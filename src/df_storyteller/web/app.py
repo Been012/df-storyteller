@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -1233,8 +1236,9 @@ async def _stream_chronicle(config: AppConfig, one_time_context: str = "") -> As
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception as e:
-        yield f"Error: {e}"
+    except Exception:
+        logger.exception("Generation failed")
+        yield "Error: generation failed. Check server logs for details."
 
 
 @app.post("/api/bio/{unit_id}")
@@ -1267,8 +1271,9 @@ async def _stream_bio(config: AppConfig, dwarf_name: str, one_time_context: str 
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception as e:
-        yield f"Error: {e}"
+    except Exception:
+        logger.exception("Generation failed")
+        yield "Error: generation failed. Check server logs for details."
 
 
 @app.post("/api/saga/generate")
@@ -1289,8 +1294,9 @@ async def _stream_saga(config: AppConfig) -> AsyncGenerator[str, None]:
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception as e:
-        yield f"Error: {e}"
+    except Exception:
+        logger.exception("Generation failed")
+        yield "Error: generation failed. Check server logs for details."
 
 
 @app.get("/api/worlds")
