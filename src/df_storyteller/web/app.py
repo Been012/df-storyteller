@@ -79,6 +79,17 @@ def _get_worlds(config: AppConfig) -> list[str]:
     )
 
 
+def _safe_watch_dir(config: AppConfig, world: str) -> Path | None:
+    """Build a watch directory path and validate it stays within the event dir."""
+    base = Path(config.paths.event_dir) if config.paths.event_dir else None
+    if not base or not world:
+        return None
+    candidate = (base / world).resolve()
+    if not candidate.is_relative_to(base.resolve()):
+        return None
+    return candidate
+
+
 def _get_active_world(config: AppConfig) -> str:
     global _active_world
     if _active_world:
@@ -1292,7 +1303,11 @@ async def api_list_worlds():
 async def api_switch_world(request: Request):
     global _active_world
     data = await request.json()
-    _active_world = data.get("world", "")
+    world = data.get("world", "")
+    config = _get_config()
+    if world and _safe_watch_dir(config, world) is None:
+        return {"ok": False, "error": "Invalid world name"}
+    _active_world = world
     _invalidate_cache()
     return {"ok": True, "active": _active_world}
 
@@ -1307,9 +1322,8 @@ async def websocket_events(websocket: WebSocket):
     _event_subscribers.append(websocket)
     try:
         config = _get_config()
-        event_dir = Path(config.paths.event_dir) if config.paths.event_dir else None
         active_world = _get_active_world(config)
-        watch_dir = event_dir / active_world if event_dir and active_world else None
+        watch_dir = _safe_watch_dir(config, active_world)
 
         # Send initial status
         if watch_dir and watch_dir.exists():
