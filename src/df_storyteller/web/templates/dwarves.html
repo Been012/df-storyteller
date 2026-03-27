@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Dwarves — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Citizens of {{ fortress_name or "the Fortress" }}</h1>
+<p class="page-subtitle">{{ dwarves | length }} souls call this place home</p>
+
+{% if dwarves %}
+<div class="dwarf-grid">
+    {% for dwarf in dwarves %}
+    <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;">
+        <div class="dwarf-name">{{ dwarf.name }}</div>
+        <div class="dwarf-profession">
+            {{ dwarf.profession }}{% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
+            &middot; Age {{ dwarf.age | int }}
+        </div>
+        {% if dwarf.notable_traits %}
+        <div class="dwarf-traits">{{ dwarf.notable_traits }}</div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="parchment">
+    <p style="text-align: center; color: var(--ink-faded); font-style: italic;">
+        No dwarves found. Run <code>storyteller-begin</code> in DFHack to take a snapshot.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

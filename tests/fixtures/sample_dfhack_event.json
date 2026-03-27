@@ -1,0 +1,25 @@
+{
+  "event_type": "death",
+  "game_year": 205,
+  "game_tick": 48231,
+  "season": "autumn",
+  "data": {
+    "victim": {
+      "unit_id": 1423,
+      "name": "Urist McStonecutter",
+      "race": "DWARF",
+      "profession": "Miner"
+    },
+    "cause": "combat",
+    "killer": {
+      "unit_id": 892,
+      "name": "Nguslu",
+      "race": "GOBLIN",
+      "profession": "Lasher"
+    },
+    "age": 87,
+    "notable_skills": [
+      {"skill": "MINING", "level": "Legendary"}
+    ]
+  }
+}

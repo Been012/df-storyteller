@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Events — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Events</h1>
+<p class="page-subtitle">A live record of happenings in the fortress</p>
+
+<div class="parchment">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+            <span class="status-dot" id="live-dot"></span>
+            <span id="live-status" style="font-size: 0.85rem; color: var(--ink-faded);">Connecting...</span>
+        </div>
+        <div>
+            <select id="event-filter" onchange="filterEvents()" style="font-family: 'Crimson Text', serif; padding: 0.3rem; border: 1px solid var(--border); border-radius: 3px;">
+                <option value="all">All Events</option>
+                <option value="death">Deaths</option>
+                <option value="combat">Combat</option>
+                <option value="mood">Moods</option>
+                <option value="artifact">Artifacts</option>
+                <option value="season_change">Seasons</option>
+                <option value="building">Buildings</option>
+                <option value="profession_change">Role Changes</option>
+                <option value="noble_appointment">Appointments</option>
+                <option value="military_change">Military</option>
+                <option value="stress_change">Stress</option>
+                <option value="migrant_arrived">Migrants</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="event-feed" id="event-feed">
+        {% if events %}
+            {% set ns = namespace(current_group='') %}
+            {% for event in events %}
+                {% set group = event.season | title ~ ' ' ~ event.year %}
+                {% if group != ns.current_group %}
+                    {% set ns.current_group = group %}
+                    <div class="event-season-header" style="font-family: 'Cinzel', serif; color: var(--gold-dark); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin: 1rem 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid rgba(201,168,76,0.3);">
+                        {{ group }}
+                    </div>
+                {% endif %}
+                <div class="event-card {{ event.type }}" data-type="{{ event.type }}">
+                    <div class="event-time">{{ event.type | replace('_', ' ') | title }}</div>
+                    <div class="event-text">{{ event.description | safe }}</div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p style="text-align: center; color: var(--ink-faded); font-style: italic; padding: 2rem;">
+                No events captured yet. Events auto-start when you load a fortress.
+            </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let ws = null;
+let allEvents = [];
+
+function connectEventFeed() {
+    const dot = document.getElementById('live-dot');
+    const status = document.getElementById('live-status');
+
+    ws = new WebSocket('ws://' + window.location.host + '/ws/events');
+
+    ws.onopen = () => {
+        dot.classList.remove('inactive');
+        status.textContent = 'Connected — waiting for events';
+    };
+
+    ws.onmessage = (msg) => {
+        const event = JSON.parse(msg.data);
+        if (event.type === 'status') {
+            status.textContent = event.description;
+            return;
+        }
+        dot.classList.remove('inactive');
+        status.textContent = 'Live — receiving events';
+        addEventCard(event);
+    };
+
+    ws.onclose = () => {
+        dot.classList.add('inactive');
+        status.textContent = 'Disconnected — will retry in 5s...';
+        setTimeout(connectEventFeed, 5000);
+    };
+
+    ws.onerror = () => {
+        // Don't show error immediately — onclose will handle retry
+    };
+}
+
+function addEventCard(event) {
+    const feed = document.getElementById('event-feed');
+    // Remove empty state message if present
+    const emptyMsg = feed.querySelector('p');
+    if (emptyMsg) emptyMsg.remove();
+
+    const card = document.createElement('div');
+    card.className = 'event-card ' + (event.type || '');
+    card.dataset.type = event.type || 'unknown';
+    card.innerHTML = `
+        <div class="event-time">${event.season || ''} ${event.year || ''} &middot; ${event.type || ''}</div>
+        <div class="event-text">${event.description || ''}</div>
+    `;
+
+    feed.insertBefore(card, feed.firstChild);
+    allEvents.unshift(event);
+
+    // Apply filter
+    filterEvents();
+}
+
+function filterEvents() {
+    const filter = document.getElementById('event-filter').value;
+    const cards = document.querySelectorAll('.event-card');
+    cards.forEach(card => {
+        if (filter === 'all' || card.dataset.type === filter) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+connectEventFeed();
+</script>
+{% endblock %}

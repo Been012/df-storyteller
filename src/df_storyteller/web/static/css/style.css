@@ -1,0 +1,679 @@
+/* Fantasy Parchment Theme for df-storyteller */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=MedievalSharp&display=swap');
+
+:root {
+    --parchment-light: #f4e8c1;
+    --parchment: #e8d5a3;
+    --parchment-dark: #d4bc7c;
+    --ink: #2c1810;
+    --ink-light: #4a3728;
+    --ink-faded: #7a6558;
+    --accent: #8b2500;
+    --accent-light: #a83a1a;
+    --gold: #c9a84c;
+    --gold-dark: #8a6d3b;
+    --border: #b8a078;
+    --shadow: rgba(44, 24, 16, 0.3);
+    --tab-bg: #3d2b1f;
+    --tab-active: #5c3d2e;
+    --tab-text: #e8d5a3;
+    --card-bg: rgba(244, 232, 193, 0.9);
+    --success: #2d5a27;
+    --danger: #8b2500;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Crimson Text', Georgia, serif;
+    background-color: #1a1008;
+    background-image:
+        radial-gradient(ellipse at top, #2a1a0e 0%, #1a1008 70%);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 18px;
+    line-height: 1.6;
+}
+
+/* ========== Top Navigation ========== */
+
+.nav-bar {
+    background: var(--tab-bg);
+    border-bottom: 3px solid var(--gold-dark);
+    display: flex;
+    align-items: center;
+    padding: 0;
+    box-shadow: 0 4px 12px var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-title {
+    font-family: 'Cinzel', serif;
+    color: var(--gold);
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding: 0.8rem 1.5rem;
+    white-space: nowrap;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-right: 1px solid rgba(201, 168, 76, 0.3);
+}
+
+.nav-tabs {
+    display: flex;
+    list-style: none;
+    flex: 1;
+}
+
+.nav-tabs a {
+    display: block;
+    padding: 0.9rem 1.5rem;
+    color: var(--tab-text);
+    text-decoration: none;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px;
+}
+
+.nav-tabs a:hover {
+    background: rgba(201, 168, 76, 0.1);
+    color: var(--gold);
+}
+
+.nav-tabs a.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+    background: rgba(201, 168, 76, 0.15);
+}
+
+.nav-world {
+    padding: 0.5rem 1.5rem;
+    margin-left: auto;
+}
+
+.nav-world select {
+    background: var(--tab-active);
+    color: var(--tab-text);
+    border: 1px solid var(--gold-dark);
+    padding: 0.3rem 0.8rem;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.85rem;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+/* ========== Main Content ========== */
+
+.content {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-header {
+    font-family: 'Cinzel', serif;
+    color: var(--parchment);
+    font-size: 1.8rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+}
+
+.page-subtitle {
+    color: var(--parchment-dark);
+    text-align: center;
+    font-style: italic;
+    margin-bottom: 2rem;
+    font-size: 1rem;
+}
+
+/* ========== Parchment Cards ========== */
+
+.parchment {
+    background: var(--parchment-light);
+    background-image:
+        linear-gradient(rgba(139, 119, 80, 0.05) 1px, transparent 1px);
+    background-size: 100% 1.6em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow:
+        0 2px 8px var(--shadow),
+        inset 0 0 30px rgba(180, 160, 120, 0.3);
+    position: relative;
+}
+
+.parchment::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+}
+
+.parchment h2 {
+    font-family: 'Cinzel', serif;
+    color: var(--accent);
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.parchment h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--ink-light);
+    font-size: 1.1rem;
+    margin: 1.2rem 0 0.5rem;
+}
+
+/* ========== Ornate Divider ========== */
+
+.divider {
+    text-align: center;
+    margin: 2rem 0;
+    color: var(--gold-dark);
+    font-size: 1.2rem;
+    letter-spacing: 8px;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    display: inline-block;
+    width: 80px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
+    vertical-align: middle;
+    margin: 0 1rem;
+}
+
+/* ========== Chronicle Entries ========== */
+
+.chronicle-entry {
+    margin-bottom: 2rem;
+}
+
+.chronicle-entry .season-header {
+    font-family: 'Cinzel', serif;
+    color: var(--accent);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.chronicle-entry .story-text {
+    text-align: justify;
+}
+
+.chronicle-entry .story-text p {
+    margin-bottom: 0.8em;
+    text-indent: 2em;
+}
+
+/* LLM-generated subheadings within stories */
+.story-heading {
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--ink-light);
+    text-indent: 0 !important;
+    margin: 1.2rem 0 0.5rem;
+    text-align: center;
+}
+
+.story-title {
+    font-size: 1.15rem;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+}
+
+.chronicle-entry .story-text p.story-heading + p {
+    text-indent: 0;
+}
+
+/* ========== Generate Button ========== */
+
+.btn {
+    font-family: 'Cinzel', serif;
+    font-weight: 600;
+    padding: 0.7rem 1.8rem;
+    border: 2px solid var(--gold-dark);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--parchment-light);
+    border-color: var(--accent);
+}
+
+.btn-primary:hover {
+    background: var(--accent-light);
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--ink-light);
+    border-color: var(--border);
+}
+
+.btn-secondary:hover {
+    background: var(--parchment);
+    border-color: var(--gold-dark);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-row {
+    display: flex;
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+/* ========== Dwarf List ========== */
+
+.dwarf-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.2rem;
+}
+
+.dwarf-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 1px 4px var(--shadow);
+}
+
+.dwarf-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow);
+    border-color: var(--gold-dark);
+}
+
+.dwarf-card .dwarf-name {
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 1.05rem;
+    margin-bottom: 0.3rem;
+}
+
+.dwarf-card .dwarf-profession {
+    color: var(--ink-light);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.dwarf-card .dwarf-traits {
+    color: var(--ink-faded);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Dwarf name hotlinks in stories */
+a.dwarf-link {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--gold-dark);
+    transition: all 0.2s;
+}
+
+a.dwarf-link:hover {
+    color: var(--gold-dark);
+    border-bottom-style: solid;
+}
+
+a.lore-xref {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--ink-faded);
+    transition: all 0.2s;
+}
+
+a.lore-xref:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+/* ========== Player Notes ========== */
+
+.note-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(184, 160, 120, 0.3);
+    font-size: 0.9rem;
+}
+
+.note-card.resolved {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+.note-tag {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+.tag-suspicion { background: #3d2b4a; color: #c9a0dc; }
+.tag-fact { background: #1a3d1a; color: #8bc98b; }
+.tag-theory { background: #3d3b1a; color: #c9c48b; }
+.tag-rumor { background: #3d2b1a; color: #c9a87b; }
+.tag-secret { background: #1a1a3d; color: #8b8bc9; }
+.tag-foreshadow { background: #3d1a1a; color: #c98b8b; }
+.tag-mood { background: #1a3d3d; color: #8bc9c9; }
+
+.note-text {
+    flex: 1;
+    color: var(--ink-light);
+}
+
+.note-time {
+    font-size: 0.75rem;
+    color: var(--ink-faded);
+    white-space: nowrap;
+}
+
+.note-actions {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.note-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--ink-faded);
+    transition: all 0.2s;
+}
+
+.note-btn:hover {
+    color: var(--ink);
+    border-color: var(--gold-dark);
+}
+    color: var(--gold-dark);
+    border-bottom-style: solid;
+}
+
+/* ========== Character Sheet ========== */
+
+.char-sheet {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.char-header {
+    grid-column: 1 / -1;
+    text-align: center;
+    border-bottom: 2px solid var(--gold-dark);
+    padding-bottom: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.char-header .char-name {
+    font-family: 'Cinzel', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.char-header .char-title {
+    color: var(--ink-light);
+    font-style: italic;
+    font-size: 1.1rem;
+}
+
+.stat-section h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--gold-dark);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem;
+}
+
+.stat-list {
+    list-style: none;
+    font-size: 0.9rem;
+}
+
+.stat-list li {
+    padding: 0.2rem 0;
+    color: var(--ink-light);
+}
+
+.stat-list li strong {
+    color: var(--ink);
+}
+
+.bio-section {
+    grid-column: 1 / -1;
+    margin-top: 1rem;
+    border-top: 2px solid var(--gold-dark);
+    padding-top: 1rem;
+}
+
+/* ========== Event Feed ========== */
+
+.event-feed {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.event-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--gold-dark);
+    border-radius: 0 4px 4px 0;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+}
+
+.event-card .event-time {
+    font-size: 0.8rem;
+    color: var(--ink-faded);
+    font-family: 'Cinzel', serif;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.3rem;
+}
+
+.event-card .event-text {
+    color: var(--ink-light);
+    line-height: 1.4;
+}
+
+.event-card.death { border-left-color: var(--danger); }
+.event-card.combat { border-left-color: #8b4500; }
+.event-card.mood { border-left-color: #5a4d8b; }
+.event-card.artifact { border-left-color: var(--gold); }
+.event-card.season_change { border-left-color: var(--success); }
+.event-card.profession_change { border-left-color: #6b5b3d; }
+.event-card.noble_appointment { border-left-color: var(--gold); }
+.event-card.military_change { border-left-color: #8b4500; }
+.event-card.stress_change { border-left-color: #5a4d8b; }
+.event-card.migrant_arrived { border-left-color: var(--success); }
+.event-card.migration_wave { border-left-color: var(--success); }
+
+/* ========== Collapsible Lore Sections ========== */
+
+.lore-summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0;
+}
+
+.lore-summary::-webkit-details-marker {
+    display: none;
+}
+
+.lore-summary h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+.lore-summary h2::before {
+    content: '\25B6';
+    font-size: 0.7em;
+    margin-right: 0.5rem;
+    color: var(--gold-dark);
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+details[open] .lore-summary h2::before {
+    transform: rotate(90deg);
+}
+
+.lore-content {
+    margin-top: 1rem;
+}
+
+/* ========== Streaming Text ========== */
+
+.streaming-text {
+    min-height: 100px;
+}
+
+.streaming-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    background: var(--accent);
+    animation: blink 0.8s infinite;
+    vertical-align: text-bottom;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* ========== Settings Form ========== */
+
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--ink-light);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    font-family: 'Crimson Text', serif;
+    font-size: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--parchment-light);
+    color: var(--ink);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--gold-dark);
+    box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.2);
+}
+
+/* ========== Status Banner ========== */
+
+.status-bar {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    padding: 0.6rem;
+    background: rgba(244, 232, 193, 0.08);
+    border-bottom: 1px solid rgba(201, 168, 76, 0.2);
+    font-size: 0.8rem;
+    color: var(--parchment-dark);
+    font-family: 'Cinzel', serif;
+}
+
+.status-bar .status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+}
+
+.status-dot.inactive {
+    background: var(--ink-faded);
+}
+
+/* ========== Loading ========== */
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+    color: var(--parchment-dark);
+    font-style: italic;
+}
+
+/* ========== Responsive ========== */
+
+@media (max-width: 768px) {
+    .content { padding: 1rem; }
+    .char-sheet { grid-template-columns: 1fr; }
+    .dwarf-grid { grid-template-columns: 1fr; }
+    .nav-title { display: none; }
+}

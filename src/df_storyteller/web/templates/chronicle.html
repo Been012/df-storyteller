@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Chronicle — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">The Chronicle of {{ fortress_name or "the Fortress" }}</h1>
+<p class="page-subtitle">A record of events, as told by the keepers of memory</p>
+
+{% if current_season and current_year %}
+<p style="text-align: center; color: var(--parchment-dark); font-size: 0.95rem; margin-bottom: 0.5rem;">
+    Writing for: <strong>{{ current_season | title }} of Year {{ current_year }}</strong>
+    {% if already_written %}
+    <br><span style="color: var(--gold-dark); font-size: 0.85rem;">An entry exists for this season — generating will replace it.</span>
+    {% endif %}
+</p>
+{% endif %}
+
+<!-- Fortress-wide player notes -->
+{% if fortress_notes %}
+<div class="parchment" style="max-width: 600px; margin: 0 auto 1rem; padding: 1rem;">
+    <h3 style="font-size: 0.95rem; margin-bottom: 0.5rem;">Fortress Notes</h3>
+    {% for note in fortress_notes %}
+    <div class="note-card {{ 'resolved' if note.resolved else '' }}" data-id="{{ note.id }}">
+        <span class="note-tag tag-{{ note.tag.value }}">{{ note.tag.value }}</span>
+        <span class="note-text">{{ note.text }}</span>
+        <span class="note-time">{{ note.game_season | title }} Y{{ note.game_year }}</span>
+        <span class="note-actions">
+            <button onclick="resolveNote('{{ note.id }}')" class="note-btn">{{ '↩' if note.resolved else '✓' }}</button>
+            <button onclick="deleteNote('{{ note.id }}')" class="note-btn">✕</button>
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div style="max-width: 600px; margin: 0 auto 0.5rem; display: flex; gap: 0.5rem; align-items: center;">
+    <select id="fortress-note-tag" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+        <option value="mood">Mood</option>
+        <option value="fact">Fact</option>
+        <option value="foreshadow">Foreshadow</option>
+        <option value="rumor">Rumor</option>
+        <option value="theory">Theory</option>
+    </select>
+    <input type="text" id="fortress-note-text" placeholder="Add a fortress-wide note..."
+        style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+    <button class="btn btn-secondary" onclick="addFortressNote()" style="padding: 0.4rem 1rem; color: var(--parchment);">Add</button>
+</div>
+
+<details style="max-width: 600px; margin: 0 auto 1rem;">
+    <summary style="cursor: pointer; color: var(--parchment-dark); font-size: 0.9rem; text-align: center;">
+        Add context for this entry (optional)
+    </summary>
+    <div style="margin-top: 0.5rem;">
+        <input type="text" id="chronicle-context" placeholder="e.g. 'The goblins attacked from the east, focus on the defense'"
+            style="width: 100%; font-family: 'Crimson Text', serif; padding: 0.5rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+    </div>
+</details>
+
+<div class="btn-row" style="justify-content: center;">
+    <button class="btn btn-primary" id="generate-btn" onclick="generateChronicle()">
+        {% if already_written %}Rewrite {{ current_season | title }} Entry{% else %}Write New Entry{% endif %}
+    </button>
+</div>
+
+<!-- Streaming output area -->
+<div id="stream-output" style="display: none;">
+    <div class="parchment">
+        <h2 id="stream-header">New Entry</h2>
+        <div class="story-text streaming-text" id="stream-text"></div>
+    </div>
+    <div class="divider">&loz;</div>
+</div>
+
+<!-- Existing journal entries -->
+{% if entries %}
+    {% for entry in entries %}
+    <div class="parchment chronicle-entry">
+        {% if entry.header %}
+        <h2 class="season-header">{{ entry.header }}</h2>
+        {% endif %}
+        <div class="story-text">{{ entry.text | safe }}</div>
+    </div>
+    {% if not loop.last %}
+    <div class="divider">&loz;</div>
+    {% endif %}
+    {% endfor %}
+{% else %}
+    <div class="parchment">
+        <p style="text-align: center; color: var(--ink-faded); font-style: italic;">
+            No chronicle entries yet. Take a snapshot in DFHack
+            (<code>storyteller-begin</code>), then click "Write New Entry" to begin.
+        </p>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Fortress note CRUD
+async function addFortressNote() {
+    const tag = document.getElementById('fortress-note-tag').value;
+    const text = document.getElementById('fortress-note-text').value.trim();
+    if (!text) return;
+    await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag, text, target_type: 'fortress' }),
+    });
+    document.getElementById('fortress-note-text').value = '';
+    window.location.reload();
+}
+async function resolveNote(noteId) {
+    await fetch('/api/notes/' + noteId + '/resolve', { method: 'POST' });
+    window.location.reload();
+}
+async function deleteNote(noteId) {
+    await fetch('/api/notes/' + noteId, { method: 'DELETE' });
+    window.location.reload();
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('fortress-note-text');
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFortressNote(); });
+});
+
+// Dwarf name -> unit_id map for hotlinking (injected from server)
+const dwarfNameMap = {{ dwarf_name_map | tojson | safe }};
+
+function simpleMarkdown(text) {
+    // Convert basic markdown to HTML — LLM headers become styled subheadings
+    return text
+        .split('\n\n').map(para => {
+            para = para.trim();
+            if (!para) return '';
+            if (para.startsWith('### ')) return '<p class="story-heading">' + para.slice(4) + '</p>';
+            if (para.startsWith('## ')) return '<p class="story-heading">' + para.slice(3) + '</p>';
+            if (para.startsWith('# ')) return '<p class="story-heading story-title">' + para.slice(2) + '</p>';
+            if (para === '---' || para === '***') return '<hr>';
+            para = para.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            para = para.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            return '<p>' + para.replace(/\n/g, ' ') + '</p>';
+        })
+        .join('\n');
+}
+
+function linkifyDwarfNames(text) {
+    // Sort names by length descending to match longest first
+    const names = Object.keys(dwarfNameMap).sort((a, b) => b.length - a.length);
+    for (const name of names) {
+        if (name.length < 3) continue;
+        // Don't replace inside existing HTML tags
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp('(?![^<]*>)' + escaped, 'g');
+        const unitId = dwarfNameMap[name];
+        text = text.replace(regex, `<a href="/dwarves/${unitId}" class="dwarf-link">${name}</a>`);
+    }
+    return text;
+}
+
+async function generateChronicle() {
+    const btn = document.getElementById('generate-btn');
+    const output = document.getElementById('stream-output');
+    const textEl = document.getElementById('stream-text');
+
+    btn.disabled = true;
+    btn.textContent = 'Writing...';
+    output.style.display = 'block';
+    textEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+    try {
+        const contextEl = document.getElementById('chronicle-context');
+        const oneTimeContext = contextEl ? contextEl.value.trim() : '';
+        const response = await fetch('/api/chronicle/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: oneTimeContext }),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+            textEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        // Remove cursor, convert markdown, and linkify dwarf names
+        let html = simpleMarkdown(fullText);
+        html = linkifyDwarfNames(html);
+        textEl.innerHTML = html;
+    } catch (err) {
+        textEl.innerHTML = '<em style="color: var(--danger);">Error generating chronicle: ' + err.message + '</em>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Write New Entry';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Settings — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Settings</h1>
+<p class="page-subtitle">Configure your storytelling experience</p>
+
+<div class="parchment" style="max-width: 600px; margin: 0 auto;">
+    <form method="POST" action="/settings">
+        <div class="form-group">
+            <label>Dwarf Fortress Path</label>
+            <input type="text" name="df_install" value="{{ config.paths.df_install }}">
+        </div>
+
+        <div class="form-group">
+            <label>LLM Provider</label>
+            <select name="llm_provider">
+                <option value="claude" {% if config.llm.provider == 'claude' %}selected{% endif %}>Claude (Anthropic)</option>
+                <option value="openai" {% if config.llm.provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                <option value="ollama" {% if config.llm.provider == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>API Key</label>
+            <input type="password" name="api_key" value="{{ config.llm.api_key }}" placeholder="sk-ant-...">
+        </div>
+
+        <div class="form-group">
+            <label>Narrative Style</label>
+            <select name="narrative_style">
+                <option value="dramatic" {% if config.story.narrative_style == 'dramatic' %}selected{% endif %}>Dramatic</option>
+                <option value="factual" {% if config.story.narrative_style == 'factual' %}selected{% endif %}>Factual</option>
+                <option value="humorous" {% if config.story.narrative_style == 'humorous' %}selected{% endif %}>Humorous</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Chronicle Length (tokens)</label>
+            <input type="number" name="chronicle_max_tokens" value="{{ config.story.chronicle_max_tokens }}" min="500" max="8000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. A seasonal fortress report. ~500-1000 words.</small>
+        </div>
+
+        <div class="form-group">
+            <label>Biography Length (tokens)</label>
+            <input type="number" name="biography_max_tokens" value="{{ config.story.biography_max_tokens }}" min="256" max="4000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 1024. Biographies are short dated entries that stack over time. ~150-250 words each.</small>
+        </div>
+
+        <div class="form-group">
+            <label>Saga Length (tokens)</label>
+            <input type="number" name="saga_max_tokens" value="{{ config.story.saga_max_tokens }}" min="500" max="8000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. Epic world history narrative from legends data. ~500-1000 words.</small>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </div>
+
+        {% if saved %}
+        <p style="color: var(--success); text-align: center; margin-top: 1rem;">Settings saved successfully.</p>
+        {% endif %}
+
+        {% if legends_file %}
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <label style="font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.5px;">Legends Data</label>
+            <p style="font-size: 0.9rem; color: var(--ink-faded);">{{ legends_file }}</p>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

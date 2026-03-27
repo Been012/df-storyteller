@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}df-storyteller{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="nav-bar">
+        <div class="nav-title">df-storyteller</div>
+        <ul class="nav-tabs">
+            <li><a href="/" class="{% if active_tab == 'chronicle' %}active{% endif %}">Chronicle</a></li>
+            <li><a href="/dwarves" class="{% if active_tab == 'dwarves' %}active{% endif %}">Dwarves</a></li>
+            <li><a href="/events" class="{% if active_tab == 'events' %}active{% endif %}">Events{% if event_count %} ({{ event_count }}){% endif %}</a></li>
+            <li><a href="/lore" class="{% if active_tab == 'lore' %}active{% endif %}">Lore</a></li>
+            <li><a href="/settings" class="{% if active_tab == 'settings' %}active{% endif %}">Settings</a></li>
+        </ul>
+        <div class="nav-world">
+            <select id="world-select" onchange="switchWorld(this.value)">
+                {% for world in worlds %}
+                <option value="{{ world }}" {% if world == active_world %}selected{% endif %}>{{ world }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </nav>
+
+    {% if fortress_name %}
+    <div class="status-bar">
+        <span class="status-item"><strong>{{ fortress_name }}</strong></span>
+        {% if site_name and site_name != fortress_name %}
+        <span class="status-item">"{{ site_name }}"</span>
+        {% endif %}
+        {% if civ_name %}
+        <span class="status-item">{{ civ_name }}</span>
+        {% endif %}
+        {% if biome %}
+        <span class="status-item">{{ biome }}</span>
+        {% endif %}
+        <span class="status-item">Year {{ year }}, {{ season }}</span>
+        <span class="status-item">{{ population }} dwarves</span>
+        {% if event_count %}<span class="status-item">{{ event_count }} events</span>{% endif %}
+        {% if last_updated %}<span class="status-item" style="color: var(--ink-faded);">Updated: {{ last_updated }}</span>{% endif %}
+        <span class="status-item">
+            <a href="/api/refresh" style="color: var(--gold-dark); text-decoration: none; font-size: 0.75rem;" title="Refresh data">&#x21bb; refresh</a>
+        </span>
+    </div>
+    {% endif %}
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

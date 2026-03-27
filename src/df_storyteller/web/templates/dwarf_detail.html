@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}{{ dwarf.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/dwarves" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Citizens</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ dwarf.name }}</div>
+            <div class="char-title">
+                {{ dwarf.profession }}
+                {% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
+                {% if dwarf.military_squad %} &mdash; {{ dwarf.military_squad }}{% endif %}
+                &middot; Age {{ dwarf.age | int }}
+            </div>
+            {% if dwarf.stress_desc %}
+            <div style="margin-top: 0.3rem; font-style: italic; color: var(--ink-faded);">
+                Mood: {{ dwarf.stress_desc }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Left Column: Personality -->
+        <div class="stat-section">
+            {% if dwarf.personality_traits %}
+            <h3>Personality</h3>
+            <ul class="stat-list">
+                {% for trait in dwarf.personality_traits %}
+                <li>{{ trait }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.beliefs %}
+            <h3>Values &amp; Beliefs</h3>
+            <ul class="stat-list">
+                {% for belief in dwarf.beliefs %}
+                <li>{{ belief }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.goals %}
+            <h3>Dreams</h3>
+            <ul class="stat-list">
+                {% for goal in dwarf.goals %}
+                <li>{{ goal }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.relationships %}
+            <h3>Family</h3>
+            <ul class="stat-list">
+                {% for rel in dwarf.relationships %}
+                <li><strong>{{ rel.type }}:</strong> {{ rel.name }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Attributes & Skills -->
+        <div class="stat-section">
+            {% if dwarf.physical_attrs %}
+            <h3>Physical</h3>
+            <ul class="stat-list">
+                {% for attr in dwarf.physical_attrs %}
+                <li>{{ attr }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.mental_attrs %}
+            <h3>Mind</h3>
+            <ul class="stat-list">
+                {% for attr in dwarf.mental_attrs %}
+                <li>{{ attr }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.skills %}
+            <h3>Skills</h3>
+            <ul class="stat-list">
+                {% for skill in dwarf.skills %}
+                <li>{{ skill }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.equipment %}
+            <h3>Equipment</h3>
+            <ul class="stat-list">
+                {% for item in dwarf.equipment %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.wounds %}
+            <h3>Wounds</h3>
+            <ul class="stat-list">
+                {% for wound in dwarf.wounds %}
+                <li style="color: var(--danger);">{{ wound }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Event History -->
+        {% if dwarf.events %}
+        <div class="bio-section">
+            <h3>Event History</h3>
+            {% for evt in dwarf.events %}
+            <div class="event-card {{ evt.type | lower | replace(' ', '_') }}" style="margin-bottom: 0.4rem;">
+                <div class="event-time">{{ evt.season }} {{ evt.year }} &middot; {{ evt.type }}</div>
+                <div class="event-text">{{ evt.description }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Player Notes -->
+        <div class="bio-section">
+            <h3>Player Notes</h3>
+            <div id="notes-list">
+                {% for note in notes %}
+                <div class="note-card {{ 'resolved' if note.resolved else '' }}" data-id="{{ note.id }}">
+                    <span class="note-tag tag-{{ note.tag.value }}">{{ note.tag.value }}</span>
+                    <span class="note-text">{{ note.text }}</span>
+                    <span class="note-time">{{ note.game_season | title }} Y{{ note.game_year }}</span>
+                    <span class="note-actions">
+                        <button onclick="resolveNote('{{ note.id }}')" class="note-btn" title="{{ 'Unresolve' if note.resolved else 'Resolve' }}">{{ '↩' if note.resolved else '✓' }}</button>
+                        <button onclick="deleteNote('{{ note.id }}')" class="note-btn" title="Delete">✕</button>
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="note-add" style="margin-top: 0.8rem; display: flex; gap: 0.5rem; align-items: center;">
+                <select id="note-tag" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                    <option value="suspicion">Suspicion</option>
+                    <option value="fact">Fact</option>
+                    <option value="theory">Theory</option>
+                    <option value="rumor">Rumor</option>
+                    <option value="secret">Secret</option>
+                    <option value="foreshadow">Foreshadow</option>
+                    <option value="mood">Mood</option>
+                </select>
+                <input type="text" id="note-text" placeholder="Write a note about this dwarf..."
+                    style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                <button class="btn btn-secondary" onclick="addNote()" style="padding: 0.4rem 1rem;">Add</button>
+            </div>
+        </div>
+
+        <!-- Biography Timeline -->
+        <div class="bio-section">
+            <h3>Biography</h3>
+
+            <!-- One-time context for this generation -->
+            <details style="margin-bottom: 0.8rem;">
+                <summary style="cursor: pointer; color: var(--ink-faded); font-size: 0.9rem;">Add context for this entry (optional)</summary>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                    <input type="text" id="bio-context" placeholder="e.g. 'Focus on their reaction to the siege'"
+                        style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                </div>
+            </details>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" id="bio-btn" onclick="generateBio({{ dwarf.unit_id }})">
+                    {% if dwarf.bio_entries %}Write New Entry{% else %}Begin Biography{% endif %}
+                </button>
+            </div>
+
+            <!-- New entry streams here -->
+            <div class="story-text streaming-text" id="bio-text" style="display: none;"></div>
+
+            <!-- Existing biography entries (newest first) -->
+            {% if dwarf.bio_entries %}
+                {% for entry in dwarf.bio_entries | reverse %}
+                <div class="chronicle-entry" style="margin-bottom: 1.5rem;">
+                    <div class="season-header" style="font-size: 1rem;">
+                        {{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                    </div>
+                    <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                </div>
+                {% if not loop.last %}
+                <div class="divider" style="margin: 1rem 0;">&loz;</div>
+                {% endif %}
+                {% endfor %}
+            {% else %}
+                <em style="color: var(--ink-faded);">
+                    No biography entries yet. Click above to write the first chapter of this dwarf's story.
+                    As they grow and change, generate new entries to track their journey.
+                </em>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const UNIT_ID = {{ dwarf.unit_id }};
+
+async function addNote() {
+    const tag = document.getElementById('note-tag').value;
+    const text = document.getElementById('note-text').value.trim();
+    if (!text) return;
+
+    await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag, text, target_type: 'dwarf', target_id: UNIT_ID }),
+    });
+    document.getElementById('note-text').value = '';
+    window.location.reload();
+}
+
+async function resolveNote(noteId) {
+    await fetch('/api/notes/' + noteId + '/resolve', { method: 'POST' });
+    window.location.reload();
+}
+
+async function deleteNote(noteId) {
+    await fetch('/api/notes/' + noteId, { method: 'DELETE' });
+    window.location.reload();
+}
+
+// Enter key adds note
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('note-text');
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addNote(); });
+});
+
+async function generateBio(unitId) {
+    const btn = document.getElementById('bio-btn');
+    const textEl = document.getElementById('bio-text');
+    const contextEl = document.getElementById('bio-context');
+    const oneTimeContext = contextEl ? contextEl.value.trim() : '';
+
+    btn.disabled = true;
+    btn.textContent = 'Writing...';
+    textEl.style.display = 'block';
+    textEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+    try {
+        const response = await fetch('/api/bio/' + unitId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: oneTimeContext }),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+        }
+
+        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
+
+        // Reload page after a moment to show the saved entry in the timeline
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Generate Biography';
+}
+</script>
+{% endblock %}

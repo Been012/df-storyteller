@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<df_world>
+  <historical_figures>
+    <historical_figure>
+      <id>100</id>
+      <name>kadol hammerlord</name>
+      <race>DWARF</race>
+      <birth_year>1</birth_year>
+      <death_year>150</death_year>
+      <entity_id>1</entity_id>
+    </historical_figure>
+    <historical_figure>
+      <id>200</id>
+      <name>ozud beastslayer</name>
+      <race>DWARF</race>
+      <birth_year>50</birth_year>
+      <death_year>-1</death_year>
+      <entity_id>1</entity_id>
+    </historical_figure>
+  </historical_figures>
+  <sites>
+    <site>
+      <id>1</id>
+      <name>daggerhalls</name>
+      <type>fortress</type>
+    </site>
+    <site>
+      <id>2</id>
+      <name>towergloom</name>
+      <type>dark fortress</type>
+    </site>
+  </sites>
+  <entities>
+    <entity>
+      <id>1</id>
+      <name>the iron confederation</name>
+      <race>DWARF</race>
+    </entity>
+    <entity>
+      <id>2</id>
+      <name>the nightmarish darkness</name>
+      <race>GOBLIN</race>
+    </entity>
+  </entities>
+  <artifacts>
+    <artifact>
+      <id>1</id>
+      <name>daggerglimmer</name>
+      <item_type>short sword</item_type>
+      <mat>bismuth bronze</mat>
+    </artifact>
+  </artifacts>
+  <historical_events>
+    <historical_event>
+      <id>1</id>
+      <type>hf_died</type>
+      <year>150</year>
+      <hfid>100</hfid>
+    </historical_event>
+  </historical_events>
+  <historical_event_collections>
+    <historical_event_collection>
+      <id>1</id>
+      <type>war</type>
+      <name>the war of swords</name>
+      <aggressor_ent_id>2</aggressor_ent_id>
+      <defender_ent_id>1</defender_ent_id>
+    </historical_event_collection>
+  </historical_event_collections>
+</df_world>

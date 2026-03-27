@@ -1,0 +1,389 @@
+"""Load game state from DFHack JSON files and gamelog into context objects.
+
+This is the bridge between raw files on disk and the story generators.
+It reads snapshots, event files, and gamelog to populate the event store
+and character tracker.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+
+from df_storyteller.config import AppConfig
+from df_storyteller.context.character_tracker import CharacterTracker
+from df_storyteller.context.context_builder import ContextBuilder
+from df_storyteller.context.event_store import EventStore
+from df_storyteller.context.world_lore import WorldLore
+from df_storyteller.ingestion.dfhack_json_parser import parse_dfhack_file
+from df_storyteller.schema.entities import Dwarf, Relationship, Skill
+from df_storyteller.schema.events import EventSource, EventType, GameEvent, Season
+from df_storyteller.schema.personality import Belief, Facet, Goal, Personality
+
+logger = logging.getLogger(__name__)
+
+
+def _load_personality(raw: dict) -> Personality:
+    """Parse personality data from a snapshot citizen entry."""
+    p = raw.get("personality", {})
+    if not p:
+        return Personality()
+
+    facets = [Facet(name=f["name"], value=f["value"]) for f in p.get("facets", [])]
+    beliefs = [Belief(name=b["name"], value=b["value"]) for b in p.get("beliefs", [])]
+    goals = [
+        Goal(name=g["name"], achieved=g.get("achieved", False))
+        for g in p.get("goals", [])
+    ]
+    return Personality(facets=facets, beliefs=beliefs, goals=goals)
+
+
+def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
+    """Create a Dwarf entity from a snapshot citizen entry."""
+    skills = [
+        Skill(
+            name=s.get("name", ""),
+            level=str(s.get("level", "")),
+            experience=s.get("experience", 0),
+        )
+        for s in citizen.get("skills", [])
+    ]
+
+    # Parse relationships
+    relationships = [
+        Relationship(
+            target_unit_id=r.get("target_id", 0),
+            target_name=r.get("target_name", ""),
+            relationship_type=r.get("type", ""),
+        )
+        for r in citizen.get("relationships", [])
+    ]
+
+    # Parse military
+    mil = citizen.get("military", {})
+    military_squad = mil.get("squad_name", "") if isinstance(mil, dict) else ""
+
+    # Parse equipment descriptions
+    equipment = [
+        e.get("description", "") for e in citizen.get("equipment", [])
+        if isinstance(e, dict) and e.get("description")
+    ]
+
+    return Dwarf(
+        unit_id=citizen.get("unit_id", 0),
+        name=citizen.get("name", "Unknown"),
+        profession=citizen.get("profession", ""),
+        race=citizen.get("race", "DWARF"),
+        age=citizen.get("age", 0),
+        skills=skills,
+        stress_category=citizen.get("stress_category", 3),
+        relationships=relationships,
+        birth_year=0,
+        is_alive=citizen.get("is_alive", True),
+        personality=_load_personality(citizen),
+        noble_positions=citizen.get("noble_positions", []),
+        military_squad=military_squad,
+        current_job=citizen.get("current_job", ""),
+        equipment=equipment,
+        wounds=citizen.get("wounds", []),
+        physical_attributes=citizen.get("physical_attributes", {}),
+        mental_attributes=citizen.get("mental_attributes", {}),
+    )
+
+
+def _get_folder_identity(folder: Path) -> str | None:
+    """Get a stable identity for a world folder by reading its most recent snapshot.
+
+    Returns 'civ_id:fortress_name' which stays constant even when the save
+    folder name changes (e.g. region2 vs autosave 1).
+    """
+    snapshots = sorted(folder.glob("snapshot_*.json"), reverse=True)
+    if not snapshots:
+        return None
+    try:
+        with open(snapshots[0], encoding="utf-8", errors="replace") as f:
+            snap = json.load(f)
+        fi = snap.get("data", {}).get("fortress_info", {})
+        civ_id = fi.get("civ_id", "")
+        name = fi.get("fortress_name", "")
+        if civ_id and name:
+            return f"{civ_id}:{name}"
+    except (json.JSONDecodeError, OSError):
+        pass
+    return None
+
+
+def load_game_state(config: AppConfig, skip_legends: bool = False) -> tuple[EventStore, CharacterTracker, WorldLore, dict]:
+    """Load all available game data from disk.
+
+    Args:
+        config: Application configuration.
+        skip_legends: If True, skip loading legends XML (expensive for large files).
+
+    Reads:
+    - Snapshot JSON files (fortress state with citizens, visitors, buildings)
+    - Event JSON files (deaths, combat, moods, etc.)
+    - Gamelog (if configured)
+
+    Returns:
+        Tuple of (event_store, character_tracker, world_lore, metadata)
+        where metadata contains fortress_name, year, season, etc.
+    """
+    event_store = EventStore()
+    character_tracker = CharacterTracker()
+    world_lore = WorldLore()
+    metadata: dict = {
+        "fortress_name": "", "site_name": "", "civ_name": "", "biome": "",
+        "year": 0, "season": "spring", "population": 0,
+        "visitors": [], "animals": [], "buildings": [],
+        "fortress_info": {},
+    }
+
+    base_event_dir = Path(config.paths.event_dir) if config.paths.event_dir else None
+
+    # Find all world subfolders that belong to the same fortress.
+    # DF save folder names can change (region2 vs autosave 1) for the same world,
+    # so we merge all folders that share the same fortress identity.
+    event_dirs: list[Path] = []
+    event_dir = None
+    if base_event_dir and base_event_dir.exists():
+        world_dirs = [
+            d for d in base_event_dir.iterdir()
+            if d.is_dir() and d.name != "processed"
+        ]
+        if world_dirs:
+            # Start with the most recently modified folder
+            primary_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
+            event_dir = primary_dir
+            event_dirs = [primary_dir]
+
+            # Read its fortress identity to find sibling folders
+            primary_identity = _get_folder_identity(primary_dir)
+            if primary_identity:
+                for wd in world_dirs:
+                    if wd == primary_dir:
+                        continue
+                    if _get_folder_identity(wd) == primary_identity:
+                        event_dirs.append(wd)
+                        logger.info("Merging sibling folder: %s", wd.name)
+
+            logger.info("Using world folder: %s (%d total)", event_dir.name, len(event_dirs))
+
+    processed_dir = event_dir / "processed" if event_dir else None
+
+    # 1. Load the most recent snapshot across all matching folders
+    snapshots: list[Path] = []
+    if event_dirs:
+        for ed in event_dirs:
+            snapshots += list(ed.glob("snapshot_*.json"))
+            proc = ed / "processed"
+            if proc.exists():
+                snapshots += list(proc.glob("snapshot_*.json"))
+        snapshots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if event_dirs:
+
+        if snapshots:
+            latest_snapshot = snapshots[0]
+            logger.info("Loading snapshot: %s", latest_snapshot)
+            try:
+                with open(latest_snapshot, encoding="utf-8", errors="replace") as f:
+                    snap = json.load(f)
+
+                data = snap.get("data", {})
+                metadata["year"] = snap.get("game_year", 0)
+                metadata["season"] = snap.get("season", "spring")
+                metadata["population"] = data.get("population", 0)
+
+                # Fortress info (new comprehensive format)
+                fi = data.get("fortress_info", {})
+                metadata["fortress_info"] = fi
+                metadata["fortress_name"] = fi.get("fortress_name", "") or data.get("fortress_name", "")
+                metadata["site_name"] = fi.get("site_name", "")
+                metadata["civ_name"] = fi.get("civ_name", "")
+                metadata["biome"] = fi.get("biome", "")
+
+                # Store visitors, animals, buildings in metadata
+                metadata["visitors"] = data.get("visitors", [])
+                metadata["animals"] = data.get("animals", [])
+                metadata["buildings"] = data.get("buildings", [])
+
+                # Register citizens
+                for citizen in data.get("citizens", []):
+                    dwarf = _load_dwarf_from_snapshot(citizen)
+                    character_tracker.register_dwarf(dwarf)
+
+                # Store visitors in metadata for context
+                metadata["visitors"] = data.get("visitors", [])
+
+                logger.info(
+                    "Snapshot loaded: %d citizens, %d visitors",
+                    len(data.get("citizens", [])),
+                    len(data.get("visitors", [])),
+                )
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning("Failed to load snapshot %s: %s", latest_snapshot, e)
+
+    # 2. Load event files from all matching folders
+    if event_dirs:
+        event_files: list[Path] = []
+        for ed in event_dirs:
+            event_files += list(ed.glob("*.json"))
+            proc = ed / "processed"
+            if proc.exists():
+                event_files += list(proc.glob("*.json"))
+        event_files.sort()
+
+        for path in event_files:
+            if path.name.startswith("snapshot_"):
+                continue
+            event = parse_dfhack_file(path)
+            if event:
+                idx = event_store.add(event)
+                for uid in event_store._extract_unit_ids(event):
+                    character_tracker.add_event(uid, event)
+
+    # 4. Load legends if available (skip if told to — expensive for large files)
+    if skip_legends:
+        logger.info("Skipping legends loading (skip_legends=True)")
+        return event_store, character_tracker, world_lore, metadata
+
+    legends_path = None
+    legends_plus_path = None
+    if config.paths.legends_xml and Path(config.paths.legends_xml).exists():
+        legends_path = Path(config.paths.legends_xml)
+    elif config.paths.df_install:
+        # Auto-detect: DFHack exportlegends creates files like:
+        #   region2-00100-01-01-legends.xml
+        #   region2-00100-01-01-legends_plus.xml
+        # Filter to the active world's region name so we don't load
+        # legends from a different world.
+        df_dir = Path(config.paths.df_install)
+
+        # DF legends exports can be named:
+        #   region2-00100-01-01-legends.xml (from legends mode)
+        #   autosave 1-00100-04-03-legends.xml (from open-legends command)
+        # open-legends gives a full export that supersedes previous ones.
+        # Always pick the most recently modified files — if you just exported,
+        # those are the right ones for your active world.
+        plus_candidates = sorted(
+            list(df_dir.glob("*-legends_plus.xml")),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        basic_candidates = sorted(
+            [f for f in df_dir.glob("*-legends.xml") if "legends_plus" not in f.name],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if plus_candidates:
+            legends_plus_path = plus_candidates[0]
+            logger.info("Auto-detected legends_plus XML: %s", legends_plus_path)
+        if basic_candidates:
+            legends_path = basic_candidates[0]
+            logger.info("Auto-detected legends XML: %s", legends_path)
+
+    if legends_path or legends_plus_path:
+        from df_storyteller.ingestion.legends_parser import parse_legends_xml
+
+        # Load basic legends first (has historical events, event collections)
+        legends = None
+        if legends_path:
+            legends = parse_legends_xml(legends_path)
+
+        # Load legends_plus and merge — it has richer data (race, type, etc.)
+        # Basic legends has: names, birth/death years, events, event collections
+        # legends_plus has: race, type, sex, relationships, written contents, etc.
+        if legends_plus_path:
+            legends_plus = parse_legends_xml(legends_plus_path)
+            if legends is None:
+                legends = legends_plus
+            else:
+                # Merge entity race and type from plus into basic
+                for eid, plus_civ in legends_plus.civilizations.items():
+                    if eid in legends.civilizations:
+                        if plus_civ.race:
+                            legends.civilizations[eid].race = plus_civ.race
+                        # Store entity type as a custom attribute for filtering
+                        if hasattr(plus_civ, '_entity_type'):
+                            legends.civilizations[eid]._entity_type = plus_civ._entity_type
+
+                # Merge HF race from plus into basic (basic has names, plus has race)
+                for hfid, plus_hf in legends_plus.historical_figures.items():
+                    if hfid in legends.historical_figures:
+                        if plus_hf.race:
+                            legends.historical_figures[hfid].race = plus_hf.race
+                    else:
+                        legends.historical_figures[hfid] = plus_hf
+
+                # Merge site type from plus
+                for sid, plus_site in legends_plus.sites.items():
+                    if sid in legends.sites:
+                        if plus_site.site_type:
+                            legends.sites[sid].site_type = plus_site.site_type
+
+                # Merge artifact details from plus (plus has type/material, basic has names)
+                for aid, plus_art in legends_plus.artifacts.items():
+                    if aid in legends.artifacts:
+                        if plus_art.item_type:
+                            legends.artifacts[aid].item_type = plus_art.item_type
+                        if plus_art.material:
+                            legends.artifacts[aid].material = plus_art.material
+                    else:
+                        legends.artifacts[aid] = plus_art
+
+                # Copy entity metadata from plus to basic
+                for eid, plus_civ in legends_plus.civilizations.items():
+                    if eid in legends.civilizations:
+                        for attr in ('_entity_type', '_child_ids', '_worship_id', '_profession'):
+                            val = getattr(plus_civ, attr, None)
+                            if val:
+                                setattr(legends.civilizations[eid], attr, val)
+
+                # Copy extended data lists from plus (these don't exist in basic)
+                if legends_plus.relationships:
+                    legends.relationships = legends_plus.relationships
+                if legends_plus.written_contents:
+                    legends.written_contents = legends_plus.written_contents
+                if legends_plus.identities:
+                    legends.identities = legends_plus.identities
+                if legends_plus.world_constructions:
+                    legends.world_constructions = legends_plus.world_constructions
+                if legends_plus.landmasses:
+                    legends.landmasses = legends_plus.landmasses
+                if legends_plus.mountain_peaks:
+                    legends.mountain_peaks = legends_plus.mountain_peaks
+                if legends_plus.rivers:
+                    legends.rivers = legends_plus.rivers
+                # Merge cultural forms: basic has descriptions, plus has names
+                # Merge by index/id so each form gets both name and description
+                def _merge_forms(basic_list: list, plus_list: list) -> list:
+                    basic_by_id = {f.get("id", str(i)): f for i, f in enumerate(basic_list)}
+                    for pf in plus_list:
+                        pid = pf.get("id", "")
+                        if pid in basic_by_id:
+                            basic_by_id[pid].update({k: v for k, v in pf.items() if v})
+                        else:
+                            basic_by_id[pid] = pf
+                    return list(basic_by_id.values())
+
+                if legends_plus.poetic_forms:
+                    legends.poetic_forms = _merge_forms(legends.poetic_forms, legends_plus.poetic_forms)
+                if legends_plus.musical_forms:
+                    legends.musical_forms = _merge_forms(legends.musical_forms, legends_plus.musical_forms)
+                if legends_plus.dance_forms:
+                    legends.dance_forms = _merge_forms(legends.dance_forms, legends_plus.dance_forms)
+                if legends_plus.entity_populations:
+                    legends.entity_populations = legends_plus.entity_populations
+
+        if legends:
+            world_lore.load(legends)
+
+    logger.info(
+        "Game state loaded: %d events, %d characters tracked",
+        event_store.count,
+        len(character_tracker._characters),
+    )
+
+    return event_store, character_tracker, world_lore, metadata
