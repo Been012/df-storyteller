@@ -42,7 +42,7 @@
                 {% endif %}
                 <div class="event-card {{ event.type }}" data-type="{{ event.type }}">
                     <div class="event-time">{{ event.type | replace('_', ' ') | title }}</div>
-                    <div class="event-text">{{ event.description | safe }}</div>
+                    <div class="event-text">{{ event.description }}</div>
                 </div>
             {% endfor %}
         {% else %}
@@ -101,10 +101,17 @@ function addEventCard(event) {
     const card = document.createElement('div');
     card.className = 'event-card ' + (event.type || '');
     card.dataset.type = event.type || 'unknown';
-    card.innerHTML = `
-        <div class="event-time">${event.season || ''} ${event.year || ''} &middot; ${event.type || ''}</div>
-        <div class="event-text">${event.description || ''}</div>
-    `;
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'event-time';
+    timeDiv.textContent = `${event.season || ''} ${event.year || ''} · ${event.type || ''}`;
+
+    const textDiv = document.createElement('div');
+    textDiv.className = 'event-text';
+    textDiv.textContent = event.description || '';
+
+    card.appendChild(timeDiv);
+    card.appendChild(textDiv);
 
     feed.insertBefore(card, feed.firstChild);
     allEvents.unshift(event);
