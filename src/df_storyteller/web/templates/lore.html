@@ -249,7 +249,11 @@ function filterLore(query) {
         const data = await resp.json();
 
         if (!data.results || data.results.length === 0) {
-            searchResults.innerHTML = '<p style="text-align: center; color: var(--ink-faded); font-style: italic;">No results found for "' + query + '"</p>';
+            searchResults.textContent = '';
+            const noResults = document.createElement('p');
+            noResults.style.cssText = 'text-align: center; color: var(--ink-faded); font-style: italic;';
+            noResults.textContent = 'No results found for "' + query + '"';
+            searchResults.appendChild(noResults);
             searchResults.style.display = '';
             return;
         }
@@ -261,24 +265,52 @@ function filterLore(query) {
             groups[r.category].push(r);
         });
 
-        let html = '<h2>Search Results (' + data.results.length + ')</h2>';
+        searchResults.textContent = '';
+
+        const heading = document.createElement('h2');
+        heading.textContent = 'Search Results (' + data.results.length + ')';
+        searchResults.appendChild(heading);
+
         for (const [cat, items] of Object.entries(groups)) {
-            html += '<h3>' + cat + ' (' + items.length + ')</h3>';
+            const catHeading = document.createElement('h3');
+            catHeading.textContent = cat + ' (' + items.length + ')';
+            searchResults.appendChild(catHeading);
+
             items.forEach(item => {
-                html += '<div class="lore-item" style="margin-bottom: 0.3rem;">';
+                const div = document.createElement('div');
+                div.className = 'lore-item';
+                div.style.marginBottom = '0.3rem';
+
+                const strong = document.createElement('strong');
                 // If item has a direct link (e.g. fortress dwarf → character sheet)
                 if (item.link) {
-                    html += '<a href="' + item.link + '" class="dwarf-link"><strong>' + item.name + '</strong></a>';
+                    const a = document.createElement('a');
+                    a.href = item.link;
+                    a.className = 'dwarf-link';
+                    a.textContent = item.name;
+                    strong.appendChild(a);
                 } else {
                     // Make name a clickable cross-reference search
-                    html += '<strong><a href="#" class="lore-xref" onclick="searchLore(\'' + item.name.replace(/'/g, "\\'") + '\'); return false;">' + item.name + '</a></strong>';
+                    const a = document.createElement('a');
+                    a.href = '#';
+                    a.className = 'lore-xref';
+                    a.textContent = item.name;
+                    a.addEventListener('click', (e) => { e.preventDefault(); searchLore(item.name); });
+                    strong.appendChild(a);
                 }
-                if (item.detail) html += ' — <span style="color: var(--ink-light);">' + item.detail + '</span>';
-                html += '</div>';
+                div.appendChild(strong);
+
+                if (item.detail) {
+                    const detailSpan = document.createElement('span');
+                    detailSpan.style.color = 'var(--ink-light)';
+                    detailSpan.textContent = ' — ' + item.detail;
+                    div.appendChild(detailSpan);
+                }
+
+                searchResults.appendChild(div);
             });
         }
 
-        searchResults.innerHTML = html;
         searchResults.style.display = '';
     }, 300);
 }
