@@ -35,27 +35,35 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 ## Screenshots
 
 ### Chronicle
+AI-generated seasonal narratives that track migrations, conflicts, role changes, and the evolving story of your fortress. Includes fortress-wide player notes with 8 tag types that influence how the AI writes.
 ![Chronicle](docs/screenshots/Chronicle.png)
 
 ### Dwarves
+Character sheets with tabbed Notes, Biography, and Diary sections. Personality traits, skills, relationships, combat record, and equipment. First-person diary entries written in the dwarf's voice based on their personality.
 ![Dwarves](docs/screenshots/dwarves.png)
 
 ### Relationship Web
+Interactive force-directed graph showing family, friend, rival, and deity connections across the entire fortress. Drag, zoom, hover for details, double-click to focus on a dwarf's connections.
 ![Relationship Web](docs/screenshots/relationship_web.png)
 
 ### Pantheon
+Bar chart of deity worship across the fortress, sorted by worshipper count. Click any deity to see who worships them. Sphere descriptions (death, minerals, sacrifice, etc.) pulled from legends data.
 ![Pantheon](docs/screenshots/Pantheon.png)
 
 ### Events
+Live event feed via WebSocket, collapsible combat log with blow-by-blow fight details and siege grouping, battle reports written by survivors, and a chat log of dwarf conversations with AI social summaries.
 ![Events](docs/screenshots/events.png)
 
 ### Lore
+Searchable world history browser covering civilizations, wars, battles, historical figures, artifacts, and more. Hover tooltips show rich detail — kill counts, battle forces, relationships, deity spheres, artifact descriptions.
 ![Lore](docs/screenshots/legends.png)
 
 ### Quests
+AI-generated quests based on your actual fortress state — citizens, buildings, events, religion, military. Filtered by category and difficulty. Grounded in real DF mechanics. Completion narratives feed into future chronicles.
 ![Quests](docs/screenshots/quests.png)
 
 ### Gazette
+A dwarven newspaper with five sections: The Fortress Herald, Military Dispatches, Quarry Gossip, Quest Board, and Obituaries. Written by the fortress's best writer in their personality voice. Newspaper-style two-column layout.
 ![Gazette](docs/screenshots/gazette.png)
 
 ## Quick Start
