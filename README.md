@@ -110,9 +110,11 @@ See the **[Wiki](https://github.com/Been012/df-storyteller/wiki)** for:
 - [LLM Integration](https://github.com/Been012/df-storyteller/wiki/LLM-Integration)
 - Feature guides for every tab
 
-## Note
+## Notes
 
-This tool is designed to run **locally on your machine** (localhost). It is not intended to be exposed to the internet or run on a public server. API keys are stored in your local config file at `~/.df-storyteller/config.toml`.
+- This tool is designed to run **locally on your machine** (localhost). It is not intended to be exposed to the internet or run on a public server.
+- **Developed and tested on Windows** with DF Premium (Steam). Should work on Mac and Linux — all code uses cross-platform libraries (`pathlib`, FastAPI) and DFHack APIs are platform-independent — but these platforms are untested. If you run into issues, please [open a bug report](https://github.com/Been012/df-storyteller/issues/new?template=bug_report.md).
+- Config and stories are stored at `~/.df-storyteller/`. API keys are in `config.toml`.
 
 ## License
 
