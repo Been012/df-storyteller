@@ -38,8 +38,8 @@ coverage.xml
 # Config with secrets (API keys are stored here)
 config.toml
 
-# Stories output (user-generated content)
-stories/
+# Stories output (user-generated content, lives in ~/.df-storyteller/stories/)
+# Do NOT ignore src/df_storyteller/stories/ (that's the source code package)
 
 # DFHack event data (game-specific, not distributable)
 storyteller_events/
