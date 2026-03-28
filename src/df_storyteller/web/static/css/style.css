@@ -742,6 +742,32 @@ details[open] .lore-summary h2::before {
     font-style: italic;
 }
 
+/* ========== Combat Log ========== */
+
+.combat-details summary {
+    list-style: none;
+}
+
+.combat-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.combat-details summary::before {
+    content: '▶ ';
+    font-size: 0.7rem;
+    color: var(--ink-faded);
+    margin-right: 0.3rem;
+}
+
+.combat-details[open] summary::before {
+    content: '▼ ';
+}
+
+.combat-details[open] summary {
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+}
+
 /* ========== Lore Tooltips ========== */
 
 .lore-tooltip {

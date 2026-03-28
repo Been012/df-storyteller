@@ -25,6 +25,9 @@ class OllamaProvider(LLMProvider):
         # with some Ollama versions (connection drops)
         def _sync_request() -> str:
             with httpx.Client(timeout=300.0) as client:
+                # Thinking models (e.g. gpt-oss, deepseek-r1) use thinking tokens
+                # from the num_predict budget, so we need extra headroom
+                predict_tokens = max_tokens * 3  # 3x to account for thinking overhead
                 response = client.post(
                     f"{self._base_url}/api/chat",
                     json={
@@ -35,7 +38,7 @@ class OllamaProvider(LLMProvider):
                         ],
                         "stream": False,
                         "options": {
-                            "num_predict": max_tokens,
+                            "num_predict": predict_tokens,
                             "temperature": temperature,
                         },
                     },

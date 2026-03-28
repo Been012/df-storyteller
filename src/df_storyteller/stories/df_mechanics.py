@@ -5,6 +5,18 @@ shared across all story generators (chronicles, biographies, diaries, quests,
 eulogies, sagas) to prevent the LLM from hallucinating game mechanics.
 """
 
+# Compact reference for short-form generation (battle reports, chat summaries)
+# where context window space is limited
+DF_MECHANICS_COMPACT = """
+DWARF FORTRESS KEY FACTS:
+- Military squads have max 10 dwarves each. Must be assigned to train. Training happens in barracks via sparring.
+- Sieges require 80+ population. Goblins are cowardly and flee when outmatched.
+- Dwarves drink booze, eat in dining rooms, sleep in bedrooms. Unhappy dwarves throw tantrums.
+- Strange moods are random (player cannot trigger them). Artifacts are created by moody dwarves.
+- Forgotten beasts emerge from breached caverns. Megabeasts attack at high wealth/population.
+- The player CANNOT control: who migrates, who falls in love, strange moods, weather, what caravans bring.
+"""
+
 DF_MECHANICS_REFERENCE = """
 DWARF FORTRESS MECHANICS — Ground all narrative in these facts:
 
