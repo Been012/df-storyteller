@@ -106,8 +106,17 @@ class LegendsData:
                         except (ValueError, TypeError):
                             pass
 
+        # Event collection index by ID (for war/battle detail lookups)
+        self._event_collections_by_id: dict[str, dict[str, Any]] = {}
+        for ec in self.event_collections:
+            ec_id = ec.get("id", "")
+            if ec_id:
+                self._event_collections_by_id[str(ec_id)] = ec
+
         # HF event involvement count
         self._hf_event_count: dict[int, int] = defaultdict(int)
+        # Site event index: site_id -> Counter of event types
+        self._site_event_types: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for evt in self.historical_events:
             for key in ("hfid", "hfid_1", "hfid_2", "slayer_hfid", "group_hfid"):
                 hfid_str = evt.get(key)
@@ -116,6 +125,27 @@ class LegendsData:
                         self._hf_event_count[int(hfid_str)] += 1
                     except (ValueError, TypeError):
                         pass
+            site_id_str = evt.get("site_id")
+            if site_id_str and site_id_str != "-1":
+                try:
+                    self._site_event_types[int(site_id_str)][evt.get("type", "unknown")] += 1
+                except (ValueError, TypeError):
+                    pass
+
+    def get_event_collection(self, ec_id: int | str) -> dict[str, Any] | None:
+        """Get an event collection (war, battle, siege) by ID."""
+        if hasattr(self, '_event_collections_by_id'):
+            return self._event_collections_by_id.get(str(ec_id))
+        for ec in self.event_collections:
+            if ec.get("id") == str(ec_id):
+                return ec
+        return None
+
+    def get_site_event_types(self, site_id: int) -> dict[str, int]:
+        """Get event type counts for a site."""
+        if hasattr(self, '_site_event_types'):
+            return dict(self._site_event_types.get(site_id, {}))
+        return {}
 
     def get_hf_event_count(self, hf_id: int) -> int:
         """Get number of historical events involving a figure."""

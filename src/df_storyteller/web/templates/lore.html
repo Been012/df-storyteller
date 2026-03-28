@@ -91,7 +91,7 @@
 
 {% call lore_section("Civilizations", civilizations, "civs") %}
     {% for civ in civilizations %}
-    <div class="lore-item" style="margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(184,160,120,0.3);">
+    <div class="lore-item" {% if civ.id %}data-entity-type="civilization" data-entity-id="{{ civ.id }}"{% endif %} style="margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(184,160,120,0.3);">
         <h3 style="margin-bottom: 0.2rem;">{{ civ.name }}{% if civ.race %} <span style="font-weight: normal; color: var(--ink-faded);">({{ civ.race }})</span>{% endif %}</h3>
         {% if civ.details %}<p style="font-size: 0.9rem; color: var(--ink-light);">{{ civ.details }}</p>{% endif %}
         {% if civ.sub_entities %}<p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.2rem;">Organizations: {{ civ.sub_entities | join(', ') }}</p>{% endif %}
@@ -101,7 +101,7 @@
 
 {% call lore_section("Wars & Conflicts", wars, "wars") %}
     {% for war in wars %}
-    <div class="lore-item" style="margin-bottom: 0.5rem;">
+    <div class="lore-item" {% if war.id %}data-entity-type="war" data-entity-id="{{ war.id }}"{% endif %} style="margin-bottom: 0.5rem;">
         <strong>{{ war.name }}</strong>{% if war.years %} <span style="color: var(--ink-faded);">({{ war.years }})</span>{% endif %}
         {% if war.details %}<br><span style="font-size: 0.9rem; color: var(--ink-light);">{{ war.details }}</span>{% endif %}
     </div>
@@ -110,7 +110,7 @@
 
 {% call lore_section("Notable Battles", battles, "battles") %}
     {% for battle in battles %}
-    <div class="lore-item" style="margin-bottom: 0.4rem;">
+    <div class="lore-item" {% if battle.id %}data-entity-type="battle" data-entity-id="{{ battle.id }}"{% endif %} style="margin-bottom: 0.4rem;">
         <strong>{{ battle.name }}</strong>{% if battle.year %} <span style="color: var(--ink-faded);">(year {{ battle.year }})</span>{% endif %}
         {% if battle.details %}<br><span style="font-size: 0.9rem; color: var(--ink-light);">{{ battle.details }}</span>{% endif %}
     </div>
@@ -119,7 +119,7 @@
 
 {% call lore_section("Notable Figures", figures, "figures") %}
     {% for fig in figures %}
-    <div class="lore-item" style="margin-bottom: 0.3rem;">
+    <div class="lore-item" {% if fig.id %}data-entity-type="figure" data-entity-id="{{ fig.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         <strong>{{ fig.name }}</strong>{% if fig.race %} <span style="color: var(--ink-faded);">({{ fig.race }})</span>{% endif %}{% if fig.description %} — {{ fig.description }}{% endif %}
     </div>
     {% endfor %}
@@ -127,7 +127,7 @@
 
 {% call lore_section("Artifacts", artifacts, "artifacts") %}
     {% for art in artifacts %}
-    <div class="lore-item" style="margin-bottom: 0.3rem;">
+    <div class="lore-item" {% if art.id %}data-entity-type="artifact" data-entity-id="{{ art.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         <strong>{{ art.name }}</strong>{% if art.details %} — <span style="color: var(--ink-light);">{{ art.details }}</span>{% endif %}
     </div>
     {% endfor %}
@@ -138,7 +138,7 @@
         <strong>Warning:</strong> This section reveals hidden identities — vampires, werebeasts, spies, and other secrets. Viewing this may spoil in-game discoveries.
     </p>
     {% for ident in identities %}
-    <div class="lore-item" style="margin-bottom: 0.3rem;">
+    <div class="lore-item" {% if ident.id %}data-entity-type="figure" data-entity-id="{{ ident.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         <strong>{{ ident.real_name }}</strong> &rarr; posing as <em>"{{ ident.assumed_name }}"</em>
     </div>
     {% endfor %}
@@ -146,7 +146,7 @@
 
 {% call lore_section("Written Works", written_works, "works") %}
     {% for work in written_works %}
-    <div class="lore-item" style="margin-bottom: 0.3rem;">
+    <div class="lore-item" {% if work.id is defined and work.id is not none %}data-entity-type="written_work" data-entity-id="{{ work.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         <strong>{{ work.title }}</strong>{% if work.details %} — <span style="color: var(--ink-light);">{{ work.details }}</span>{% endif %}
     </div>
     {% endfor %}
@@ -154,7 +154,7 @@
 
 {% call lore_section("Notable Relationships", relationships, "rels") %}
     {% for rel in relationships %}
-    <div class="lore-item" style="margin-bottom: 0.3rem; font-size: 0.9rem;">
+    <div class="lore-item" {% if rel.id %}data-entity-type="figure" data-entity-id="{{ rel.id }}"{% endif %} style="margin-bottom: 0.3rem; font-size: 0.9rem;">
         {{ rel.description }}{% if rel.year %} <span style="color: var(--ink-faded);">(year {{ rel.year }})</span>{% endif %}
     </div>
     {% endfor %}
@@ -162,7 +162,7 @@
 
 {% call lore_section("Geography", geography, "geo") %}
     {% for geo in geography %}
-    <div class="lore-item" style="margin-bottom: 0.3rem;">
+    <div class="lore-item" {% if geo.id and geo.entity_type %}data-entity-type="{{ geo.entity_type }}" data-entity-id="{{ geo.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         <strong>{{ geo.name }}</strong> — <span style="color: var(--ink-light);">{{ geo.details }}</span>
     </div>
     {% endfor %}
@@ -300,6 +300,12 @@ function filterLore(query) {
                 }
                 div.appendChild(strong);
 
+                // Add tooltip data attributes (skip fortress dwarves — they link to character sheets)
+                if (item.entity_type && item.id && !item.link) {
+                    div.dataset.entityType = item.entity_type;
+                    div.dataset.entityId = item.id;
+                }
+
                 if (item.detail) {
                     const detailSpan = document.createElement('span');
                     detailSpan.style.color = 'var(--ink-light)';
@@ -355,5 +361,144 @@ async function generateSaga() {
     btn.disabled = false;
     btn.textContent = 'Write Epic Saga';
 }
+
+// ==================== Lore Tooltip ====================
+(function() {
+    const tooltipEl = document.createElement('div');
+    tooltipEl.id = 'lore-tooltip';
+    tooltipEl.className = 'lore-tooltip';
+    tooltipEl.style.display = 'none';
+    document.body.appendChild(tooltipEl);
+
+    const cache = new Map();
+    let activeTarget = null;
+    let showTimeout = null;
+    let hideTimeout = null;
+    let fetchController = null;
+
+    function renderTooltip(data) {
+        tooltipEl.textContent = '';
+
+        const title = document.createElement('div');
+        title.className = 'tooltip-title';
+        title.textContent = data.name;
+        tooltipEl.appendChild(title);
+
+        if (data.fields && data.fields.length) {
+            for (const field of data.fields) {
+                const row = document.createElement('div');
+                row.className = 'tooltip-field';
+                const label = document.createElement('span');
+                label.className = 'tooltip-label';
+                label.textContent = field.label + ': ';
+                row.appendChild(label);
+                const value = document.createElement('span');
+                value.className = 'tooltip-value';
+                value.textContent = field.value;
+                row.appendChild(value);
+                tooltipEl.appendChild(row);
+            }
+        } else {
+            const msg = document.createElement('div');
+            msg.className = 'tooltip-loading';
+            msg.textContent = 'No additional details available.';
+            tooltipEl.appendChild(msg);
+        }
+    }
+
+    function renderLoading() {
+        tooltipEl.textContent = '';
+        const msg = document.createElement('div');
+        msg.className = 'tooltip-loading';
+        msg.textContent = 'Loading...';
+        tooltipEl.appendChild(msg);
+    }
+
+    function positionTooltip(targetEl) {
+        const rect = targetEl.getBoundingClientRect();
+        tooltipEl.style.display = 'block';
+        tooltipEl.style.left = '-9999px';
+        const tipRect = tooltipEl.getBoundingClientRect();
+
+        let top = rect.bottom + 8 + window.scrollY;
+        let left = rect.left + window.scrollX;
+
+        if (left + tipRect.width > window.innerWidth - 16) {
+            left = window.innerWidth - tipRect.width - 16;
+        }
+        if (top + tipRect.height > window.scrollY + window.innerHeight - 16) {
+            top = rect.top - tipRect.height - 8 + window.scrollY;
+        }
+        if (left < 16) left = 16;
+
+        tooltipEl.style.top = top + 'px';
+        tooltipEl.style.left = left + 'px';
+    }
+
+    function scheduleShow(target) {
+        clearTimeout(hideTimeout);
+        if (activeTarget === target) return;
+        clearTimeout(showTimeout);
+
+        showTimeout = setTimeout(async () => {
+            activeTarget = target;
+            const type = target.dataset.entityType;
+            const id = target.dataset.entityId;
+            const key = type + ':' + id;
+
+            if (cache.has(key)) {
+                renderTooltip(cache.get(key));
+                positionTooltip(target);
+                return;
+            }
+
+            renderLoading();
+            positionTooltip(target);
+
+            if (fetchController) fetchController.abort();
+            fetchController = new AbortController();
+
+            try {
+                const res = await fetch('/api/lore/detail?entity_type=' + encodeURIComponent(type) + '&entity_id=' + encodeURIComponent(id), { signal: fetchController.signal });
+                if (!res.ok) throw new Error('not found');
+                const data = await res.json();
+                cache.set(key, data);
+                if (activeTarget === target) {
+                    renderTooltip(data);
+                    positionTooltip(target);
+                }
+            } catch (err) {
+                if (err.name !== 'AbortError' && activeTarget === target) {
+                    tooltipEl.style.display = 'none';
+                }
+            }
+        }, 300);
+    }
+
+    function scheduleHide() {
+        clearTimeout(showTimeout);
+        hideTimeout = setTimeout(() => {
+            tooltipEl.style.display = 'none';
+            activeTarget = null;
+        }, 200);
+    }
+
+    // Event delegation — covers both static Jinja elements and JS-created search results
+    document.body.addEventListener('mouseover', (e) => {
+        const target = e.target.closest('[data-entity-type][data-entity-id]');
+        if (target) { scheduleShow(target); return; }
+        if (e.target.closest('#lore-tooltip')) { clearTimeout(hideTimeout); return; }
+    });
+
+    document.body.addEventListener('mouseout', (e) => {
+        const target = e.target.closest('[data-entity-type][data-entity-id]');
+        if (target) { scheduleHide(); return; }
+        if (e.target.closest('#lore-tooltip')) { scheduleHide(); return; }
+    });
+
+    // Keep tooltip visible when hovering it
+    tooltipEl.addEventListener('mouseover', () => clearTimeout(hideTimeout));
+    tooltipEl.addEventListener('mouseout', () => scheduleHide());
+})();
 </script>
 {% endblock %}

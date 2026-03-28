@@ -12,7 +12,7 @@ from typing import Any, AsyncGenerator
 logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -977,6 +977,8 @@ async def lore_page(request: Request):
 
             race_display = civ.race.replace('_', ' ').title() if civ.race else ''
             civilizations.append({
+                "id": eid,
+                "entity_type": "civilization",
                 "name": civ.name,
                 "race": race_display,
                 "details": ". ".join(details_parts) if details_parts else "",
@@ -1007,6 +1009,8 @@ async def lore_page(request: Request):
                     year_range = f"Year {sy}"
 
                 wars.append({
+                    "id": ec.get("id", ""),
+                    "entity_type": "war",
                     "name": ec.get("name", "Unknown conflict"),
                     "details": " vs ".join(details_parts) if details_parts else "",
                     "years": year_range,
@@ -1037,7 +1041,7 @@ async def lore_page(request: Request):
                     outcome_str = outcome.replace("_", " ") if isinstance(outcome, str) else str(outcome)
                     details += f" — {outcome_str}"
                 details += f" ({atk_deaths}/{def_deaths} casualties)"
-            battles.append({"name": name, "details": details, "year": year})
+            battles.append({"id": battle.get("id", ""), "entity_type": "battle", "name": name, "details": details, "year": year})
 
         # Historical eras
         eras = []
@@ -1074,6 +1078,8 @@ async def lore_page(request: Request):
                     details_parts.append(f"known to use aliases")
                     break
             figures.append({
+                "id": hfid,
+                "entity_type": "figure",
                 "name": hf.name,
                 "race": race,
                 "description": " | ".join(details_parts) if details_parts else "",
@@ -1105,6 +1111,8 @@ async def lore_page(request: Request):
                 if holder:
                     details_parts.append(f"held by {holder.name}")
             artifacts.append({
+                "id": aid,
+                "entity_type": "artifact",
                 "name": art.name,
                 "details": " — ".join(details_parts) if details_parts else "",
             })
@@ -1133,6 +1141,8 @@ async def lore_page(request: Request):
             if author_name:
                 details_parts.append(f"by {author_name}")
             written_works.append({
+                "id": wc.get("id", ""),
+                "entity_type": "written_work",
                 "title": title,
                 "details": " — ".join(details_parts) if details_parts else "",
             })
@@ -1161,6 +1171,8 @@ async def lore_page(request: Request):
                 pass
             if source_name and target_name:
                 relationships.append({
+                    "id": source_id,
+                    "entity_type": "figure",
                     "description": f"{source_name} — {rtype} — {target_name}",
                     "year": year,
                 })
@@ -1178,6 +1190,8 @@ async def lore_page(request: Request):
                     pass
             if hf_name and name:
                 identities.append({
+                    "id": hf_id,
+                    "entity_type": "figure",
                     "real_name": hf_name,
                     "assumed_name": name,
                 })
@@ -1190,10 +1204,10 @@ async def lore_page(request: Request):
             details = "Volcano" if is_volcano == "1" else "Mountain"
             if height:
                 details += f", height {height}"
-            geography.append({"name": name, "type": "peak", "details": details})
+            geography.append({"id": peak.get("id", ""), "entity_type": "geography", "name": name, "type": "peak", "details": details})
 
         for land in legends.landmasses:
-            geography.append({"name": land.get("name", ""), "type": "landmass", "details": "Landmass"})
+            geography.append({"id": land.get("id", ""), "entity_type": "geography", "name": land.get("name", ""), "type": "landmass", "details": "Landmass"})
 
         for river in legends.rivers:
             geography.append({"name": river.get("name", ""), "type": "river", "details": "River"})
@@ -1381,7 +1395,7 @@ async def api_lore_search(q: str = ""):
             break
         if query in civ.name.lower() or query in civ.race.lower():
             race = civ.race.replace("_", " ").title() if civ.race else ""
-            results.append({"category": "Civilization", "name": civ.name, "detail": race})
+            results.append({"category": "Civilization", "name": civ.name, "detail": race, "id": eid, "entity_type": "civilization"})
             count += 1
 
     # Build set of HF IDs with assumed identities (don't reveal in search)
@@ -1413,7 +1427,7 @@ async def api_lore_search(q: str = ""):
                 detail += ")"
             if hfid in hfs_with_identities:
                 detail += " — this figure harbors a secret..."
-            results.append({"category": "Figure", "name": hf.name, "detail": detail})
+            results.append({"category": "Figure", "name": hf.name, "detail": detail, "id": hfid, "entity_type": "figure"})
             count += 1
 
     # Search artifacts
@@ -1432,7 +1446,7 @@ async def api_lore_search(q: str = ""):
                 holder = legends.get_figure(art.creator_hf_id)
                 if holder:
                     detail_parts.append(f"held by {holder.name}")
-            results.append({"category": "Artifact", "name": art.name, "detail": " — ".join(detail_parts)})
+            results.append({"category": "Artifact", "name": art.name, "detail": " — ".join(detail_parts), "id": aid, "entity_type": "artifact"})
             count += 1
 
     # Search sites
@@ -1441,7 +1455,7 @@ async def api_lore_search(q: str = ""):
         if count >= MAX_PER_CATEGORY:
             break
         if query in site.name.lower() or query in site.site_type.lower():
-            results.append({"category": "Site", "name": site.name, "detail": site.site_type})
+            results.append({"category": "Site", "name": site.name, "detail": site.site_type, "id": sid, "entity_type": "site"})
             count += 1
 
     # Search written works
@@ -1464,7 +1478,7 @@ async def api_lore_search(q: str = ""):
             detail = wc_type
             if author_name:
                 detail += f" by {author_name}"
-            results.append({"category": "Written Work", "name": title, "detail": detail})
+            results.append({"category": "Written Work", "name": title, "detail": detail, "id": wc.get("id", ""), "entity_type": "written_work"})
             count += 1
 
     # Search wars/battles
@@ -1475,10 +1489,365 @@ async def api_lore_search(q: str = ""):
         name = ec.get("name", "")
         if name and query in name.lower():
             ec_type = ec.get("type", "").replace("_", " ").title()
-            results.append({"category": ec_type, "name": name, "detail": ""})
+            results.append({"category": ec_type, "name": name, "detail": "", "id": ec.get("id", ""), "entity_type": "war"})
             count += 1
 
     return {"results": results}
+
+
+@app.get("/api/lore/detail")
+async def api_lore_detail(entity_type: str, entity_id: str):
+    """Return structured detail for a lore entity (for hover tooltips)."""
+    config = _get_config()
+    _, _, world_lore, _ = _load_game_state_safe(config, skip_legends=False)
+
+    if not world_lore.is_loaded or not world_lore._legends:
+        return JSONResponse({"error": "Legends not loaded"}, status_code=503)
+
+    legends = world_lore._legends
+
+    try:
+        eid = int(entity_id)
+    except (ValueError, TypeError):
+        eid = 0
+
+    if entity_type == "figure":
+        hf = legends.get_figure(eid)
+        if not hf:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        fields = []
+        if hf.race:
+            fields.append({"label": "Race", "value": hf.race.replace("_", " ").title()})
+        if hf.hf_type:
+            fields.append({"label": "Type", "value": hf.hf_type.replace("_", " ").title()})
+        if hf.birth_year and hf.birth_year > 0:
+            born = f"Year {hf.birth_year}"
+            if hf.death_year and hf.death_year > 0:
+                born += f" — died Year {hf.death_year}"
+            fields.append({"label": "Born", "value": born})
+        if hf.spheres:
+            fields.append({"label": "Spheres", "value": ", ".join(hf.spheres)})
+        if hf.associated_civ_id:
+            civ = legends.get_civilization(hf.associated_civ_id)
+            if civ:
+                fields.append({"label": "Civilization", "value": civ.name})
+
+        # Relationships from legends
+        from collections import Counter
+        hfid_str = str(eid)
+        rel_summaries = []
+        for rel in legends.relationships:
+            if rel.get("source_hf") == hfid_str:
+                other = legends.get_figure(int(rel.get("target_hf", 0)))
+                if other:
+                    rel_summaries.append(f"{rel.get('relationship', '?')} of {other.name}")
+            elif rel.get("target_hf") == hfid_str:
+                other = legends.get_figure(int(rel.get("source_hf", 0)))
+                if other:
+                    rel_summaries.append(f"{rel.get('relationship', '?')} of {other.name}")
+        if rel_summaries:
+            fields.append({"label": "Relationships", "value": "; ".join(rel_summaries[:5])})
+
+        # Event type breakdown + kill details in a single pass
+        evt_types: Counter[str] = Counter()
+        kill_victims: list[tuple[str, str]] = []  # (name, race)
+        kill_races: Counter[str] = Counter()
+        for evt in legends.historical_events:
+            for key in ("hfid", "hfid_1", "hfid_2", "slayer_hfid", "group_hfid"):
+                if evt.get(key) == hfid_str:
+                    evt_types[evt.get("type", "unknown")] += 1
+                    # Track kills where this figure is the slayer
+                    if evt.get("type") == "hf died" and evt.get("slayer_hfid") == hfid_str:
+                        victim = legends.get_figure(int(evt.get("hfid", 0))) if evt.get("hfid") else None
+                        if victim:
+                            kill_victims.append((victim.name, victim.race.replace("_", " ").title() if victim.race else ""))
+                            kill_races[victim.race.replace("_", " ").title() if victim.race else "Unknown"] += 1
+                    break
+        if evt_types:
+            # Only show interesting event types, skip mundane ones
+            readable_map = {
+                "hf died": "kills",
+                "hf simple battle event": "battles",
+                "hf attacked site": "site attacks",
+                "hf destroyed site": "site destructions",
+                "creature devoured": "devoured victims",
+                "item stolen": "thefts",
+                "hf wounded": "wounds inflicted",
+                "hf confronted": "confrontations",
+                "artifact created": "artifacts created",
+                "hf new pet": "tamed creatures",
+                "assume identity": "assumed identities",
+                "hf razed structure": "razed structures",
+            }
+            # Skip boring types: state changes, job changes, entity links, travel
+            summary_parts = []
+            for evt_type, count in evt_types.most_common(10):
+                if evt_type in readable_map:
+                    summary_parts.append(f"{count} {readable_map[evt_type]}")
+                if len(summary_parts) >= 4:
+                    break
+            total = sum(evt_types.values())
+            if summary_parts:
+                fields.append({"label": "Notable Events", "value": ", ".join(summary_parts)})
+            else:
+                fields.append({"label": "Historical Events", "value": str(total)})
+
+        # Kill details
+        if kill_victims:
+            race_summary = ", ".join(f"{count} {race}" for race, count in kill_races.most_common(4))
+            fields.append({"label": "Kill Count", "value": f"{len(kill_victims)} ({race_summary})"})
+            notable_kills = [f"{name} ({race})" for name, race in kill_victims[:3]]
+            fields.append({"label": "Notable Kills", "value": "; ".join(notable_kills)})
+
+        if hf.notable_deeds:
+            fields.append({"label": "Deeds", "value": "; ".join(hf.notable_deeds[:3])})
+        return {"entity_type": "figure", "name": hf.name, "fields": fields}
+
+    elif entity_type == "civilization":
+        civ = legends.get_civilization(eid)
+        if not civ:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        fields = []
+        if civ.race:
+            fields.append({"label": "Race", "value": civ.race.replace("_", " ").title()})
+        if civ.sites:
+            site_names = []
+            for sid in civ.sites[:5]:
+                site = legends.get_site(sid)
+                if site:
+                    site_names.append(f"{site.name} ({site.site_type})" if site.site_type else site.name)
+            if site_names:
+                suffix = f" (+{len(civ.sites) - 5} more)" if len(civ.sites) > 5 else ""
+                fields.append({"label": "Sites", "value": ", ".join(site_names) + suffix})
+        wars = legends.get_wars_involving(eid)
+        if wars:
+            war_names = [w.get("name", "Unknown") for w in wars[:4]]
+            suffix = f" (+{len(wars) - 4} more)" if len(wars) > 4 else ""
+            fields.append({"label": "Wars", "value": "; ".join(war_names) + suffix})
+        if civ.leader_hf_ids:
+            leader_names = []
+            for lid in civ.leader_hf_ids[:3]:
+                lhf = legends.get_figure(lid)
+                if lhf:
+                    leader_names.append(lhf.name)
+            if leader_names:
+                fields.append({"label": "Leaders", "value": ", ".join(leader_names)})
+        return {"entity_type": "civilization", "name": civ.name, "fields": fields}
+
+    elif entity_type == "artifact":
+        art = legends.get_artifact(eid)
+        if not art:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        fields = []
+        if art.item_type:
+            fields.append({"label": "Type", "value": art.item_type.replace("_", " ")})
+        if art.material:
+            fields.append({"label": "Material", "value": art.material})
+        if art.creator_hf_id:
+            creator = legends.get_figure(art.creator_hf_id)
+            if creator:
+                creator_detail = creator.name
+                if creator.race:
+                    creator_detail += f" ({creator.race.replace('_', ' ').title()})"
+                fields.append({"label": "Creator", "value": creator_detail})
+        if art.site_id:
+            site = legends.get_site(art.site_id)
+            if site:
+                fields.append({"label": "Location", "value": f"{site.name} ({site.site_type})" if site.site_type else site.name})
+        if art.description:
+            fields.append({"label": "Description", "value": art.description[:300]})
+        return {"entity_type": "artifact", "name": art.name, "fields": fields}
+
+    elif entity_type == "site":
+        site = legends.get_site(eid)
+        if not site:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        fields = []
+        if site.site_type:
+            fields.append({"label": "Type", "value": site.site_type.replace("_", " ").title()})
+        if site.owner_civ_id:
+            owner = legends.get_civilization(site.owner_civ_id)
+            if owner:
+                race = f" ({owner.race.replace('_', ' ').title()})" if owner.race else ""
+                fields.append({"label": "Owner", "value": f"{owner.name}{race}"})
+        if site.coordinates:
+            fields.append({"label": "Coordinates", "value": f"({site.coordinates[0]}, {site.coordinates[1]})"})
+        # Notable events at this site (precomputed index)
+        site_evt_types = legends.get_site_event_types(eid)
+        if site_evt_types:
+            interesting = {"hf died": "deaths", "hf attacked site": "attacks", "artifact created": "artifacts created",
+                           "hf destroyed site": "destructions", "item stolen": "thefts", "creature devoured": "devourings"}
+            parts = []
+            for et, label in interesting.items():
+                if et in site_evt_types:
+                    parts.append(f"{site_evt_types[et]} {label}")
+            if parts:
+                fields.append({"label": "Notable Events", "value": ", ".join(parts[:4])})
+            total = sum(site_evt_types.values())
+            fields.append({"label": "Total Events", "value": str(total)})
+        return {"entity_type": "site", "name": site.name, "fields": fields}
+
+    elif entity_type in ("war", "battle"):
+        ec = legends.get_event_collection(entity_id)
+        if not ec:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        fields = []
+        sy = ec.get("start_year", "")
+        ey = ec.get("end_year", "")
+        if sy:
+            year_str = f"Year {sy}" + (f"–{ey}" if ey and ey != sy else "")
+            fields.append({"label": "Years", "value": year_str})
+        for role, key in [("Aggressor", "aggressor_ent_id"), ("Defender", "defender_ent_id")]:
+            ids = ec.get(key, [])
+            if isinstance(ids, str):
+                ids = [ids]
+            names = []
+            for eid_str in ids:
+                try:
+                    c = legends.get_civilization(int(eid_str))
+                    if c:
+                        names.append(f"{c.name} ({c.race.replace('_', ' ').title()})" if c.race else c.name)
+                except (ValueError, TypeError):
+                    pass
+            if names:
+                fields.append({"label": role, "value": ", ".join(names)})
+        # For wars: list battles and total casualties
+        ec_type = ec.get("type", "")
+        if ec_type == "war":
+            war_id = ec.get("id")
+            war_battles = [b for b in legends.battles if b.get("war_eventcol") == war_id]
+            if war_battles:
+                battle_summaries = []
+                total_atk_d = 0
+                total_def_d = 0
+                for b in war_battles:
+                    outcome_str = b.get("outcome", "").replace("_", " ")
+                    battle_summaries.append(f"{b.get('name', '?')} ({outcome_str})")
+                    ad = b.get("attacking_squad_deaths", [])
+                    dd = b.get("defending_squad_deaths", [])
+                    if isinstance(ad, list):
+                        total_atk_d += sum(int(d) for d in ad if str(d).isdigit())
+                    if isinstance(dd, list):
+                        total_def_d += sum(int(d) for d in dd if str(d).isdigit())
+                fields.append({"label": "Battles", "value": "; ".join(battle_summaries[:5])
+                               + (f" (+{len(war_battles) - 5} more)" if len(war_battles) > 5 else "")})
+                if total_atk_d or total_def_d:
+                    fields.append({"label": "Total Casualties", "value": f"Attackers: {total_atk_d}, Defenders: {total_def_d}"})
+
+        # Outcome for individual battles
+        outcome = ec.get("outcome", "")
+        if outcome and ec_type != "war":
+            fields.append({"label": "Outcome", "value": outcome.replace("_", " ").title()})
+        # Site where it happened
+        site_id = ec.get("site_id")
+        if site_id and site_id != "-1":
+            site = legends.get_site(int(site_id))
+            if site:
+                fields.append({"label": "Location", "value": site.name})
+        # Squad composition for battles
+        atk_races = ec.get("attacking_squad_race", [])
+        def_races = ec.get("defending_squad_race", [])
+        if isinstance(atk_races, list) and atk_races:
+            from collections import Counter as RCounter
+            atk_summary = RCounter(r.replace("_", " ").title() for r in atk_races)
+            fields.append({"label": "Attacking Forces", "value": ", ".join(f"{c} {r}" for r, c in atk_summary.most_common(4))})
+        if isinstance(def_races, list) and def_races:
+            from collections import Counter as RCounter2
+            def_summary = RCounter2(r.replace("_", " ").title() for r in def_races)
+            fields.append({"label": "Defending Forces", "value": ", ".join(f"{c} {r}" for r, c in def_summary.most_common(4))})
+        # Casualty totals
+        atk_deaths = ec.get("attacking_squad_deaths", [])
+        def_deaths = ec.get("defending_squad_deaths", [])
+        if isinstance(atk_deaths, list):
+            total_atk = sum(int(d) for d in atk_deaths if d.isdigit())
+            total_def = sum(int(d) for d in def_deaths if d.isdigit()) if isinstance(def_deaths, list) else 0
+            if total_atk or total_def:
+                fields.append({"label": "Casualties", "value": f"Attackers: {total_atk}, Defenders: {total_def}"})
+        # Notable combatants
+        atk_hfids = ec.get("attacking_hfid", [])
+        def_hfids = ec.get("defending_hfid", [])
+        if isinstance(atk_hfids, list) and atk_hfids:
+            combatant_names = []
+            for hid in atk_hfids[:3]:
+                h = legends.get_figure(int(hid))
+                if h:
+                    combatant_names.append(h.name)
+            if combatant_names:
+                suffix = f" (+{len(atk_hfids) - 3} more)" if len(atk_hfids) > 3 else ""
+                fields.append({"label": "Notable Attackers", "value": ", ".join(combatant_names) + suffix})
+        if isinstance(def_hfids, list) and def_hfids:
+            combatant_names = []
+            for hid in def_hfids[:3]:
+                h = legends.get_figure(int(hid))
+                if h:
+                    combatant_names.append(h.name)
+            if combatant_names:
+                suffix = f" (+{len(def_hfids) - 3} more)" if len(def_hfids) > 3 else ""
+                fields.append({"label": "Notable Defenders", "value": ", ".join(combatant_names) + suffix})
+        return {"entity_type": entity_type, "name": ec.get("name", "Unknown"), "fields": fields}
+
+    elif entity_type == "written_work":
+        for wc in legends.written_contents:
+            if str(wc.get("id", "")) == str(entity_id):
+                fields = []
+                wc_type = wc.get("type", "").replace("_", " ").title()
+                if wc_type:
+                    fields.append({"label": "Form", "value": wc_type})
+                style = wc.get("style", "").split(":")[0].strip().title()
+                if style:
+                    fields.append({"label": "Style", "value": style})
+                author_id = wc.get("author")
+                if author_id:
+                    try:
+                        author = legends.get_figure(int(author_id))
+                        if author:
+                            author_detail = author.name
+                            if author.race:
+                                author_detail += f" ({author.race.replace('_', ' ').title()})"
+                            if author.associated_civ_id:
+                                aciv = legends.get_civilization(author.associated_civ_id)
+                                if aciv:
+                                    author_detail += f" of {aciv.name}"
+                            fields.append({"label": "Author", "value": author_detail})
+                    except (ValueError, TypeError):
+                        pass
+                pages = wc.get("page_end", "")
+                if pages and pages != "1":
+                    fields.append({"label": "Pages", "value": pages})
+                # References to historical events/figures that inspired the work
+                ref = wc.get("reference", "")
+                if ref and isinstance(ref, str) and ref.strip():
+                    fields.append({"label": "Reference", "value": ref.strip()[:200]})
+                return {"entity_type": "written_work", "name": wc.get("title", "Untitled"), "fields": fields}
+        return JSONResponse({"error": "not_found"}, status_code=404)
+
+    elif entity_type == "geography":
+        # Search across mountains, rivers, landmasses by ID string
+        for peak in legends.mountain_peaks:
+            if str(peak.get("id", "")) == str(entity_id):
+                fields = [{"label": "Type", "value": "Mountain Peak"}]
+                height = peak.get("height", "")
+                if height:
+                    fields.append({"label": "Height", "value": f"{height}"})
+                is_volcano = peak.get("is_volcano")
+                if is_volcano:
+                    fields.append({"label": "Volcano", "value": "Yes"})
+                coords = peak.get("coords", "")
+                if coords:
+                    fields.append({"label": "Coordinates", "value": coords})
+                return {"entity_type": "geography", "name": peak.get("name", ""), "fields": fields}
+        for land in legends.landmasses:
+            if str(land.get("id", "")) == str(entity_id):
+                fields = [{"label": "Type", "value": "Landmass"}]
+                c1 = land.get("coord_1", "")
+                c2 = land.get("coord_2", "")
+                if c1 and c2:
+                    fields.append({"label": "Extent", "value": f"{c1} to {c2}"})
+                return {"entity_type": "geography", "name": land.get("name", ""), "fields": fields}
+        # Rivers don't have IDs, skip
+        return JSONResponse({"error": "not_found"}, status_code=404)
+
+    return JSONResponse({"error": "invalid_type"}, status_code=400)
 
 
 # ==================== Notes API ====================

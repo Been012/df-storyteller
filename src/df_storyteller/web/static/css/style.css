@@ -707,6 +707,57 @@ details[open] .lore-summary h2::before {
     font-style: italic;
 }
 
+/* ========== Lore Tooltips ========== */
+
+.lore-tooltip {
+    position: absolute;
+    z-index: 1000;
+    max-width: 420px;
+    min-width: 200px;
+    background: rgba(30, 20, 10, 0.95);
+    border: 1px solid var(--gold-dark);
+    border-radius: 4px;
+    padding: 0.8rem 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    color: var(--parchment);
+    pointer-events: auto;
+}
+
+.tooltip-title {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gold-dark);
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem;
+}
+
+.tooltip-field {
+    margin-bottom: 0.15rem;
+    line-height: 1.4;
+}
+
+.tooltip-label {
+    font-weight: 700;
+    color: var(--ink-faded);
+}
+
+.tooltip-value {
+    color: var(--parchment);
+}
+
+.tooltip-loading {
+    color: var(--ink-faded);
+    font-style: italic;
+}
+
+[data-entity-type][data-entity-id] {
+    cursor: pointer;
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {
