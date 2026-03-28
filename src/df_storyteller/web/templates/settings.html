@@ -60,6 +60,12 @@
         </div>
 
         <div class="form-group">
+            <label>Gazette Length (tokens)</label>
+            <input type="number" name="gazette_max_tokens" value="{{ config.story.gazette_max_tokens }}" min="1024" max="8000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. The dwarven newspaper. Higher = longer articles per section.</small>
+        </div>
+
+        <div class="form-group">
             <label>Quest Generation Length (tokens)</label>
             <input type="number" name="quest_generation_max_tokens" value="{{ config.story.quest_generation_max_tokens }}" min="512" max="4000">
             <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI-generated quest descriptions and hints.</small>

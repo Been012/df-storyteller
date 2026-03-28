@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Fortress Gazette — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Chronicle</a>
+</div>
+
+{% if not gazette %}
+<div class="parchment" style="text-align: center; padding: 2rem;">
+    <h1 class="page-header">The Fortress Gazette</h1>
+    <p class="page-subtitle">No gazette has been written for this season yet.</p>
+    <div style="margin-top: 1rem;">
+        <button class="btn btn-primary" id="gazette-btn" onclick="generateGazette()">
+            Publish This Season's Edition
+        </button>
+    </div>
+    <div id="gazette-loading" style="display: none; margin-top: 1rem; color: var(--ink-faded); font-style: italic;">
+        The printing press rumbles to life...
+    </div>
+</div>
+{% else %}
+
+<div class="newspaper">
+    <!-- Masthead -->
+    <div class="newspaper-masthead">
+        <div class="newspaper-rule"></div>
+        <div class="newspaper-name">The {{ fortress_name or "Fortress" }} Gazette</div>
+        <div class="newspaper-subtitle">All the News Fit to Engrave in Stone</div>
+        <div class="newspaper-meta">
+            <span>{{ gazette.season | default('') | title }} of Year {{ gazette.year | default('?') }}</span>
+            <span>&middot;</span>
+            <span>Population: {{ population }}</span>
+            <span>&middot;</span>
+            <span>Editor: {{ gazette.author | default('Unknown') }}</span>
+        </div>
+        <div class="newspaper-rule"></div>
+    </div>
+
+    <!-- Content in newspaper columns -->
+    <div class="newspaper-content">
+        {% if gazette.sections.herald %}
+        <div class="newspaper-section">
+            <h2 class="newspaper-section-head">The Fortress Herald</h2>
+            <div class="newspaper-body">{{ gazette.sections.herald }}</div>
+        </div>
+        {% endif %}
+
+        {% if gazette.sections.military %}
+        <div class="newspaper-section">
+            <h2 class="newspaper-section-head">Military Dispatches</h2>
+            <div class="newspaper-body">{{ gazette.sections.military }}</div>
+        </div>
+        {% endif %}
+
+        {% if gazette.sections.gossip %}
+        <div class="newspaper-section">
+            <h2 class="newspaper-section-head">Quarry Gossip</h2>
+            <div class="newspaper-body">{{ gazette.sections.gossip }}</div>
+        </div>
+        {% endif %}
+
+        {% if gazette.sections.quests %}
+        <div class="newspaper-section">
+            <h2 class="newspaper-section-head">Quest Board</h2>
+            <div class="newspaper-body">{{ gazette.sections.quests }}</div>
+        </div>
+        {% endif %}
+
+        {% if gazette.sections.obituaries %}
+        <div class="newspaper-section">
+            <h2 class="newspaper-section-head">Obituaries</h2>
+            <div class="newspaper-body">{{ gazette.sections.obituaries }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer -->
+    <div class="newspaper-footer">
+        <div class="newspaper-rule"></div>
+        <p>Written and edited by {{ gazette.author | default('Unknown') }} &middot; Printed at {{ fortress_name or "the Fortress" }}</p>
+    </div>
+</div>
+
+<div style="margin-top: 1rem; text-align: center;">
+    <button class="btn btn-secondary" id="gazette-btn" onclick="generateGazette()">
+        Rewrite This Edition
+    </button>
+    <div id="gazette-loading" style="display: none; margin-top: 1rem; color: var(--ink-faded); font-style: italic;">
+        The printing press rumbles to life...
+    </div>
+</div>
+{% endif %}
+
+{% if past_gazettes %}
+<details style="margin-top: 2rem;">
+    <summary style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--ink-faded); cursor: pointer;">
+        Past Editions ({{ past_gazettes | length }})
+    </summary>
+    {% for past in past_gazettes %}
+    <div class="parchment" style="margin-top: 0.8rem;">
+        <div style="font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark); margin-bottom: 0.3rem;">
+            {{ past.season | default('') | title }} of Year {{ past.year | default('?') }}
+            <span style="font-size: 0.85rem; color: var(--ink-faded); font-family: 'Crimson Text', serif;">— by {{ past.author }}</span>
+        </div>
+        {% for section_name, section_text in past.sections.items() %}
+        {% if section_text %}
+        <div style="margin-bottom: 0.5rem;">
+            <strong style="font-size: 0.9rem;">{{ section_name | replace('_', ' ') | title }}:</strong>
+            <span style="font-size: 0.88rem; color: var(--ink-light);">{{ section_text | truncate(200) }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
+</details>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function generateGazette() {
+    const btn = document.getElementById('gazette-btn');
+    const loading = document.getElementById('gazette-loading');
+
+    btn.disabled = true;
+    btn.textContent = 'Publishing...';
+    loading.style.display = 'block';
+
+    try {
+        const response = await fetch('/api/gazette/generate', { method: 'POST' });
+        const data = await response.json();
+        if (data.ok) {
+            window.location.reload();
+        } else {
+            loading.textContent = 'Error: ' + (data.error || 'generation failed');
+        }
+    } catch (err) {
+        loading.textContent = 'Error: ' + err.message;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Publish This Season\'s Edition';
+}
+</script>
+{% endblock %}

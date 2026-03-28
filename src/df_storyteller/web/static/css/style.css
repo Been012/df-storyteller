@@ -742,6 +742,105 @@ details[open] .lore-summary h2::before {
     font-style: italic;
 }
 
+/* ========== Gazette / Newspaper ========== */
+
+.newspaper {
+    background: #f4e8c1;
+    color: #2a1f14;
+    padding: 2rem 2.5rem;
+    border-radius: 4px;
+    max-width: 900px;
+    margin: 0 auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.newspaper-masthead {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.newspaper-name {
+    font-family: 'Cinzel', serif;
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #1a1510;
+    margin: 0.3rem 0;
+}
+
+.newspaper-subtitle {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: #5a4a3a;
+    letter-spacing: 1px;
+    margin-bottom: 0.4rem;
+}
+
+.newspaper-meta {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.85rem;
+    color: #5a4a3a;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.newspaper-rule {
+    border: none;
+    border-top: 2px solid #1a1510;
+    margin: 0.3rem 0;
+}
+
+.newspaper-content {
+    column-count: 2;
+    column-gap: 2rem;
+    column-rule: 1px solid #b4a078;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #2a1f14;
+}
+
+.newspaper-section {
+    break-inside: avoid;
+    margin-bottom: 1.2rem;
+}
+
+.newspaper-section-head {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #1a1510;
+    border-bottom: 1px solid #1a1510;
+    padding-bottom: 0.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.newspaper-body {
+    text-align: justify;
+    hyphens: auto;
+    white-space: pre-wrap;
+}
+
+.newspaper-footer {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.8rem;
+    color: #5a4a3a;
+    font-style: italic;
+}
+
+@media (max-width: 700px) {
+    .newspaper-content { column-count: 1; }
+    .newspaper { padding: 1.5rem; }
+    .newspaper-name { font-size: 1.6rem; }
+}
+
 /* ========== Combat Log ========== */
 
 .combat-details summary {

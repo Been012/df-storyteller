@@ -58,6 +58,7 @@ class StoryConfig(BaseModel):
     chat_summary_max_tokens: int = 2048
     quest_generation_max_tokens: int = 2048
     quest_narrative_max_tokens: int = 1024
+    gazette_max_tokens: int = 4096
 
 
 class AppConfig(BaseModel):
