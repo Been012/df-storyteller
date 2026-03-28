@@ -19,16 +19,16 @@ from df_storyteller.llm.prompt_templates import render_system_prompt, render_use
 from df_storyteller.stories.base import create_provider
 
 
-def _bio_path(config: AppConfig, unit_id: int) -> Path:
+def _bio_path(config: AppConfig, unit_id: int, output_dir: Path | None = None) -> Path:
     """Path to a dwarf's biography JSON file."""
-    output_dir = Path(config.paths.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir / f"bio_{unit_id}.json"
+    d = output_dir or Path(config.paths.output_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"bio_{unit_id}.json"
 
 
-def load_biography_history(config: AppConfig, unit_id: int) -> list[dict]:
+def load_biography_history(config: AppConfig, unit_id: int, output_dir: Path | None = None) -> list[dict]:
     """Load all previous biography entries for a dwarf."""
-    path = _bio_path(config, unit_id)
+    path = _bio_path(config, unit_id, output_dir)
     if not path.exists():
         return []
     try:
@@ -38,11 +38,11 @@ def load_biography_history(config: AppConfig, unit_id: int) -> list[dict]:
         return []
 
 
-def _save_biography_entry(config: AppConfig, unit_id: int, entry: dict) -> None:
+def _save_biography_entry(config: AppConfig, unit_id: int, entry: dict, output_dir: Path | None = None) -> None:
     """Append a biography entry to the dwarf's history."""
-    history = load_biography_history(config, unit_id)
+    history = load_biography_history(config, unit_id, output_dir)
     history.append(entry)
-    path = _bio_path(config, unit_id)
+    path = _bio_path(config, unit_id, output_dir)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2, ensure_ascii=False)
 
@@ -51,6 +51,7 @@ async def generate_biography(
     config: AppConfig,
     dwarf_name: str,
     one_time_context: str = "",
+    output_dir: Path | None = None,
 ) -> str:
     """Generate a dated biography entry for a dwarf.
 
@@ -88,7 +89,7 @@ async def generate_biography(
     # Load previous bio entries for continuity
     year = metadata.get("year", 0)
     season = metadata.get("season", "")
-    previous_entries = load_biography_history(config, dwarf.unit_id)
+    previous_entries = load_biography_history(config, dwarf.unit_id, output_dir)
 
     previous_text = ""
     if previous_entries:
@@ -106,8 +107,8 @@ async def generate_biography(
     # Player notes for this dwarf + fortress
     from df_storyteller.context.notes_store import get_notes_for_dwarf, get_fortress_notes
     from df_storyteller.context.narrative_formatter import format_player_notes
-    dwarf_notes = get_notes_for_dwarf(config, dwarf.unit_id)
-    fortress_notes = get_fortress_notes(config)
+    dwarf_notes = get_notes_for_dwarf(config, dwarf.unit_id, output_dir)
+    fortress_notes = get_fortress_notes(config, output_dir)
     all_notes = dwarf_notes + fortress_notes
     notes_text = format_player_notes(all_notes, one_time_context=one_time_context)
 
@@ -145,7 +146,7 @@ Write 2-3 short paragraphs (150-250 words). Date the entry as "{season.title()} 
         "text": bio_text,
         "profession": dwarf.profession,
         "stress_category": dwarf.stress_category,
-    })
+    }, output_dir)
 
     return bio_text
 
@@ -154,6 +155,7 @@ async def generate_eulogy(
     config: AppConfig,
     dwarf_name: str,
     one_time_context: str = "",
+    output_dir: Path | None = None,
 ) -> str:
     """Generate a death eulogy — the final biography entry for a fallen dwarf.
 
@@ -205,7 +207,7 @@ async def generate_eulogy(
             break
 
     # Load full biography history for the eulogy
-    previous_entries = load_biography_history(config, dwarf.unit_id)
+    previous_entries = load_biography_history(config, dwarf.unit_id, output_dir)
     previous_text = ""
     if previous_entries:
         previous_text = "BIOGRAPHY HISTORY (the dwarf's life story):\n\n"
@@ -214,8 +216,8 @@ async def generate_eulogy(
             previous_text += entry.get("text", "") + "\n\n"
 
     # Player notes
-    dwarf_notes = get_notes_for_dwarf(config, dwarf.unit_id)
-    fortress_notes = get_fortress_notes(config)
+    dwarf_notes = get_notes_for_dwarf(config, dwarf.unit_id, output_dir)
+    fortress_notes = get_fortress_notes(config, output_dir)
     notes_text = format_player_notes(dwarf_notes + fortress_notes, one_time_context=one_time_context)
 
     system_prompt = render_system_prompt(
@@ -262,6 +264,6 @@ End with a line about how the fortress remembers them."""
         "profession": dwarf.profession,
         "stress_category": dwarf.stress_category,
         "is_eulogy": True,
-    })
+    }, output_dir)
 
     return eulogy_text

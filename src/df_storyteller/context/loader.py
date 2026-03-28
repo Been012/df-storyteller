@@ -114,12 +114,34 @@ def _get_folder_identity(folder: Path) -> str | None:
     return None
 
 
-def load_game_state(config: AppConfig, skip_legends: bool = False) -> tuple[EventStore, CharacterTracker, WorldLore, dict]:
+def get_fortress_output_dir(config: AppConfig, metadata: dict | None = None) -> Path:
+    """Get the per-fortress output directory for stories, notes, etc.
+
+    Uses fortress identity (civ_id:fortress_name) to create isolated
+    directories per fortress. Falls back to the base output_dir if no
+    fortress identity is available.
+    """
+    base = Path(config.paths.output_dir)
+    if metadata:
+        fi = metadata.get("fortress_info", {})
+        civ_id = fi.get("civ_id", "")
+        name = metadata.get("fortress_name", "")
+        if civ_id and name:
+            safe_name = name.lower().replace(" ", "_")
+            fortress_dir = base / f"{civ_id}_{safe_name}"
+            fortress_dir.mkdir(parents=True, exist_ok=True)
+            return fortress_dir
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def load_game_state(config: AppConfig, skip_legends: bool = False, active_world: str = "") -> tuple[EventStore, CharacterTracker, WorldLore, dict]:
     """Load all available game data from disk.
 
     Args:
         config: Application configuration.
         skip_legends: If True, skip loading legends XML (expensive for large files).
+        active_world: If set, use this world folder as the primary instead of the most recent.
 
     Reads:
     - Snapshot JSON files (fortress state with citizens, visitors, buildings)
@@ -153,8 +175,15 @@ def load_game_state(config: AppConfig, skip_legends: bool = False) -> tuple[Even
             if d.is_dir() and d.name != "processed"
         ]
         if world_dirs:
-            # Start with the most recently modified folder
-            primary_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
+            # Use active_world if specified and exists, otherwise most recent
+            primary_dir = None
+            if active_world:
+                candidate = base_event_dir / active_world
+                if candidate.exists() and candidate.is_dir():
+                    primary_dir = candidate
+            if not primary_dir:
+                primary_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
+
             event_dir = primary_dir
             event_dirs = [primary_dir]
 

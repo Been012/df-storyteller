@@ -12,15 +12,15 @@ from pathlib import Path
 from df_storyteller.config import AppConfig
 
 
-def _journal_path(config: AppConfig) -> Path:
-    output_dir = Path(config.paths.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir / "fortress_journal.md"
+def _journal_path(config: AppConfig, output_dir: Path | None = None) -> Path:
+    d = output_dir or Path(config.paths.output_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "fortress_journal.md"
 
 
-def get_existing_seasons(config: AppConfig) -> list[tuple[str, int]]:
+def get_existing_seasons(config: AppConfig, output_dir: Path | None = None) -> list[tuple[str, int]]:
     """Return list of (season, year) that already have chronicle entries."""
-    path = _journal_path(config)
+    path = _journal_path(config, output_dir)
     if not path.exists():
         return []
 
@@ -28,15 +28,15 @@ def get_existing_seasons(config: AppConfig) -> list[tuple[str, int]]:
     return re.findall(r"## (\w+) of Year (\d+)", text)
 
 
-def has_entry_for(config: AppConfig, season: str, year: int) -> bool:
+def has_entry_for(config: AppConfig, season: str, year: int, output_dir: Path | None = None) -> bool:
     """Check if a chronicle entry already exists for this season/year."""
-    existing = get_existing_seasons(config)
+    existing = get_existing_seasons(config, output_dir)
     return any(s.lower() == season.lower() and int(y) == year for s, y in existing)
 
 
-def append_to_journal(config: AppConfig, entry: str, year: int, season: str) -> Path:
+def append_to_journal(config: AppConfig, entry: str, year: int, season: str, output_dir: Path | None = None) -> Path:
     """Add or replace a chronicle entry in the fortress journal."""
-    path = _journal_path(config)
+    path = _journal_path(config, output_dir)
 
     season_header = f"## {season.title()} of Year {year}"
 

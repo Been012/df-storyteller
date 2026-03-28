@@ -157,7 +157,8 @@ def _load_game_state_safe(config: AppConfig, skip_legends: bool = True):
         return _cached_state[1]
 
     try:
-        result = load_game_state(config, skip_legends=skip_legends)
+        active_world = _get_active_world(config)
+        result = load_game_state(config, skip_legends=skip_legends, active_world=active_world)
         _cached_state = (cache_key, result)
         _cache_time = now
         return result
@@ -172,6 +173,14 @@ def _invalidate_cache():
     global _cached_state, _cache_time
     _cached_state = None
     _cache_time = 0
+
+
+def _get_fortress_dir(config: AppConfig, metadata: dict | None = None) -> Path:
+    """Get the per-fortress output directory for the active fortress."""
+    from df_storyteller.context.loader import get_fortress_output_dir
+    if metadata is None:
+        _, _, _, metadata = _load_game_state_safe(config)
+    return get_fortress_output_dir(config, metadata)
 
 
 def _base_context(config: AppConfig, active_tab: str, metadata: dict | None = None) -> dict:
@@ -347,9 +356,10 @@ def _markdown_to_html(text: str) -> str:
     return "\n".join(html_lines)
 
 
-def _parse_journal(config: AppConfig) -> list[dict]:
+def _parse_journal(config: AppConfig, metadata: dict | None = None) -> list[dict]:
     """Parse the fortress journal markdown into entries."""
-    journal_path = Path(config.paths.output_dir) / "fortress_journal.md"
+    fortress_dir = _get_fortress_dir(config, metadata)
+    journal_path = fortress_dir / "fortress_journal.md"
     if not journal_path.exists():
         return []
 
@@ -387,7 +397,8 @@ async def chronicle_page(request: Request):
     config = _get_config()
     _, character_tracker, _, metadata = _load_game_state_safe(config)
     ctx = _base_context(config, "chronicle", metadata)
-    entries = _parse_journal(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    entries = _parse_journal(config, metadata)
 
     # Show newest entries first
     entries.reverse()
@@ -401,11 +412,11 @@ async def chronicle_page(request: Request):
     from df_storyteller.output.journal import has_entry_for
     current_season = metadata.get("season", "")
     current_year = metadata.get("year", 0)
-    already_written = has_entry_for(config, current_season, current_year) if current_season and current_year else False
+    already_written = has_entry_for(config, current_season, current_year, fortress_dir) if current_season and current_year else False
 
     # Load fortress-wide notes
     from df_storyteller.context.notes_store import load_all_notes
-    all_notes = load_all_notes(config)
+    all_notes = load_all_notes(config, fortress_dir)
     fortress_notes = [n for n in all_notes if n.target_type == "fortress"]
 
     return templates.TemplateResponse(request=request, name="chronicle.html", context={
@@ -595,8 +606,9 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     ]
 
     # Load biography history (dated entries) with name hotlinks
+    fortress_dir = _get_fortress_dir(config, metadata)
     from df_storyteller.stories.biography import load_biography_history
-    bio_history = load_biography_history(config, dwarf.unit_id)
+    bio_history = load_biography_history(config, dwarf.unit_id, fortress_dir)
     name_map = _build_dwarf_name_map(character_tracker)
     for entry in bio_history:
         if entry.get("text"):
@@ -609,11 +621,11 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     # Load notes for this dwarf
     from df_storyteller.context.notes_store import get_notes_for_dwarf
     from df_storyteller.schema.notes import TAG_DESCRIPTIONS
-    dwarf_notes = get_notes_for_dwarf(config, unit_id)
+    dwarf_notes = get_notes_for_dwarf(config, unit_id, fortress_dir)
     # Include resolved notes too for display
     from df_storyteller.context.notes_store import load_all_notes
     all_dwarf_notes = [
-        n for n in load_all_notes(config)
+        n for n in load_all_notes(config, fortress_dir)
         if n.target_type == "dwarf" and n.target_id == unit_id
     ]
 
@@ -1227,7 +1239,8 @@ async def api_lore_search(q: str = ""):
 async def api_list_notes(target_type: str | None = None, target_id: int | None = None):
     from df_storyteller.context.notes_store import load_all_notes
     config = _get_config()
-    notes = load_all_notes(config)
+    fortress_dir = _get_fortress_dir(config)
+    notes = load_all_notes(config, fortress_dir)
     if target_type:
         notes = [n for n in notes if n.target_type == target_type]
     if target_id is not None:
@@ -1244,6 +1257,7 @@ async def api_create_note(request: Request):
 
     # Get current game time from latest snapshot metadata
     _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
 
     note = PlayerNote(
         tag=NoteTag(data["tag"]),
@@ -1253,7 +1267,7 @@ async def api_create_note(request: Request):
         game_year=metadata.get("year", 0),
         game_season=metadata.get("season", ""),
     )
-    add_note(config, note)
+    add_note(config, note, fortress_dir)
     return note.model_dump(mode="json")
 
 
@@ -1261,7 +1275,8 @@ async def api_create_note(request: Request):
 async def api_resolve_note(note_id: str):
     from df_storyteller.context.notes_store import resolve_note
     config = _get_config()
-    ok = resolve_note(config, note_id)
+    fortress_dir = _get_fortress_dir(config)
+    ok = resolve_note(config, note_id, fortress_dir)
     return {"ok": ok}
 
 
@@ -1269,7 +1284,8 @@ async def api_resolve_note(note_id: str):
 async def api_delete_note(note_id: str):
     from df_storyteller.context.notes_store import delete_note
     config = _get_config()
-    ok = delete_note(config, note_id)
+    fortress_dir = _get_fortress_dir(config)
+    ok = delete_note(config, note_id, fortress_dir)
     return {"ok": ok}
 
 
@@ -1295,7 +1311,8 @@ async def api_generate_chronicle(request: Request):
 async def _stream_chronicle(config: AppConfig, one_time_context: str = "") -> AsyncGenerator[str, None]:
     from df_storyteller.stories.chronicle import generate_chronicle
     try:
-        result = await generate_chronicle(config, None, one_time_context=one_time_context)
+        fortress_dir = _get_fortress_dir(config)
+        result = await generate_chronicle(config, None, one_time_context=one_time_context, output_dir=fortress_dir)
         # Simulate streaming by yielding in chunks
         words = result.split(" ")
         for i, word in enumerate(words):
@@ -1331,7 +1348,8 @@ async def api_generate_bio(unit_id: int, request: Request):
 async def _stream_bio(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
     from df_storyteller.stories.biography import generate_biography
     try:
-        result = await generate_biography(config, dwarf_name, one_time_context=one_time_context)
+        fortress_dir = _get_fortress_dir(config)
+        result = await generate_biography(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
         words = result.split(" ")
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
@@ -1366,7 +1384,8 @@ async def api_generate_eulogy(unit_id: int, request: Request):
 async def _stream_eulogy(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
     from df_storyteller.stories.biography import generate_eulogy
     try:
-        result = await generate_eulogy(config, dwarf_name, one_time_context=one_time_context)
+        fortress_dir = _get_fortress_dir(config)
+        result = await generate_eulogy(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
         words = result.split(" ")
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
