@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Pantheon — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/dwarves" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Citizens</a>
+    <h1 class="page-header" style="margin-top: 0.5rem;">Pantheon</h1>
+    <p id="stats" class="page-subtitle">Loading...</p>
+</div>
+
+<div id="pantheon" class="parchment" style="padding: 1rem;">
+    <p style="text-align: center; color: var(--ink-faded);">Loading religion data...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.2rem;
+    cursor: pointer;
+    padding: 0.2rem 0;
+    border-radius: 4px;
+}
+.bar-row:hover {
+    background: rgba(255,255,255,0.03);
+}
+.bar-label {
+    width: 240px;
+    min-width: 240px;
+    text-align: right;
+    padding-right: 1rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    color: var(--ink-faded);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bar-spheres {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.78rem;
+    color: var(--ink-faded);
+    font-style: italic;
+}
+.bar-track {
+    flex: 1;
+    height: 26px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+}
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    display: flex;
+    align-items: center;
+    padding-left: 0.6rem;
+}
+.bar-count {
+    font-size: 0.85rem;
+    color: #1a1510;
+    font-weight: bold;
+}
+.bar-detail {
+    display: none;
+    padding: 0.4rem 0 0.6rem 256px;
+    font-size: 0.85rem;
+    line-height: 1.7;
+}
+.bar-detail a {
+    color: var(--parchment);
+    text-decoration: none;
+}
+.bar-detail a:hover {
+    color: var(--gold-dark);
+    text-decoration: underline;
+}
+.bar-detail .worshipper-prof {
+    color: var(--ink-faded);
+    font-size: 0.8rem;
+}
+</style>
+<script>
+const COLORS = [
+    '#d4a84b', '#6a9fd8', '#6aaa6a', '#d86a6a', '#d8a86a',
+    '#b98bdc', '#8bc9c9', '#c9a0dc', '#c98b8b', '#8bc98b',
+    '#c9c48b', '#8b8bc9', '#dc8bb9', '#8bdcb9',
+];
+
+async function loadReligion() {
+    const container = document.getElementById('pantheon');
+    const statsEl = document.getElementById('stats');
+
+    try {
+        const res = await fetch('/api/religion');
+        if (!res.ok) throw new Error('API returned ' + res.status);
+        const data = await res.json();
+
+        const deities = data.nodes.filter(n => n.type === 'deity');
+        const dwarves = Object.fromEntries(data.nodes.filter(n => n.type === 'dwarf').map(n => [n.id, n]));
+
+        if (deities.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: var(--ink-faded); font-style: italic;">No deity worship data found. Take a new snapshot with the updated storyteller-begin script.</p>';
+            statsEl.textContent = '';
+            return;
+        }
+
+        deities.sort((a, b) => b.worshipper_count - a.worshipper_count);
+        const maxCount = deities[0].worshipper_count;
+
+        // Build worshipper lookup
+        const deityWorshippers = {};
+        for (const deity of deities) {
+            deityWorshippers[deity.id] = data.edges
+                .filter(e => e.target === deity.id)
+                .map(e => dwarves[e.source])
+                .filter(Boolean);
+        }
+
+        statsEl.textContent = `${Object.keys(dwarves).length} worshippers across ${deities.length} deities`;
+
+        let html = '';
+        deities.forEach((deity, i) => {
+            const pct = Math.max(10, (deity.worshipper_count / maxCount) * 100);
+            const color = COLORS[i % COLORS.length];
+            const worshippers = deityWorshippers[deity.id] || [];
+            const spheres = (deity.spheres || []).join(', ');
+
+            html += `<div>`;
+            html += `<div class="bar-row" onclick="toggleDetail('detail-${i}')">`;
+            html += `<div class="bar-label">`;
+            html += deity.name;
+            if (spheres) {
+                html += `<br><span class="bar-spheres">${spheres}</span>`;
+            }
+            html += `</div>`;
+            html += `<div class="bar-track">`;
+            html += `<div class="bar-fill" style="width: ${pct}%; background: ${color};">`;
+            html += `<span class="bar-count">${deity.worshipper_count}</span>`;
+            html += `</div></div></div>`;
+
+            // Expandable worshipper list
+            html += `<div class="bar-detail" id="detail-${i}">`;
+            for (const w of worshippers) {
+                const name = w.name.split(',')[0];
+                html += `<a href="/dwarves/${w.id}">${name}</a> <span class="worshipper-prof">${w.profession || ''}</span><br>`;
+            }
+            html += `</div></div>`;
+        });
+
+        container.innerHTML = html;
+
+    } catch (err) {
+        container.innerHTML = '<p style="color: var(--danger);">Failed to load: ' + err.message + '</p>';
+    }
+}
+
+function toggleDetail(id) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = el.style.display === 'none' || !el.style.display ? 'block' : 'none';
+    }
+}
+
+loadReligion();
+</script>
+{% endblock %}

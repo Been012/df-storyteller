@@ -7,7 +7,10 @@
         <h1 class="page-header">Citizens of {{ fortress_name or "the Fortress" }}</h1>
         <p class="page-subtitle">{{ dwarves | length }} souls call this place home</p>
     </div>
-    <a href="/dwarves/relationships" class="btn btn-secondary" style="white-space: nowrap;">View Relationship Web</a>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="/dwarves/relationships" class="btn btn-secondary" style="white-space: nowrap;">Relationship Web</a>
+        <a href="/dwarves/religion" class="btn btn-secondary" style="white-space: nowrap;">Pantheon</a>
+    </div>
 </div>
 
 {% if dwarves %}

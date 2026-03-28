@@ -470,6 +470,106 @@ async def relationships_page(request: Request):
     return templates.TemplateResponse(request=request, name="relationships.html", context=ctx)
 
 
+@app.get("/dwarves/religion", response_class=HTMLResponse)
+async def religion_page(request: Request):
+    """Fortress pantheon — deity worship overview."""
+    config = _get_config()
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config)
+    ctx = _base_context(config, "dwarves", metadata)
+    return templates.TemplateResponse(request=request, name="religion.html", context=ctx)
+
+
+@app.get("/api/religion")
+async def api_religion():
+    """Return religion graph data as JSON — deities and their worshippers."""
+    config = _get_config()
+    # Load with legends to get deity sphere data
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ranked = character_tracker.ranked_characters()
+
+    deities: dict[str, dict] = {}  # deity name -> {id, name, worshippers: []}
+    dwarf_nodes = []
+
+    for dwarf, score in ranked:
+        dwarf_nodes.append({
+            "id": dwarf.unit_id,
+            "name": dwarf.name,
+            "profession": dwarf.profession,
+            "is_alive": dwarf.is_alive,
+        })
+        for rel in dwarf.relationships:
+            if rel.relationship_type == "deity":
+                deity_name = rel.target_name
+                if deity_name not in deities:
+                    deities[deity_name] = {
+                        "id": f"deity_{rel.target_unit_id}",
+                        "name": deity_name,
+                        "worshippers": [],
+                    }
+                deities[deity_name]["worshippers"].append(dwarf.unit_id)
+
+    # Build nodes and edges
+    nodes = []
+    edges = []
+
+    # Look up deity spheres from legends data.
+    # Legends uses dwarven-language names ("avuz", "inod") while the snapshot
+    # has English translated names ("Avuz", "Inod the Defensive Sanctum").
+    # Build lookup by all name words so "avuz" matches "Avuz" and
+    # "inod" matches "Inod the Defensive Sanctum".
+    _legend_deities: list[tuple[str, list[str]]] = []  # [(name, spheres)]
+    if world_lore.is_loaded and world_lore._legends:
+        for hf in world_lore._legends.historical_figures.values():
+            if (hf.is_deity or hf.hf_type == "deity") and hf.spheres:
+                _legend_deities.append((hf.name.lower(), hf.spheres))
+
+    def _find_deity_spheres(deity_name: str) -> list[str]:
+        dn = deity_name.lower()
+        first_word = dn.split()[0] if dn else ""
+        for legend_name, legend_spheres in _legend_deities:
+            # Exact first word match (most reliable)
+            legend_first = legend_name.split()[0] if legend_name else ""
+            if first_word and legend_first == first_word:
+                return legend_spheres
+        for legend_name, legend_spheres in _legend_deities:
+            # Full legend name appears in the snapshot deity name
+            if legend_name and legend_name in dn:
+                return legend_spheres
+        return []
+
+    # Deity nodes
+    for deity in deities.values():
+        spheres = _find_deity_spheres(deity["name"])
+        nodes.append({
+            "id": deity["id"],
+            "name": deity["name"],
+            "type": "deity",
+            "worshipper_count": len(deity["worshippers"]),
+            "spheres": spheres,
+        })
+        for dwarf_id in deity["worshippers"]:
+            edges.append({
+                "source": str(dwarf_id),
+                "target": deity["id"],
+                "type": "worship",
+            })
+
+    # Dwarf nodes
+    for d in dwarf_nodes:
+        # Only include dwarves that worship at least one deity
+        has_worship = any(d["id"] in deity["worshippers"] for deity in deities.values())
+        if has_worship:
+            nodes.append({
+                "id": str(d["id"]),
+                "name": d["name"],
+                "type": "dwarf",
+                "profession": d["profession"],
+                "is_alive": d["is_alive"],
+            })
+
+    return {"nodes": nodes, "edges": edges, "deity_count": len(deities)}
+
+
 @app.get("/api/relationships")
 async def api_relationships():
     """Return relationship graph data as JSON for the visualization."""
