@@ -12,7 +12,12 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 - **Epic Sagas** — World history narratives drawn from legends data. Analyzes battle outcomes, civilization power dynamics, beast attacks, and religious conflicts to identify overarching themes.
 - **Live Event Feed** — Real-time tracking of game events via WebSocket.
 - **World Lore Browser** — Searchable database of civilizations, wars, battles, artifacts, historical figures, assumed identities, written works, and cultural forms from your world.
-- **Player Notes** — Influence stories with your own observations. Tag notes as Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, or Mood — each tag controls how the LLM uses the information.
+- **Player Notes** — Influence stories with your own observations. Tag notes as Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, or What If — each tag controls how the LLM uses the information.
+- **Death Eulogies** — When a dwarf dies, generate a memorial eulogy that reflects their life, achievements, and legacy.
+- **Relationship Web** — Interactive force-directed graph showing family, friend, and rival connections across the fortress.
+- **Combat Log** — Blow-by-blow accounts of fights parsed from the gamelog, with weapon, injury, and outcome details.
+- **Chat Log** — Dwarf conversation and sentiment tracking with AI-powered social life summaries.
+- **Multi-Fortress Support** — Each fortress gets isolated story storage. Switch between fortresses via the world dropdown.
 
 ## Screenshots
 
@@ -20,7 +25,7 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 
 ## Requirements
 
-- **Dwarf Fortress** (Steam or classic)
+- **Dwarf Fortress** (Steam / DF Premium recommended)
 - **DFHack** (Steam Workshop or [dfhack.org](https://dfhack.org/))
 - **Python 3.11+**
 - **An LLM provider** (one of):
@@ -75,19 +80,20 @@ The interface uses a fantasy parchment theme with five tabs:
 | Tab | Description |
 |-----|-------------|
 | **Chronicle** | Seasonal journal. Generate entries that reference actual events. Fortress-wide player notes. |
-| **Dwarves** | Character sheets with personality traits, skills, attributes. Player notes per dwarf. Dated biography timeline. |
-| **Events** | Live feed of game events — role changes, migrations, deaths, season changes. Grouped by season. |
+| **Dwarves** | Character sheets with personality, skills, combat record. Biography timeline. Death eulogies. [Relationship Web](/dwarves/relationships) for the full fortress. |
+| **Events** | Live feed of game events. Combat Log with blow-by-blow fight details. Chat Log with AI-summarized social interactions. |
 | **Lore** | Searchable world history — civilizations with religions/guilds, wars with battle details, historical figures, artifacts, assumed identities, cultural forms with full descriptions. |
-| **Settings** | LLM provider, API key, story length controls. |
+| **Settings** | LLM provider, API key, story length controls (chronicle, biography, saga, chat summary). |
 
 ### Features
 
 - **Dwarf name hotlinks** — Names in stories link to character sheets
 - **Cross-reference search** — Search any name across all lore data
-- **Player notes** — 7 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood) that influence how the LLM writes
+- **Player notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If) that influence how the LLM writes
+- **What If story hooks** — Player-authored hypothetical scenarios woven into chronicles as speculative subplots
 - **Assumed identity spoiler protection** — Hidden identities (vampires, spies) are collapsed with a warning
 - **Auto-snapshots** — Dwarf data refreshes every season change
-- **Multi-world support** — Each world gets its own data folder, merged across save names
+- **Multi-fortress support** — Each fortress gets isolated story storage (chronicles, bios, notes), switch via dropdown. Worlds merged across save folder names.
 
 ## How It Works
 
@@ -120,7 +126,7 @@ Python Backend (FastAPI)
 | Skills with readable names | DFHack (`soul.skills`) |
 | Noble positions | DFHack (`getNoblePositions`) |
 | Military squad | DFHack (`unit.military`) |
-| Relationships (spouse, family) | DFHack (`unit.relations`) |
+| Relationships (spouse, family, friends, grudges) | DFHack (`histfig_links` on historical figures) |
 | Equipment, wounds, stress | DFHack |
 | Role changes, appointments | Event monitoring (polled) |
 
@@ -133,6 +139,8 @@ Python Backend (FastAPI)
 - Migrant arrivals
 - Season changes (triggers auto-snapshot)
 - Deaths, building construction, job completion (via DFHack eventful plugin)
+- Detailed combat (blow-by-blow from gamelog with weapon, injuries, outcomes)
+- Dwarf conversations and sentiments (from gamelog conversation announcements)
 
 ### Legends data parsed
 
@@ -197,6 +205,7 @@ model = "llama3"
 chronicle_max_tokens = 4096
 biography_max_tokens = 1024
 saga_max_tokens = 4096
+chat_summary_max_tokens = 2048
 narrative_style = "dramatic"
 ```
 
@@ -206,7 +215,7 @@ narrative_style = "dramatic"
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Run tests (33 tests)
+# Run tests (52 tests)
 pytest -v
 
 # Run specific test
@@ -225,9 +234,9 @@ pytest tests/test_gamelog_parser.py::test_parse_death_announcement -v
 
 - Legends XML map exports (BMP) are broken in current DF Steam version
 - `dfhack.units.getGoalType()` returns empty in some DF versions
-- Gamelog parsing is built but disabled (contains cross-world data)
 - True LLM streaming not yet implemented (simulated word-by-word)
 - Web app routes don't have automated tests yet
+- Gamelog combat/chat parsing only covers the current session (since last fortress load)
 
 ## License
 
