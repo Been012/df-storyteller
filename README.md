@@ -64,7 +64,7 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 # Install
 git clone https://github.com/Been012/df-storyteller.git
 cd df-storyteller
-pip install -e ".[dev]"
+pip install -e .
 
 # Configure (one time)
 python -m df_storyteller init
