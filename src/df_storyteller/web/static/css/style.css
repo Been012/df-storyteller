@@ -411,6 +411,43 @@ a.lore-xref:hover {
     white-space: nowrap;
 }
 
+.deceased-badge {
+    display: inline-block;
+    background: #3d1a1a;
+    color: #c98b8b;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
+    font-style: normal;
+}
+
+.memorial-section {
+    border: 1px solid #3d1a1a;
+    border-radius: 5px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    background: rgba(61, 26, 26, 0.1);
+}
+
+.memorial-section h3 {
+    color: #c98b8b;
+}
+
+.memorial-btn {
+    background: #3d1a1a;
+    border-color: #5a2d2d;
+}
+
+.memorial-btn:hover {
+    background: #5a2d2d;
+}
+
+.eulogy-entry {
+    border-left: 3px solid #c98b8b;
+    padding-left: 1rem;
+}
+
 .note-actions {
     display: flex;
     gap: 0.2rem;

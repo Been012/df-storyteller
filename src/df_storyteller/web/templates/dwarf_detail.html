@@ -15,6 +15,9 @@
                 {% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
                 {% if dwarf.military_squad %} &mdash; {{ dwarf.military_squad }}{% endif %}
                 &middot; Age {{ dwarf.age | int }}
+                {% if not dwarf.is_alive %}
+                <span class="deceased-badge">Deceased</span>
+                {% endif %}
             </div>
             {% if dwarf.stress_desc %}
             <div style="margin-top: 0.3rem; font-style: italic; color: var(--ink-faded);">
@@ -156,6 +159,23 @@
             </div>
         </div>
 
+        <!-- Memorial (deceased dwarves only) -->
+        {% if not dwarf.is_alive %}
+        <div class="memorial-section">
+            <h3>Memorial</h3>
+            {% if not dwarf.has_eulogy %}
+            <div class="btn-row">
+                <button class="btn btn-primary memorial-btn" id="eulogy-btn" onclick="generateEulogy({{ dwarf.unit_id }})">
+                    Write Eulogy
+                </button>
+            </div>
+            <div class="story-text streaming-text" id="eulogy-text" style="display: none;"></div>
+            {% else %}
+            <em style="color: var(--ink-faded);">A eulogy has been written and appears in the biography below.</em>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <!-- Biography Timeline -->
         <div class="bio-section">
             <h3>Biography</h3>
@@ -181,9 +201,9 @@
             <!-- Existing biography entries (newest first) -->
             {% if dwarf.bio_entries %}
                 {% for entry in dwarf.bio_entries | reverse %}
-                <div class="chronicle-entry" style="margin-bottom: 1.5rem;">
+                <div class="chronicle-entry{% if entry.get('is_eulogy') %} eulogy-entry{% endif %}" style="margin-bottom: 1.5rem;">
                     <div class="season-header" style="font-size: 1rem;">
-                        {{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                        {% if entry.get('is_eulogy') %}Memorial — {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                     </div>
                     <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
                 </div>
@@ -275,6 +295,43 @@ async function generateBio(unitId) {
 
     btn.disabled = false;
     btn.textContent = 'Generate Biography';
+}
+
+async function generateEulogy(unitId) {
+    const btn = document.getElementById('eulogy-btn');
+    const textEl = document.getElementById('eulogy-text');
+
+    btn.disabled = true;
+    btn.textContent = 'Writing memorial...';
+    textEl.style.display = 'block';
+    textEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+    try {
+        const response = await fetch('/api/eulogy/' + unitId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: '' }),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+        }
+
+        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Write Eulogy';
 }
 </script>
 {% endblock %}
