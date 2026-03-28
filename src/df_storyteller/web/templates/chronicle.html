@@ -192,6 +192,9 @@ async function generateChronicle() {
         let html = simpleMarkdown(fullText);
         html = linkifyDwarfNames(html);
         textEl.innerHTML = html;
+
+        // Reload after a moment to show the saved entry and update button state
+        setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
         textEl.innerHTML = '<em style="color: var(--danger);">Error generating chronicle: ' + err.message + '</em>';
     }
