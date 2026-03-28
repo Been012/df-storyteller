@@ -91,7 +91,7 @@ def init(ctx: click.Context, df_path: str | None) -> None:
     console.print("\nNext steps:")
     console.print("  1. Launch Dwarf Fortress and load a fortress")
     console.print("  2. In DFHack console, type: [bold]storyteller-begin[/bold]")
-    console.print("  3. Launch the web UI: [bold]python -m df_storyteller serve[/bold]")
+    console.print("  3. Launch the web UI: [bold]df-storyteller serve[/bold]")
     console.print("  4. Start generating stories!")
 
 
