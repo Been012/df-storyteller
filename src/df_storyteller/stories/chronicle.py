@@ -117,6 +117,30 @@ async def generate_chronicle(
     if notes_text:
         ctx.lore_text = (ctx.lore_text + "\n\n" + notes_text).strip()
 
+    # Add recently completed quests as narrative context
+    from df_storyteller.context.quest_store import get_completed_quests
+    completed = get_completed_quests(config, output_dir)
+    if completed:
+        # Include quests completed this year or last year for narrative continuity
+        recent_quests = [q for q in completed if q.game_year >= year - 1]
+        if recent_quests:
+            quest_lines = []
+            for q in recent_quests[-5:]:  # Last 5 completed quests
+                line = f"- [{q.category.value.title()}] {q.title}: {q.description}"
+                if q.completion_narrative:
+                    line += f" (Completed: {q.completion_narrative[:150]}...)" if len(q.completion_narrative) > 150 else f" (Completed: {q.completion_narrative})"
+                quest_lines.append(line)
+            quest_context = "COMPLETED QUESTS (weave these achievements into the chronicle):\n" + "\n".join(quest_lines)
+            ctx.lore_text = (ctx.lore_text + "\n\n" + quest_context).strip()
+
+    # Add active quests as ongoing storylines
+    from df_storyteller.context.quest_store import get_active_quests
+    active = get_active_quests(config, output_dir)
+    if active:
+        active_lines = [f"- [{q.category.value.title()}] {q.title}: {q.description}" for q in active[:5]]
+        active_context = "ACTIVE QUESTS (reference these as ongoing ambitions or challenges):\n" + "\n".join(active_lines)
+        ctx.lore_text = (ctx.lore_text + "\n\n" + active_context).strip()
+
     system_prompt = render_system_prompt(ctx)
     user_prompt = render_user_prompt(ctx)
 

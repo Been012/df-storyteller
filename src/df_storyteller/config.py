@@ -56,6 +56,8 @@ class StoryConfig(BaseModel):
     chronicle_max_tokens: int = 4096
     saga_max_tokens: int = 4096
     chat_summary_max_tokens: int = 2048
+    quest_generation_max_tokens: int = 2048
+    quest_narrative_max_tokens: int = 1024
 
 
 class AppConfig(BaseModel):

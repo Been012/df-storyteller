@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Quests — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Quest Board of {{ fortress_name or "the Fortress" }}</h1>
+<p class="page-subtitle">Challenges and deeds to bring glory to the fortress</p>
+
+<div style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap;">
+    <button class="btn btn-primary" id="generate-btn" onclick="generateQuests()">Seek New Quests</button>
+    <select id="quest-count" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+        <option value="1">1 Quest</option>
+        <option value="3" selected>3 Quests</option>
+        <option value="5">5 Quests</option>
+    </select>
+    <select id="quest-category" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+        <option value="">Any Category</option>
+        <option value="military">Military</option>
+        <option value="construction">Construction</option>
+        <option value="religious">Religious</option>
+        <option value="crafting">Crafting</option>
+        <option value="exploration">Exploration</option>
+        <option value="social">Social</option>
+        <option value="chaos">Chaos</option>
+    </select>
+    <select id="quest-difficulty" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
+        <option value="">Any Difficulty</option>
+        <option value="easy">Easy</option>
+        <option value="medium">Medium</option>
+        <option value="hard">Hard</option>
+        <option value="legendary">Legendary</option>
+    </select>
+</div>
+
+<div id="quest-loading" style="display: none; text-align: center; color: var(--ink-faded); font-style: italic; padding: 1rem;">
+    The quest board shimmers as new challenges emerge...
+</div>
+
+<div id="completion-output" style="display: none; margin-bottom: 1.5rem;">
+    <div class="parchment">
+        <h3 style="color: var(--gold-dark);">Quest Fulfilled</h3>
+        <div class="story-text streaming-text" id="completion-text"></div>
+    </div>
+</div>
+
+{% if active_quests %}
+<h2 style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold-dark); margin-bottom: 0.8rem;">
+    Active Quests ({{ active_quests | length }})
+</h2>
+
+{% for quest in active_quests %}
+<div class="parchment quest-card {% if quest.priority %}quest-priority{% endif %}" id="quest-{{ quest.id }}">
+    <div class="quest-header">
+        <span class="quest-category cat-{{ quest.category.value }}">{{ quest.category.value }}</span>
+        <span class="quest-difficulty diff-{{ quest.difficulty.value }}">{{ quest.difficulty.value }}</span>
+        <h3 class="quest-title">{{ quest.title }}</h3>
+        <button onclick="togglePriority('{{ quest.id }}')" class="quest-star {% if quest.priority %}starred{% endif %}">
+            {% if quest.priority %}&#9733;{% else %}&#9734;{% endif %}
+        </button>
+    </div>
+    <p class="quest-description">{{ quest.description }}</p>
+    {% if quest.hints %}
+    <details class="quest-hints">
+        <summary>Hints</summary>
+        <ul>
+            {% for hint in quest.hints %}
+            <li>{{ hint }}</li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
+    {% if quest.related_unit_names %}
+    <p class="quest-related">Related: {{ quest.related_unit_names | join(', ') }}</p>
+    {% endif %}
+    <div class="quest-meta">
+        Issued: {{ quest.game_season | title }} of Year {{ quest.game_year }}
+    </div>
+    <div class="quest-actions">
+        <button class="btn btn-primary" onclick="completeQuest('{{ quest.id }}', '{{ quest.title | e }}')">Complete</button>
+        <button class="btn btn-secondary" onclick="abandonQuest('{{ quest.id }}')">Abandon</button>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="parchment" style="text-align: center; color: var(--ink-faded); font-style: italic; padding: 2rem;">
+    No active quests. Click "Seek New Quests" above to generate challenges for your fortress.
+</div>
+{% endif %}
+
+{% if completed_quests %}
+<details style="margin-top: 1.5rem;">
+    <summary style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--ink-faded); cursor: pointer;">
+        Completed Quests ({{ completed_quests | length }})
+    </summary>
+
+    {% for quest in completed_quests %}
+    <div class="parchment quest-card quest-completed" style="margin-top: 0.8rem;">
+        <div class="quest-header">
+            <span class="quest-category cat-{{ quest.category.value }}">{{ quest.category.value }}</span>
+            <h3 class="quest-title">{{ quest.title }} <span class="quest-check">&#10003;</span></h3>
+        </div>
+        <p class="quest-description">{{ quest.description }}</p>
+        {% if quest.completion_narrative %}
+        <div class="quest-narrative">{{ quest.completion_narrative }}</div>
+        {% endif %}
+        <div class="quest-meta">
+            Completed: {{ quest.completed_at.strftime('%Y-%m-%d') if quest.completed_at else 'Unknown' }}
+        </div>
+        <button class="btn btn-secondary" onclick="deleteQuest('{{ quest.id }}')" style="font-size: 0.8rem; margin-top: 0.3rem;">Remove</button>
+    </div>
+    {% endfor %}
+</details>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function generateQuests() {
+    const btn = document.getElementById('generate-btn');
+    const loading = document.getElementById('quest-loading');
+    const count = document.getElementById('quest-count').value;
+    const category = document.getElementById('quest-category').value;
+    const difficulty = document.getElementById('quest-difficulty').value;
+
+    btn.disabled = true;
+    btn.textContent = 'Consulting the fates...';
+    loading.style.display = 'block';
+
+    try {
+        const body = { count: parseInt(count) };
+        if (category) body.category = category;
+        if (difficulty) body.difficulty = difficulty;
+        const response = await fetch('/api/quests/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const quests = await response.json();
+        if (quests.length > 0) {
+            window.location.reload();
+        } else {
+            loading.textContent = 'The fates are silent. Try again.';
+        }
+    } catch (err) {
+        loading.textContent = 'Error: ' + err.message;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Seek New Quests';
+}
+
+async function completeQuest(questId, questTitle) {
+    const output = document.getElementById('completion-output');
+    const textEl = document.getElementById('completion-text');
+
+    output.style.display = 'block';
+    textEl.innerHTML = '<span class="streaming-cursor"></span>';
+    output.scrollIntoView({ behavior: 'smooth' });
+
+    try {
+        const response = await fetch('/api/quests/' + questId + '/complete', { method: 'POST' });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+        }
+
+        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
+
+        // Hide the quest card and reload after a moment
+        const card = document.getElementById('quest-' + questId);
+        if (card) card.style.display = 'none';
+        setTimeout(() => window.location.reload(), 3000);
+    } catch (err) {
+        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+    }
+}
+
+async function abandonQuest(questId) {
+    await fetch('/api/quests/' + questId + '/abandon', { method: 'POST' });
+    const card = document.getElementById('quest-' + questId);
+    if (card) card.remove();
+}
+
+async function togglePriority(questId) {
+    await fetch('/api/quests/' + questId + '/priority', { method: 'POST' });
+    window.location.reload();
+}
+
+async function deleteQuest(questId) {
+    await fetch('/api/quests/' + questId, { method: 'DELETE' });
+    window.location.reload();
+}
+</script>
+{% endblock %}

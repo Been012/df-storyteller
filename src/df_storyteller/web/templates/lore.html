@@ -34,6 +34,22 @@
     <div class="divider">&loz;</div>
 </div>
 
+{% if saved_sagas %}
+<details style="margin-bottom: 1rem;">
+    <summary style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold-dark); cursor: pointer;">
+        Saved Sagas ({{ saved_sagas | length }})
+    </summary>
+    {% for saga in saved_sagas | reverse %}
+    <div class="parchment" style="margin-top: 0.8rem;">
+        <div style="font-size: 0.8rem; color: var(--ink-faded); margin-bottom: 0.5rem;">
+            {{ saga.season | default('') | title }} of Year {{ saga.year | default('?') }}
+        </div>
+        <div class="story-text" style="line-height: 1.7;">{{ saga.text | replace('\n', '<br>') | safe }}</div>
+    </div>
+    {% endfor %}
+</details>
+{% endif %}
+
 <!-- Historical Eras -->
 {% if eras %}
 <div class="parchment" style="text-align: center;">

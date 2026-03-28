@@ -59,6 +59,18 @@
             <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI summary of dwarf conversations and social happenings.</small>
         </div>
 
+        <div class="form-group">
+            <label>Quest Generation Length (tokens)</label>
+            <input type="number" name="quest_generation_max_tokens" value="{{ config.story.quest_generation_max_tokens }}" min="512" max="4000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI-generated quest descriptions and hints.</small>
+        </div>
+
+        <div class="form-group">
+            <label>Quest Completion Narrative Length (tokens)</label>
+            <input type="number" name="quest_narrative_max_tokens" value="{{ config.story.quest_narrative_max_tokens }}" min="256" max="4000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 1024. Narrative written when completing a quest.</small>
+        </div>
+
         <div class="btn-row">
             <button type="submit" class="btn btn-primary">Save Settings</button>
         </div>

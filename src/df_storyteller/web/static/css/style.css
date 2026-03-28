@@ -758,6 +758,131 @@ details[open] .lore-summary h2::before {
     cursor: pointer;
 }
 
+/* ========== Quests ========== */
+
+.quest-card {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border-left: 4px solid var(--border);
+    position: relative;
+}
+
+.quest-priority { border-left-color: var(--gold-dark); }
+
+.quest-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+}
+
+.quest-title {
+    flex: 1;
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.quest-category {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.cat-military { background: #3d1a1a; color: #c98b8b; }
+.cat-construction { background: #3d2b1a; color: #c9a87b; }
+.cat-religious { background: #2d1a3d; color: #b98bdc; }
+.cat-crafting { background: #3d3b1a; color: #c9c48b; }
+.cat-exploration { background: #1a3d1a; color: #8bc98b; }
+.cat-social { background: #1a1a3d; color: #8b8bc9; }
+.cat-chaos { background: #3d1a2d; color: #dc8bb9; }
+
+.quest-difficulty {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.diff-easy { background: #1a3d1a; color: #8bc98b; }
+.diff-medium { background: #3d3b1a; color: #c9c48b; }
+.diff-hard { background: #3d2b1a; color: #c9a87b; }
+.diff-legendary { background: #3d1a1a; color: #c98b8b; }
+
+.quest-description {
+    font-size: 0.95rem;
+    color: var(--ink-light);
+    margin-bottom: 0.5rem;
+}
+
+.quest-star {
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: var(--ink-faded);
+    padding: 0;
+    line-height: 1;
+}
+
+.quest-star.starred { color: var(--gold-dark); }
+
+.quest-hints {
+    margin: 0.4rem 0;
+    font-size: 0.85rem;
+    color: var(--ink-faded);
+}
+
+.quest-hints summary { cursor: pointer; }
+.quest-hints ul { margin: 0.3rem 0 0 1rem; }
+.quest-hints li { margin-bottom: 0.2rem; }
+
+.quest-related {
+    font-size: 0.85rem;
+    color: var(--ink-faded);
+    font-style: italic;
+}
+
+.quest-meta {
+    font-size: 0.8rem;
+    color: var(--ink-faded);
+    margin: 0.4rem 0;
+}
+
+.quest-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.quest-completed {
+    opacity: 0.7;
+    border-left-color: #1a3d1a;
+}
+
+.quest-completed .quest-title { text-decoration: line-through; text-decoration-color: var(--ink-faded); }
+
+.quest-check {
+    color: #8bc98b;
+    font-size: 0.9rem;
+}
+
+.quest-narrative {
+    font-style: italic;
+    color: var(--ink-light);
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {

@@ -112,6 +112,18 @@ async def generate_biography(
     all_notes = dwarf_notes + fortress_notes
     notes_text = format_player_notes(all_notes, one_time_context=one_time_context)
 
+    # Quests involving this dwarf
+    from df_storyteller.context.quest_store import load_all_quests
+    all_quests = load_all_quests(config, output_dir)
+    dwarf_quests = [q for q in all_quests if dwarf.name in " ".join(q.related_unit_names)]
+    quest_text = ""
+    if dwarf_quests:
+        quest_lines = []
+        for q in dwarf_quests[-3:]:
+            status = "completed" if q.status.value == "completed" else "ongoing"
+            quest_lines.append(f"- {q.title} ({status}): {q.description}")
+        quest_text = "\n## Quests\n" + "\n".join(quest_lines)
+
     # Custom user prompt for dated biography
     user_prompt = f"""Write a short biography entry for this dwarf as of {season.title()} of Year {year}.
 
@@ -124,6 +136,7 @@ async def generate_biography(
 {f"## Previous Entries{chr(10)}{previous_text}" if previous_text else ""}
 
 {notes_text}
+{quest_text}
 
 {"If previous entries exist, focus on what has CHANGED — new events, shifting mood, new skills, injuries, relationships. Do not repeat information from previous entries." if previous_text else "This is the first entry. Introduce the dwarf and their place in the fortress."}
 

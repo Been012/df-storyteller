@@ -1282,9 +1282,21 @@ async def lore_page(request: Request):
             }
 
     # Apply sensible limits to "other" sections (search reveals all)
+    # Load saved sagas
+    saved_sagas = []
+    try:
+        fortress_dir = _get_fortress_dir(config, metadata)
+        saga_path = fortress_dir / "saga.json"
+        if saga_path.exists():
+            import json as _json
+            saved_sagas = _json.loads(saga_path.read_text(encoding="utf-8", errors="replace"))
+    except (ValueError, OSError):
+        pass
+
     return templates.TemplateResponse(request=request, name="lore.html", context={
         **ctx,
         "lore_loaded": world_lore.is_loaded,
+        "saved_sagas": saved_sagas,
         "player_civ": player_civ_data,
         "eras": eras if world_lore.is_loaded and world_lore._legends else [],
         "civilizations": civilizations[:20],
@@ -1301,6 +1313,129 @@ async def lore_page(request: Request):
         "musical_forms": world_lore._legends.musical_forms if world_lore.is_loaded and world_lore._legends else [],
         "dance_forms": world_lore._legends.dance_forms if world_lore.is_loaded and world_lore._legends else [],
     })
+
+
+# ==================== Quests ====================
+
+
+@app.get("/quests", response_class=HTMLResponse)
+async def quests_page(request: Request):
+    config = _get_config()
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config)
+    ctx = _base_context(config, "quests", metadata)
+    fortress_dir = _get_fortress_dir(config, metadata)
+
+    from df_storyteller.context.quest_store import load_all_quests
+    from df_storyteller.schema.quests import QuestStatus
+    quests = load_all_quests(config, fortress_dir)
+
+    active = [q for q in quests if q.status == QuestStatus.ACTIVE]
+    completed = [q for q in quests if q.status == QuestStatus.COMPLETED]
+
+    # Sort: priority first, then newest first
+    active.sort(key=lambda q: (not q.priority, -q.created_at.timestamp()))
+    completed.sort(key=lambda q: -q.created_at.timestamp())
+
+    return templates.TemplateResponse(request=request, name="quests.html", context={
+        **ctx, "active_quests": active, "completed_quests": completed,
+    })
+
+
+@app.post("/api/quests/generate")
+async def api_generate_quests(request: Request):
+    """Generate new AI quests based on fortress state."""
+    config = _get_config()
+    data = {}
+    try:
+        data = await request.json()
+    except Exception:
+        pass
+    count = min(int(data.get("count", 3)), 10)
+    category = data.get("category", "")
+    difficulty = data.get("difficulty", "")
+
+    from df_storyteller.stories.quest_generator import generate_quests
+    fortress_dir = _get_fortress_dir(config)
+    quests = await generate_quests(config, count=count, category=category, difficulty=difficulty, output_dir=fortress_dir)
+    return [q.model_dump(mode="json") for q in quests]
+
+
+@app.post("/api/quests/{quest_id}/complete")
+async def api_complete_quest(quest_id: str):
+    """Stream a completion narrative for a quest."""
+    config = _get_config()
+    fortress_dir = _get_fortress_dir(config)
+
+    async def _stream() -> AsyncGenerator[str, None]:
+        from df_storyteller.stories.quest_generator import generate_completion_narrative
+        from df_storyteller.context.quest_store import load_all_quests, save_all_quests
+        from df_storyteller.schema.quests import QuestStatus
+
+        quests = load_all_quests(config, fortress_dir)
+        quest = next((q for q in quests if q.id == quest_id), None)
+        if not quest:
+            yield "Quest not found."
+            return
+
+        try:
+            narrative = await generate_completion_narrative(config, quest, fortress_dir)
+        except Exception:
+            logger.exception("Quest completion narrative failed")
+            yield "Error: generation failed. Check server logs for details."
+            return
+
+        # Save completion
+        from datetime import datetime
+        quest.status = QuestStatus.COMPLETED
+        quest.completed_at = datetime.now()
+        quest.completion_narrative = narrative
+        save_all_quests(config, quests, fortress_dir)
+
+        # Stream word by word
+        words = narrative.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
+            await asyncio.sleep(0.02)
+
+    return StreamingResponse(_stream(), media_type="text/plain")
+
+
+@app.post("/api/quests/{quest_id}/abandon")
+async def api_abandon_quest(quest_id: str):
+    from df_storyteller.context.quest_store import abandon_quest
+    config = _get_config()
+    fortress_dir = _get_fortress_dir(config)
+    ok = abandon_quest(config, quest_id, fortress_dir)
+    return {"ok": ok}
+
+
+@app.post("/api/quests/{quest_id}/priority")
+async def api_toggle_quest_priority(quest_id: str):
+    from df_storyteller.context.quest_store import toggle_priority
+    config = _get_config()
+    fortress_dir = _get_fortress_dir(config)
+    ok = toggle_priority(config, quest_id, fortress_dir)
+    return {"ok": ok}
+
+
+@app.delete("/api/quests/{quest_id}")
+async def api_delete_quest(quest_id: str):
+    from df_storyteller.context.quest_store import delete_quest
+    config = _get_config()
+    fortress_dir = _get_fortress_dir(config)
+    ok = delete_quest(config, quest_id, fortress_dir)
+    return {"ok": ok}
+
+
+@app.get("/api/quests")
+async def api_list_quests(status: str | None = None):
+    from df_storyteller.context.quest_store import load_all_quests
+    config = _get_config()
+    fortress_dir = _get_fortress_dir(config)
+    quests = load_all_quests(config, fortress_dir)
+    if status:
+        quests = [q for q in quests if q.status.value == status]
+    return [q.model_dump(mode="json") for q in quests]
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -1334,7 +1469,7 @@ async def save_settings(request: Request):
     if form.get("api_key"):
         config.llm.api_key = form["api_key"]
     config.story.narrative_style = form.get("narrative_style", config.story.narrative_style)
-    for field in ("chronicle_max_tokens", "biography_max_tokens", "saga_max_tokens", "chat_summary_max_tokens"):
+    for field in ("chronicle_max_tokens", "biography_max_tokens", "saga_max_tokens", "chat_summary_max_tokens", "quest_generation_max_tokens", "quest_narrative_max_tokens"):
         try:
             val = form.get(field)
             if val:
@@ -2027,6 +2162,30 @@ async def _stream_saga(config: AppConfig) -> AsyncGenerator[str, None]:
     from df_storyteller.stories.saga import generate_saga
     try:
         result = await generate_saga(config, "full")
+
+        # Save saga to per-fortress directory
+        try:
+            _, _, _, metadata = _load_game_state_safe(config)
+            fortress_dir = _get_fortress_dir(config, metadata)
+            import json as _json
+            saga_path = fortress_dir / "saga.json"
+            existing = []
+            if saga_path.exists():
+                try:
+                    existing = _json.loads(saga_path.read_text(encoding="utf-8", errors="replace"))
+                except (ValueError, OSError):
+                    existing = []
+            from datetime import datetime as _dt
+            existing.append({
+                "text": result,
+                "year": metadata.get("year", 0),
+                "season": metadata.get("season", ""),
+                "generated_at": _dt.now().isoformat(),
+            })
+            saga_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            logger.warning("Failed to save saga to disk")
+
         words = result.split(" ")
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
