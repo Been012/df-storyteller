@@ -398,6 +398,7 @@ a.lore-xref:hover {
 .tag-secret { background: #1a1a3d; color: #8b8bc9; }
 .tag-foreshadow { background: #3d1a1a; color: #c98b8b; }
 .tag-mood { background: #1a3d3d; color: #8bc9c9; }
+.tag-what_if { background: #2d1a3d; color: #b98bdc; }
 
 .note-text {
     flex: 1;

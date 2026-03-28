@@ -8,6 +8,7 @@ Each note has a tag that controls how the LLM uses it:
 - SECRET: Hidden truth that colors narrative without being stated openly.
 - FORESHADOW: Narrative seeds for future events. Ominous hints.
 - MOOD: Sets emotional tone for scenes.
+- WHAT_IF: Player-authored hypothetical. Woven into chronicles as speculative subplot.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ class NoteTag(str, Enum):
     SECRET = "secret"
     FORESHADOW = "foreshadow"
     MOOD = "mood"
+    WHAT_IF = "what_if"
 
 
 # How the LLM should handle each tag type
@@ -38,6 +40,7 @@ TAG_INSTRUCTIONS: dict[NoteTag, str] = {
     NoteTag.SECRET: "This is hidden knowledge. Show its consequences without stating the secret directly. Let the reader feel something is wrong.",
     NoteTag.FORESHADOW: "Plant narrative seeds for this. Use ominous hints, dark imagery, a sense of approaching doom or change.",
     NoteTag.MOOD: "Use this to set the emotional tone of scenes. Color descriptions, atmosphere, and character interactions with this feeling.",
+    NoteTag.WHAT_IF: "The player is exploring a hypothetical scenario. Weave it into the chronicle as an emerging subplot or speculative thread. Use phrases like 'What if...', 'Had things gone differently...', 'There are those who wonder...'. Let it influence events without overriding what actually happened.",
 }
 
 # User-facing descriptions for the UI
@@ -49,6 +52,7 @@ TAG_DESCRIPTIONS: dict[NoteTag, str] = {
     NoteTag.SECRET: "A hidden truth. The story shows consequences without revealing the secret directly.",
     NoteTag.FORESHADOW: "Something you want the story to build toward. Creates ominous hints.",
     NoteTag.MOOD: "Sets the emotional tone. Affects atmosphere and descriptions.",
+    NoteTag.WHAT_IF: "A hypothetical scenario. The story explores it as a speculative subplot or alternate possibility.",
 }
 
 
