@@ -51,14 +51,28 @@ def init(ctx: click.Context, df_path: str | None) -> None:
     provider = click.prompt(
         "LLM provider",
         type=click.Choice(["claude", "openai", "ollama"]),
-        default="claude",
+        default="ollama",
     )
     config.llm.provider = provider
 
-    # 3. API key (if needed)
+    # 3. Provider-specific config
     if provider in ("claude", "openai"):
         api_key = click.prompt("API key", hide_input=True)
         config.llm.api_key = api_key
+    elif provider == "ollama":
+        console.print("\n[bold]Ollama setup[/bold]")
+        console.print("Make sure Ollama is installed and running ([bold]ollama serve[/bold])")
+        console.print("You can see available models with: [bold]ollama list[/bold]")
+        ollama_model = click.prompt(
+            "Ollama model name",
+            default="llama3",
+        )
+        config.llm.ollama.model = ollama_model
+        ollama_url = click.prompt(
+            "Ollama URL",
+            default="http://localhost:11434",
+        )
+        config.llm.ollama.base_url = ollama_url
 
     # 4. Save config
     save_config(config)
@@ -75,11 +89,10 @@ def init(ctx: click.Context, df_path: str | None) -> None:
 
     console.print("\n[bold green]Setup complete![/bold green]")
     console.print("\nNext steps:")
-    console.print("  1. Launch Dwarf Fortress")
-    console.print("  2. Embark on a new fortress (or load an existing one)")
-    console.print("  3. In DFHack console, type: [bold]storyteller-begin[/bold]")
-    console.print("  4. Play the game!")
-    console.print("  5. In your terminal: [bold]python -m df_storyteller chronicle[/bold]")
+    console.print("  1. Launch Dwarf Fortress and load a fortress")
+    console.print("  2. In DFHack console, type: [bold]storyteller-begin[/bold]")
+    console.print("  3. Launch the web UI: [bold]python -m df_storyteller serve[/bold]")
+    console.print("  4. Start generating stories!")
 
 
 # ==================== status ====================
