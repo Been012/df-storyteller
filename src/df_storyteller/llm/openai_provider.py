@@ -25,21 +25,42 @@ class OpenAIProvider(LLMProvider):
         max_tokens: int = 4096,
         temperature: float = 0.8,
     ) -> str:
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI, AuthenticationError, APIConnectionError, RateLimitError
 
-        client = AsyncOpenAI(api_key=self._api_key)
-        response = await client.chat.completions.create(
-            model=self._model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        if not response.choices:
-            return "[Error: OpenAI returned an empty response. Try again or check your prompt.]"
-        return response.choices[0].message.content or ""
+        try:
+            client = AsyncOpenAI(api_key=self._api_key)
+            response = await client.chat.completions.create(
+                model=self._model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            if not response.choices:
+                return "[OpenAI returned an empty response. Try again or check your prompt.]"
+            return response.choices[0].message.content or ""
+        except AuthenticationError:
+            raise ValueError(
+                "Invalid OpenAI API key. Check your key in Settings or run 'python -m df_storyteller init'."
+            )
+        except RateLimitError:
+            raise ValueError(
+                "OpenAI rate limit reached. Wait a moment and try again."
+            )
+        except APIConnectionError:
+            raise ValueError(
+                "Cannot connect to the OpenAI API. Check your internet connection."
+            )
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "context_length" in err_msg or "max_tokens" in err_msg or "too many tokens" in err_msg:
+                raise ValueError(
+                    "Prompt too large for this OpenAI model's context window. "
+                    "Try reducing token limits in Settings, or generate shorter content."
+                )
+            raise
 
     def estimate_tokens(self, text: str) -> int:
         return len(text) // 4

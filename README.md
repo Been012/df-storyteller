@@ -100,6 +100,10 @@ See the **[Wiki](https://github.com/Been012/df-storyteller/wiki)** for:
 - [LLM Integration](https://github.com/Been012/df-storyteller/wiki/LLM-Integration)
 - Feature guides for every tab
 
+## Note
+
+This tool is designed to run **locally on your machine** (localhost). It is not intended to be exposed to the internet or run on a public server. API keys are stored in your local config file at `~/.df-storyteller/config.toml`.
+
 ## License
 
 MIT

@@ -31,17 +31,37 @@ class ClaudeProvider(LLMProvider):
     ) -> str:
         import anthropic
 
-        client = anthropic.AsyncAnthropic(api_key=self._api_key)
-        message = await client.messages.create(
-            model=self._model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        if not message.content:
-            return "[Error: Claude returned an empty response. Try again or check your prompt.]"
-        return message.content[0].text
+        try:
+            client = anthropic.AsyncAnthropic(api_key=self._api_key)
+            message = await client.messages.create(
+                model=self._model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            if not message.content:
+                return "[Claude returned an empty response. Try again or check your prompt.]"
+            return message.content[0].text
+        except anthropic.AuthenticationError:
+            raise ValueError(
+                "Invalid Anthropic API key. Check your key in Settings or run 'python -m df_storyteller init'."
+            )
+        except anthropic.RateLimitError:
+            raise ValueError(
+                "Anthropic rate limit reached. Wait a moment and try again."
+            )
+        except anthropic.APIConnectionError:
+            raise ValueError(
+                "Cannot connect to the Anthropic API. Check your internet connection."
+            )
+        except anthropic.BadRequestError as e:
+            if "max_tokens" in str(e).lower() or "context" in str(e).lower():
+                raise ValueError(
+                    "Prompt too large for Claude's context window. Try reducing token limits in Settings, "
+                    "or generate shorter content."
+                )
+            raise ValueError(f"Claude API error: {e}")
 
     def estimate_tokens(self, text: str) -> int:
         return len(text) // 4

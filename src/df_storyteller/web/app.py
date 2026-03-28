@@ -215,6 +215,17 @@ def _base_context(config: AppConfig, active_tab: str, metadata: dict | None = No
         else:
             last_updated = f"{age // 3600}h ago"
 
+    # Determine setup state for guidance
+    has_config = bool(config.paths.df_install)
+    has_data = bool(metadata.get("fortress_name"))
+    has_llm = bool(config.llm.provider)
+
+    setup_step = ""
+    if not has_config:
+        setup_step = "no_config"
+    elif not has_data:
+        setup_step = "no_data"
+
     return {
         "active_tab": active_tab,
         "worlds": worlds,
@@ -228,6 +239,7 @@ def _base_context(config: AppConfig, active_tab: str, metadata: dict | None = No
         "population": metadata.get("population", 0),
         "event_count": event_count,
         "last_updated": last_updated,
+        "setup_step": setup_step,
     }
 
 
@@ -975,9 +987,9 @@ Write 2-3 paragraphs summarizing the social mood, notable relationships, tension
             for i, word in enumerate(words):
                 yield word + (" " if i < len(words) - 1 else "")
                 await asyncio.sleep(0.02)
-        except Exception:
+        except Exception as e:
             logger.exception("Chat summary generation failed")
-            yield "Error: generation failed. Check server logs for details."
+            yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
 
     return StreamingResponse(_stream(), media_type="text/plain")
 
@@ -1236,9 +1248,9 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
             for i, word in enumerate(words):
                 yield word + (" " if i < len(words) - 1 else "")
                 await asyncio.sleep(0.02)
-        except Exception:
+        except Exception as e:
             logger.exception("Battle report generation failed")
-            yield "Error: generation failed. Check server logs for details."
+            yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
 
     return StreamingResponse(_stream(), media_type="text/plain")
 
@@ -2023,9 +2035,9 @@ async def api_complete_quest(quest_id: str):
 
         try:
             narrative = await generate_completion_narrative(config, quest, fortress_dir)
-        except Exception:
+        except Exception as e:
             logger.exception("Quest completion narrative failed")
-            yield "Error: generation failed. Check server logs for details."
+            yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
             return
 
         # Save completion
@@ -2715,7 +2727,7 @@ async def _stream_chronicle(config: AppConfig, one_time_context: str = "") -> As
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception:
+    except Exception as e:
         logger.exception("Generation failed")
         yield "Error: generation failed. Check server logs for details."
 
@@ -2751,7 +2763,7 @@ async def _stream_bio(config: AppConfig, dwarf_name: str, one_time_context: str 
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception:
+    except Exception as e:
         logger.exception("Generation failed")
         yield "Error: generation failed. Check server logs for details."
 
@@ -2787,7 +2799,7 @@ async def _stream_eulogy(config: AppConfig, dwarf_name: str, one_time_context: s
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception:
+    except Exception as e:
         logger.exception("Eulogy generation failed")
         yield "Error: generation failed. Check server logs for details."
 
@@ -2823,7 +2835,7 @@ async def _stream_diary(config: AppConfig, dwarf_name: str, one_time_context: st
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception:
+    except Exception as e:
         logger.exception("Diary generation failed")
         yield "Error: generation failed. Check server logs for details."
 
@@ -2870,7 +2882,7 @@ async def _stream_saga(config: AppConfig) -> AsyncGenerator[str, None]:
         for i, word in enumerate(words):
             yield word + (" " if i < len(words) - 1 else "")
             await asyncio.sleep(0.02)
-    except Exception:
+    except Exception as e:
         logger.exception("Generation failed")
         yield "Error: generation failed. Check server logs for details."
 

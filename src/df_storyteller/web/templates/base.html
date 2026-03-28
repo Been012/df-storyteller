@@ -27,7 +27,25 @@
         </div>
     </nav>
 
-    {% if fortress_name %}
+    {% if setup_step == 'no_config' %}
+    <div class="setup-banner">
+        <strong>Welcome to df-storyteller!</strong> Get started in 3 steps:
+        <ol>
+            <li>Run <code>python -m df_storyteller init</code> in your terminal to configure your DF path and LLM provider</li>
+            <li>In the DFHack console, run <code>storyteller-begin</code> to take your first fortress snapshot</li>
+            <li>Come back here and start generating stories!</li>
+        </ol>
+    </div>
+    {% elif setup_step == 'no_data' %}
+    <div class="setup-banner">
+        <strong>Almost there!</strong> No fortress data found yet.
+        <ol>
+            <li>Launch Dwarf Fortress and load a save (or embark on a new fortress)</li>
+            <li>In the DFHack console, run <code>storyteller-begin</code> to snapshot your dwarves</li>
+            <li>Click <a href="/api/refresh" style="color: var(--gold-dark);">refresh</a> to load the data</li>
+        </ol>
+    </div>
+    {% elif fortress_name %}
     <div class="status-bar">
         <span class="status-item"><strong>{{ fortress_name }}</strong></span>
         {% if site_name and site_name != fortress_name %}

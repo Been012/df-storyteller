@@ -1043,6 +1043,40 @@ details[open] .lore-summary h2::before {
     line-height: 1.6;
 }
 
+/* ========== Setup Banner ========== */
+
+.setup-banner {
+    background: rgba(212, 168, 75, 0.15);
+    border: 1px solid var(--gold-dark);
+    border-radius: 4px;
+    padding: 1rem 1.5rem;
+    margin: 0.5rem 1rem;
+    font-family: 'Crimson Text', serif;
+    color: var(--parchment);
+    line-height: 1.6;
+}
+
+.setup-banner strong {
+    color: var(--gold-dark);
+    font-family: 'Cinzel', serif;
+}
+
+.setup-banner ol {
+    margin: 0.5rem 0 0 1.2rem;
+    padding: 0;
+}
+
+.setup-banner li {
+    margin-bottom: 0.3rem;
+}
+
+.setup-banner code {
+    background: rgba(0,0,0,0.3);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.9rem;
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {
