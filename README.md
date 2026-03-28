@@ -60,6 +60,8 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 
 ## Quick Start
 
+**Prerequisites:** [Python 3.11+](https://www.python.org/downloads/) — during install, check **"Add Python to PATH"**.
+
 **Install and run:**
 ```bash
 pip install df-storyteller
