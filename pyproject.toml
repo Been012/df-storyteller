@@ -4,9 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "df-storyteller"
-version = "0.1.0"
+version = "0.2.0"
 description = "Dwarf Fortress storytelling assistant — turns game events into narrative stories"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.11"
+keywords = ["dwarf-fortress", "dfhack", "storytelling", "ai", "llm", "narrative"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Games/Entertainment",
+]
 dependencies = [
     "click>=8.1",
     "pydantic>=2.0",

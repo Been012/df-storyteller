@@ -78,10 +78,15 @@ python -m df_storyteller serve
 
 ## Requirements
 
-- **Dwarf Fortress** (Steam / DF Premium recommended)
-- **DFHack** (Steam Workshop or [dfhack.org](https://dfhack.org/))
+- **Dwarf Fortress** v50.x (Steam / DF Premium) — tested with v50.14
+- **DFHack** v50.14-r1+ (Steam Workshop or [dfhack.org](https://dfhack.org/))
 - **Python 3.11+**
-- **An LLM provider**: [Ollama](https://ollama.com/) (free, local), [Claude](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/)
+- **An LLM provider** (one of):
+  - [Ollama](https://ollama.com/) — free, runs locally, no API key needed (supports thinking models)
+  - [Anthropic Claude](https://console.anthropic.com/) — API key required
+  - [OpenAI](https://platform.openai.com/) — API key required
+
+> **Note:** This tool uses DF Premium (Steam) APIs. Classic DF (pre-Steam) is not supported — some DFHack fields like `unit.relations` don't exist in the Steam version. We use `histfig_links` on historical figures instead.
 
 ## Tech Stack
 
