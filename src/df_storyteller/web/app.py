@@ -746,7 +746,8 @@ async def dwarf_detail_page(request: Request, unit_id: int):
             entry["text"] = _linkify_dwarf_names(
                 entry["text"].replace("\n", "<br>"), name_map
             )
-    dwarf_data["bio_entries"] = bio_history
+    dwarf_data["bio_entries"] = [e for e in bio_history if not e.get("is_diary")]
+    dwarf_data["diary_entries"] = [e for e in bio_history if e.get("is_diary")]
     dwarf_data["has_eulogy"] = any(e.get("is_eulogy") for e in bio_history)
 
     # Load notes for this dwarf
@@ -2145,6 +2146,42 @@ async def _stream_eulogy(config: AppConfig, dwarf_name: str, one_time_context: s
             await asyncio.sleep(0.02)
     except Exception:
         logger.exception("Eulogy generation failed")
+        yield "Error: generation failed. Check server logs for details."
+
+
+@app.post("/api/diary/{unit_id}")
+async def api_generate_diary(unit_id: int, request: Request):
+    """Stream a first-person diary entry for a dwarf."""
+    config = _get_config()
+    one_time = ""
+    try:
+        data = await request.json()
+        one_time = data.get("context", "")
+    except Exception:
+        pass
+
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config)
+    dwarf = character_tracker.get_dwarf(unit_id)
+    if not dwarf:
+        return StreamingResponse(iter(["Dwarf not found."]), media_type="text/plain")
+
+    return StreamingResponse(
+        _stream_diary(config, dwarf.name, one_time),
+        media_type="text/plain",
+    )
+
+
+async def _stream_diary(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
+    from df_storyteller.stories.biography import generate_diary
+    try:
+        fortress_dir = _get_fortress_dir(config)
+        result = await generate_diary(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
+        words = result.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
+            await asyncio.sleep(0.02)
+    except Exception:
+        logger.exception("Diary generation failed")
         yield "Error: generation failed. Check server logs for details."
 
 

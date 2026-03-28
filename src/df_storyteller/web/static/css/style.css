@@ -448,6 +448,41 @@ a.lore-xref:hover {
     padding-left: 1rem;
 }
 
+.diary-entry {
+    border-left: 3px solid #8b8bc9;
+    padding-left: 1rem;
+    font-style: italic;
+}
+
+.dwarf-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 1rem;
+}
+
+.dwarf-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.5rem 1rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    color: var(--ink-faded);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dwarf-tab:hover {
+    color: var(--parchment);
+}
+
+.dwarf-tab.active {
+    color: var(--gold-dark);
+    border-bottom-color: var(--gold-dark);
+}
+
 .note-actions {
     display: flex;
     gap: 0.2rem;

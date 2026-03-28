@@ -154,97 +154,124 @@
         </div>
         {% endif %}
 
-        <!-- Player Notes -->
+        <!-- Tabbed sections: Notes | Biography | Diary -->
         <div class="bio-section">
-            <h3>Player Notes</h3>
-            <div id="notes-list">
-                {% for note in notes %}
-                <div class="note-card {{ 'resolved' if note.resolved else '' }}" data-id="{{ note.id }}">
-                    <span class="note-tag tag-{{ note.tag.value }}">{{ note.tag.value }}</span>
-                    <span class="note-text">{{ note.text }}</span>
-                    <span class="note-time">{{ note.game_season | title }} Y{{ note.game_year }}</span>
-                    <span class="note-actions">
-                        <button onclick="resolveNote('{{ note.id }}')" class="note-btn" title="{{ 'Unresolve' if note.resolved else 'Resolve' }}">{{ '↩' if note.resolved else '✓' }}</button>
-                        <button onclick="deleteNote('{{ note.id }}')" class="note-btn" title="Delete">✕</button>
-                    </span>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="note-add" style="margin-top: 0.8rem; display: flex; gap: 0.5rem; align-items: center;">
-                <select id="note-tag" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
-                    <option value="suspicion">Suspicion</option>
-                    <option value="fact">Fact</option>
-                    <option value="theory">Theory</option>
-                    <option value="rumor">Rumor</option>
-                    <option value="secret">Secret</option>
-                    <option value="foreshadow">Foreshadow</option>
-                    <option value="mood">Mood</option>
-                    <option value="what_if">What If</option>
-                </select>
-                <input type="text" id="note-text" placeholder="Write a note about this dwarf..."
-                    style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
-                <button class="btn btn-secondary" onclick="addNote()" style="padding: 0.4rem 1rem;">Add</button>
-            </div>
-        </div>
-
-        <!-- Memorial (deceased dwarves only) -->
-        {% if not dwarf.is_alive %}
-        <div class="memorial-section">
-            <h3>Memorial</h3>
-            {% if not dwarf.has_eulogy %}
-            <div class="btn-row">
-                <button class="btn btn-primary memorial-btn" id="eulogy-btn" onclick="generateEulogy({{ dwarf.unit_id }})">
-                    Write Eulogy
-                </button>
-            </div>
-            <div class="story-text streaming-text" id="eulogy-text" style="display: none;"></div>
-            {% else %}
-            <em style="color: var(--ink-faded);">A eulogy has been written and appears in the biography below.</em>
-            {% endif %}
-        </div>
-        {% endif %}
-
-        <!-- Biography Timeline -->
-        <div class="bio-section">
-            <h3>Biography</h3>
-
-            <!-- One-time context for this generation -->
-            <details style="margin-bottom: 0.8rem;">
-                <summary style="cursor: pointer; color: var(--ink-faded); font-size: 0.9rem;">Add context for this entry (optional)</summary>
-                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
-                    <input type="text" id="bio-context" placeholder="e.g. 'Focus on their reaction to the siege'"
-                        style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
-                </div>
-            </details>
-
-            <div class="btn-row">
-                <button class="btn btn-primary" id="bio-btn" onclick="generateBio({{ dwarf.unit_id }})">
-                    {% if dwarf.bio_entries %}Write New Entry{% else %}Begin Biography{% endif %}
-                </button>
+            <div class="dwarf-tabs">
+                <button class="dwarf-tab active" onclick="switchTab('notes')">Notes</button>
+                <button class="dwarf-tab" onclick="switchTab('biography')">Biography{% if dwarf.bio_entries %} ({{ dwarf.bio_entries | length }}){% endif %}</button>
+                <button class="dwarf-tab" onclick="switchTab('diary')">Diary{% if dwarf.diary_entries %} ({{ dwarf.diary_entries | length }}){% endif %}</button>
             </div>
 
-            <!-- New entry streams here -->
-            <div class="story-text streaming-text" id="bio-text" style="display: none;"></div>
-
-            <!-- Existing biography entries (newest first) -->
-            {% if dwarf.bio_entries %}
-                {% for entry in dwarf.bio_entries | reverse %}
-                <div class="chronicle-entry{% if entry.get('is_eulogy') %} eulogy-entry{% endif %}" style="margin-bottom: 1.5rem;">
-                    <div class="season-header" style="font-size: 1rem;">
-                        {% if entry.get('is_eulogy') %}Memorial — {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+            <!-- Notes Tab -->
+            <div class="dwarf-tab-content" id="tab-notes">
+                <div id="notes-list">
+                    {% for note in notes %}
+                    <div class="note-card {{ 'resolved' if note.resolved else '' }}" data-id="{{ note.id }}">
+                        <span class="note-tag tag-{{ note.tag.value }}">{{ note.tag.value }}</span>
+                        <span class="note-text">{{ note.text }}</span>
+                        <span class="note-time">{{ note.game_season | title }} Y{{ note.game_year }}</span>
+                        <span class="note-actions">
+                            <button onclick="resolveNote('{{ note.id }}')" class="note-btn" title="{{ 'Unresolve' if note.resolved else 'Resolve' }}">{{ '↩' if note.resolved else '✓' }}</button>
+                            <button onclick="deleteNote('{{ note.id }}')" class="note-btn" title="Delete">✕</button>
+                        </span>
                     </div>
-                    <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                    {% endfor %}
                 </div>
-                {% if not loop.last %}
-                <div class="divider" style="margin: 1rem 0;">&loz;</div>
+                <div class="note-add" style="margin-top: 0.8rem; display: flex; gap: 0.5rem; align-items: center;">
+                    <select id="note-tag" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                        <option value="suspicion">Suspicion</option>
+                        <option value="fact">Fact</option>
+                        <option value="theory">Theory</option>
+                        <option value="rumor">Rumor</option>
+                        <option value="secret">Secret</option>
+                        <option value="foreshadow">Foreshadow</option>
+                        <option value="mood">Mood</option>
+                        <option value="what_if">What If</option>
+                    </select>
+                    <input type="text" id="note-text" placeholder="Write a note about this dwarf..."
+                        style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                    <button class="btn btn-secondary" onclick="addNote()" style="padding: 0.4rem 1rem;">Add</button>
+                </div>
+            </div>
+
+            <!-- Biography Tab -->
+            <div class="dwarf-tab-content" id="tab-biography" style="display: none;">
+                {% if not dwarf.is_alive and not dwarf.has_eulogy %}
+                <div class="memorial-section" style="margin-bottom: 1rem;">
+                    <div class="btn-row">
+                        <button class="btn btn-primary memorial-btn" id="eulogy-btn" onclick="generateEulogy({{ dwarf.unit_id }})">
+                            Write Eulogy
+                        </button>
+                    </div>
+                    <div class="story-text streaming-text" id="eulogy-text" style="display: none;"></div>
+                </div>
                 {% endif %}
-                {% endfor %}
-            {% else %}
-                <em style="color: var(--ink-faded);">
-                    No biography entries yet. Click above to write the first chapter of this dwarf's story.
-                    As they grow and change, generate new entries to track their journey.
-                </em>
-            {% endif %}
+
+                <details style="margin-bottom: 0.8rem;">
+                    <summary style="cursor: pointer; color: var(--ink-faded); font-size: 0.9rem;">Add context for this entry (optional)</summary>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <input type="text" id="bio-context" placeholder="e.g. 'Focus on their reaction to the siege'"
+                            style="flex: 1; font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                    </div>
+                </details>
+
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="bio-btn" onclick="generateBio({{ dwarf.unit_id }})">
+                        {% if dwarf.bio_entries %}Write New Entry{% else %}Begin Biography{% endif %}
+                    </button>
+                </div>
+
+                <div class="story-text streaming-text" id="bio-text" style="display: none;"></div>
+
+                {% if dwarf.bio_entries %}
+                    {% for entry in dwarf.bio_entries | reverse %}
+                    <div class="chronicle-entry{% if entry.get('is_eulogy') %} eulogy-entry{% endif %}" style="margin-bottom: 1.5rem;">
+                        <div class="season-header" style="font-size: 1rem;">
+                            {% if entry.get('is_eulogy') %}Memorial — {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                        </div>
+                        <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                    </div>
+                    {% if not loop.last %}
+                    <div class="divider" style="margin: 1rem 0;">&loz;</div>
+                    {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <em style="color: var(--ink-faded);">
+                        No biography entries yet. Click above to write the first chapter of this dwarf's story.
+                    </em>
+                {% endif %}
+            </div>
+
+            <!-- Diary Tab -->
+            <div class="dwarf-tab-content" id="tab-diary" style="display: none;">
+                {% if dwarf.is_alive %}
+                <div class="btn-row" style="margin-bottom: 1rem;">
+                    <button class="btn btn-primary" id="diary-btn" onclick="generateDiary({{ dwarf.unit_id }})">
+                        Write Diary Entry
+                    </button>
+                </div>
+                {% endif %}
+
+                <div class="story-text streaming-text" id="diary-text" style="display: none;"></div>
+
+                {% if dwarf.diary_entries %}
+                    {% for entry in dwarf.diary_entries | reverse %}
+                    <div class="chronicle-entry diary-entry" style="margin-bottom: 1.5rem;">
+                        <div class="season-header" style="font-size: 1rem;">
+                            {{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                        </div>
+                        <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                    </div>
+                    {% if not loop.last %}
+                    <div class="divider" style="margin: 1rem 0;">&loz;</div>
+                    {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <em style="color: var(--ink-faded);">
+                        No diary entries yet. Click above to hear this dwarf's inner thoughts.
+                    </em>
+                {% endif %}
+            </div>
         </div>
     </div>
 </div>
@@ -253,6 +280,13 @@
 {% block scripts %}
 <script>
 const UNIT_ID = {{ dwarf.unit_id }};
+
+function switchTab(tabName) {
+    document.querySelectorAll('.dwarf-tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.dwarf-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tabName).style.display = 'block';
+    event.target.classList.add('active');
+}
 
 async function addNote() {
     const tag = document.getElementById('note-tag').value;
@@ -360,6 +394,43 @@ async function generateEulogy(unitId) {
 
     btn.disabled = false;
     btn.textContent = 'Write Eulogy';
+}
+
+async function generateDiary(unitId) {
+    const btn = document.getElementById('diary-btn');
+    const textEl = document.getElementById('diary-text');
+
+    btn.disabled = true;
+    btn.textContent = 'Writing diary...';
+    textEl.style.display = 'block';
+    textEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+    try {
+        const response = await fetch('/api/diary/' + unitId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ context: '' }),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+        }
+
+        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
+        setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Write Diary Entry';
 }
 </script>
 {% endblock %}

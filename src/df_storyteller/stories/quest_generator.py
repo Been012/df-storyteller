@@ -330,10 +330,12 @@ async def generate_completion_narrative(
 
     current_context = _build_fortress_context(metadata, character_tracker, event_store, world_lore)
 
-    system_prompt = """You are a dwarven chronicler recording the completion of a great quest.
+    from df_storyteller.stories.df_mechanics import DF_MECHANICS_REFERENCE
+    system_prompt = f"""You are a dwarven chronicler recording the completion of a great quest.
 Write a brief narrative (150-250 words) describing how this quest was fulfilled.
 Use actual dwarf names and fortress details. The tone should be triumphant and
-celebratory, befitting a dwarven achievement."""
+celebratory, befitting a dwarven achievement.
+{DF_MECHANICS_REFERENCE}"""
 
     user_prompt = f"""## The Quest
 Title: {quest.title}

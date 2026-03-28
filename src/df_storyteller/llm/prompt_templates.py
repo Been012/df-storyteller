@@ -126,17 +126,19 @@ Use the exact names from the data. Do NOT invent names or events.
 
 def render_system_prompt(ctx: StoryContext, **extra: str) -> str:
     """Render the system prompt for a given story context."""
+    from df_storyteller.stories.df_mechanics import DF_MECHANICS_REFERENCE
     template_map = {
         "chronicle": CHRONICLE_SYSTEM,
         "biography": BIOGRAPHY_SYSTEM,
         "saga": SAGA_SYSTEM,
     }
     template = template_map.get(ctx.mode, CHRONICLE_SYSTEM)
-    return template.render(
+    prompt = template.render(
         fortress_name=ctx.fortress_name,
         world_name=ctx.world_name,
         **extra,
     )
+    return prompt + "\n\n" + DF_MECHANICS_REFERENCE
 
 
 def render_user_prompt(ctx: StoryContext) -> str:
