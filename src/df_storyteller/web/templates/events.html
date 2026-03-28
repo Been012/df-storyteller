@@ -52,6 +52,73 @@
         {% endif %}
     </div>
 </div>
+
+{% if combat_encounters %}
+<h2 class="page-header" style="margin-top: 2rem;">Combat Log</h2>
+<p class="page-subtitle">Blow-by-blow accounts of recent fights</p>
+
+<div class="parchment">
+    {% for fight in combat_encounters %}
+    <div style="margin-bottom: 1.5rem; padding: 0.8rem; border: 1px solid var(--border); border-radius: 4px; {% if fight.is_lethal %}border-left: 3px solid #c98b8b;{% endif %}">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.6rem;">
+            <div style="font-family: 'Cinzel', serif; font-size: 1.05rem;">
+                {{ fight.attacker }} <span style="color: var(--ink-faded);">vs</span> {{ fight.defender }}
+                {% if fight.weapon %}<span style="font-size: 0.85rem; color: var(--gold-dark); font-family: 'Crimson Text', serif;"> &mdash; {{ fight.weapon }}</span>{% endif %}
+            </div>
+            <div style="font-size: 0.8rem; color: var(--ink-faded);">{{ fight.season | title }} {{ fight.year }}</div>
+        </div>
+
+        <div style="font-size: 0.88rem; line-height: 1.6;">
+            {% for line in fight.raw_lines %}
+                {% set lower_line = line.lower() %}
+                {% if 'hacks' in lower_line or 'slashes' in lower_line or 'stabs' in lower_line or 'strikes' in lower_line or 'punches' in lower_line or 'kicks' in lower_line or 'bites' in lower_line or 'scratches' in lower_line or 'bashes' in lower_line or 'gores' in lower_line %}
+                <div style="color: var(--ink-light); margin-top: 0.3rem;">
+                    <span style="color: var(--parchment);">&#9876;</span> {{ line }}
+                </div>
+                {% elif 'artery' in lower_line or 'tendon' in lower_line or 'nerve' in lower_line or 'has been' in lower_line %}
+                <div style="color: #c98b8b; padding-left: 1.2rem; font-size: 0.83rem;">{{ line }}</div>
+                {% elif 'the force' in lower_line %}
+                <div style="color: #c9a87b; padding-left: 1.2rem; font-size: 0.83rem;">{{ line }}</div>
+                {% elif 'falls over' in lower_line or 'gives in' in lower_line or 'knocked unconscious' in lower_line or 'collapses' in lower_line %}
+                <div style="font-style: italic; color: var(--ink-faded); margin-top: 0.2rem; padding-left: 1.2rem;">{{ line }}</div>
+                {% elif 'cloven asunder' in lower_line or 'sails off' in lower_line or 'flies off' in lower_line %}
+                <div style="color: #c98b8b; font-weight: bold; padding-left: 1.2rem;">{{ line }}</div>
+                {% else %}
+                <div style="color: var(--ink-faded); padding-left: 1.2rem; font-size: 0.83rem;">{{ line }}</div>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        {% if fight.outcome %}
+        <div style="margin-top: 0.5rem; font-style: italic; font-size: 0.9rem; color: {% if fight.is_lethal %}#c98b8b{% else %}var(--ink-faded){% endif %}; border-top: 1px solid var(--border); padding-top: 0.4rem;">
+            {{ fight.defender }} {{ fight.outcome }}{% if fight.is_lethal %} — FATAL{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if chat_lines %}
+<h2 class="page-header" style="margin-top: 2rem;">Chat Log</h2>
+<p class="page-subtitle">What the dwarves have been saying and feeling</p>
+
+<div class="parchment">
+    <div style="margin-bottom: 1rem;">
+        <button class="btn btn-primary" id="chat-summarize-btn" onclick="summarizeChat()">Summarize with AI</button>
+        <div class="story-text streaming-text" id="chat-summary" style="display: none; margin-top: 0.8rem;"></div>
+    </div>
+
+    <div style="max-height: 500px; overflow-y: auto;">
+        {% for chat in chat_lines %}
+        <div style="margin-bottom: 0.3rem; font-size: 0.88rem; line-height: 1.5;">
+            <strong style="color: var(--parchment);">{{ chat.name }}</strong><span style="color: var(--ink-faded);">, {{ chat.profession }}:</span>
+            <span style="color: var(--ink-light);">{{ chat.message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -133,5 +200,42 @@ function filterEvents() {
 }
 
 connectEventFeed();
+
+async function summarizeChat() {
+    const btn = document.getElementById('chat-summarize-btn');
+    const summaryEl = document.getElementById('chat-summary');
+    if (!btn || !summaryEl) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Summarizing...';
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+    try {
+        const response = await fetch('/api/chat/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            fullText += chunk;
+            summaryEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
+        }
+
+        summaryEl.innerHTML = fullText.replace(/\n/g, '<br>');
+    } catch (err) {
+        summaryEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Summarize with AI';
+}
 </script>
 {% endblock %}

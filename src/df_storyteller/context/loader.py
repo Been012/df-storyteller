@@ -92,6 +92,57 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
     )
 
 
+SESSION_MARKERS = (
+    "*** STARTING NEW GAME ***",
+    "** Starting New Outpost **",
+    "** Loading Fortress **",
+)
+
+
+def _read_current_session_gamelog(path: Path) -> list[str]:
+    """Read only the current session from gamelog.txt.
+
+    Scans backwards from the end of the file to find the last session
+    marker (STARTING NEW GAME, Loading Fortress, etc.) and returns
+    only lines from that point forward. This avoids parsing the entire
+    gamelog which can be hundreds of thousands of lines.
+    """
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            file_size = f.tell()
+
+            # Read in chunks from the end to find the last session marker
+            chunk_size = 64 * 1024  # 64KB chunks
+            offset = 0
+            tail_bytes = b""
+
+            while offset < file_size:
+                read_size = min(chunk_size, file_size - offset)
+                offset += read_size
+                f.seek(file_size - offset)
+                chunk = f.read(read_size)
+                tail_bytes = chunk + tail_bytes
+
+                # Check if any session marker is in what we've read so far
+                tail_text = tail_bytes.decode("cp437", errors="replace")
+                for marker in SESSION_MARKERS:
+                    idx = tail_text.rfind(marker)
+                    if idx >= 0:
+                        # Found the last session marker — return lines from there
+                        session_text = tail_text[idx:]
+                        lines = session_text.split("\n")
+                        # Skip the marker line itself
+                        return [l.rstrip("\r") for l in lines[1:] if l.strip()]
+
+            # No marker found — fall back to last 5000 lines
+            tail_text = tail_bytes.decode("cp437", errors="replace")
+            lines = tail_text.split("\n")
+            return [l.rstrip("\r") for l in lines[-5000:] if l.strip()]
+    except OSError:
+        return []
+
+
 def _get_folder_identity(folder: Path) -> str | None:
     """Get a stable identity for a world folder by reading its most recent snapshot.
 
@@ -272,6 +323,37 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 idx = event_store.add(event)
                 for uid in event_store._extract_unit_ids(event):
                     character_tracker.add_event(uid, event)
+
+    # 3. Parse gamelog.txt for combat and other events (current session only)
+    # The session marker (** Loading Fortress ** / ** Starting New Outpost **)
+    # already scopes to the current fortress — DF writes a new marker each time
+    # a fortress is loaded, so we only see events from the active fortress.
+    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    if gamelog_path and gamelog_path.exists():
+        from df_storyteller.ingestion.gamelog_parser import GamelogParser
+        from df_storyteller.schema.events import Season as SeasonEnum
+        gamelog_lines = _read_current_session_gamelog(gamelog_path)
+        gamelog_parser = GamelogParser()
+        gamelog_parser.set_year(metadata.get("year", 0))
+        # Set current season from snapshot so events before the first season
+        # change line in this session get the correct season
+        try:
+            gamelog_parser.set_season(SeasonEnum(metadata.get("season", "spring")))
+        except ValueError:
+            pass
+        gamelog_events = list(gamelog_parser.parse_lines(gamelog_lines))
+        # Assign incrementing ticks so gamelog events sort after DFHack events
+        # within the same season (DFHack ticks are real game ticks, gamelog has 0)
+        max_tick = max((e.game_tick for e in event_store.recent_events(50)), default=0)
+        for i, event in enumerate(gamelog_events):
+            if event.game_tick == 0:
+                event.game_tick = max_tick + 1 + i
+        combat_count = 0
+        for event in gamelog_events:
+            event_store.add(event)
+            if event.event_type == EventType.COMBAT:
+                combat_count += 1
+        logger.info("Gamelog parsed: %d events (%d combat) from current session (%d lines)", len(gamelog_events), combat_count, len(gamelog_lines))
 
     # 4. Load legends if available (skip if told to — expensive for large files)
     if skip_legends:

@@ -55,6 +55,7 @@ class StoryConfig(BaseModel):
     biography_max_tokens: int = 1024  # Bios should be short — they get updated over time
     chronicle_max_tokens: int = 4096
     saga_max_tokens: int = 4096
+    chat_summary_max_tokens: int = 2048
 
 
 class AppConfig(BaseModel):

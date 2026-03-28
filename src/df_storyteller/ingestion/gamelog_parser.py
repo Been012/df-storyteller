@@ -17,6 +17,7 @@ from typing import Generator
 from df_storyteller.schema.events import (
     ArtifactData,
     ArtifactEvent,
+    CombatBlow,
     CombatData,
     CombatEvent,
     DeathData,
@@ -58,15 +59,32 @@ ARTIFACT_PATTERN = re.compile(
     r'^(.+) has created (.+), a (.+)!$'
 )
 
-# Combat lines: "The X strikes The Y in the Z with ..."
+# Combat lines: DF Premium format "The militia commander hacks the giant groundhog in the right front paw with his (copper battle axe), tearing apart the muscle!"
+COMBAT_DETAILED_PATTERN = re.compile(
+    r"^(?:The )?(.+?) (hacks|slashes|stabs|strikes|punches|kicks|bites|scratches|bashes|gores|charges at)"
+    r" (?:the )?(.+?) in the (.+?) with (?:his|her|its) \((.+?)\)(?:, (.+))?[!.]$",
+    re.IGNORECASE,
+)
+
+# Simpler combat: "The X strikes The Y in the Z!"
 COMBAT_STRIKE_PATTERN = re.compile(
-    r"^(?:The )?(.+?) (strikes|punches|kicks|bites|scratches|stabs|slashes|bashes|gores)"
+    r"^(?:The )?(.+?) (strikes|punches|kicks|bites|scratches|stabs|slashes|bashes|gores|hacks)"
     r" (?:The |the )?(.+?) in the (.+?)(?:with .+)?[!.]$",
     re.IGNORECASE,
 )
 
 COMBAT_WOUND_PATTERN = re.compile(
-    r"^The (.+?) is (bruised|torn|fractured|broken|severed|mangled|crushed)",
+    r"^(?:The |A )(.+?) (?:has been |is )(bruised|torn|fractured|broken|severed|mangled|crushed|opened|cut)",
+    re.IGNORECASE,
+)
+
+COMBAT_INJURY_PATTERN = re.compile(
+    r"^(?:An? .+ has been (?:opened|severed|torn|bruised)|A tendon .+ has been|The force .+|A sensory nerve|A motor nerve)",
+    re.IGNORECASE,
+)
+
+COMBAT_OUTCOME_PATTERN = re.compile(
+    r"^(?:The )?(.+?) (falls over|gives in to pain|has been knocked unconscious|collapses)",
     re.IGNORECASE,
 )
 
@@ -96,6 +114,9 @@ class GamelogParser:
 
     def set_year(self, year: int) -> None:
         self._current_year = year
+
+    def set_season(self, season: Season) -> None:
+        self._current_season = season
 
     def parse_file(self, path: Path) -> list[GameEvent]:
         """Parse an entire gamelog.txt file and return all events."""
@@ -224,27 +245,31 @@ class GamelogParser:
         )
 
     def _is_combat_line(self, line: str) -> bool:
-        return bool(
-            COMBAT_STRIKE_PATTERN.match(line)
-            or COMBAT_WOUND_PATTERN.match(line)
-            or line.startswith("The ")
-            and any(
-                w in line.lower()
-                for w in [
-                    "strikes",
-                    "misses",
-                    "charges",
-                    "blocks",
-                    "dodges",
-                    "counterattack",
-                    "latch",
-                    "shakes",
-                    "collaps",
-                    "gives in",
-                    "is no longer",
-                ]
-            )
-        )
+        if COMBAT_DETAILED_PATTERN.match(line):
+            return True
+        if COMBAT_STRIKE_PATTERN.match(line):
+            return True
+        if COMBAT_WOUND_PATTERN.match(line):
+            return True
+        if COMBAT_INJURY_PATTERN.match(line):
+            return True
+        if COMBAT_OUTCOME_PATTERN.match(line):
+            return True
+        lower = line.lower()
+        if line.startswith("The ") and any(
+            w in lower
+            for w in [
+                "strikes", "misses", "charges", "blocks", "dodges",
+                "counterattack", "latch", "shakes", "collaps",
+                "gives in", "is no longer", "cloven asunder",
+                "sails off", "flies off", "injured part",
+            ]
+        ):
+            return True
+        # Injury follow-ups that don't start with "The"
+        if lower.startswith(("an artery", "a tendon", "a sensory", "a motor", "many nerves")):
+            return True
+        return False
 
     def _flush_combat(self) -> Generator[CombatEvent, None, None]:
         if not self._combat_lines:
@@ -255,18 +280,67 @@ class GamelogParser:
         defender = ""
         weapon = ""
         body_part = ""
+        blows: list[CombatBlow] = []
+        injuries: list[str] = []
+        outcome = ""
 
-        # Extract from the first strike line
         for line in self._combat_lines:
+            # Try detailed pattern first (DF Premium with weapon)
+            m = COMBAT_DETAILED_PATTERN.match(line)
+            if m:
+                blow_attacker = m.group(1)
+                action = m.group(2)
+                blow_defender = m.group(3)
+                blow_body_part = m.group(4)
+                blow_weapon = m.group(5)
+                effect = m.group(6) or ""
+                if not attacker:
+                    attacker = blow_attacker
+                    defender = blow_defender
+                    weapon = blow_weapon
+                    body_part = blow_body_part
+                blows.append(CombatBlow(
+                    attacker=blow_attacker, defender=blow_defender,
+                    action=action, body_part=blow_body_part,
+                    weapon=blow_weapon, effect=effect,
+                ))
+                continue
+
+            # Try simple strike pattern
             m = COMBAT_STRIKE_PATTERN.match(line)
             if m:
-                attacker = m.group(1)
-                defender = m.group(3)
-                body_part = m.group(4)
-                break
+                blow_attacker = m.group(1)
+                action = m.group(2)
+                blow_defender = m.group(3)
+                blow_body_part = m.group(4)
+                if not attacker:
+                    attacker = blow_attacker
+                    defender = blow_defender
+                    body_part = blow_body_part
+                blows.append(CombatBlow(
+                    attacker=blow_attacker, defender=blow_defender,
+                    action=action, body_part=blow_body_part,
+                ))
+                continue
+
+            # Injuries
+            if COMBAT_INJURY_PATTERN.match(line) or COMBAT_WOUND_PATTERN.match(line):
+                injuries.append(line.strip())
+                continue
+
+            # Outcome
+            m = COMBAT_OUTCOME_PATTERN.match(line)
+            if m:
+                outcome = m.group(2)
+                continue
+
+            if "cloven asunder" in line.lower() or "sails off" in line.lower():
+                outcome = "severed"
 
         is_lethal = any(
-            "struck down" in l.lower() or "has been killed" in l.lower()
+            "struck down" in l.lower()
+            or "has been killed" in l.lower()
+            or "cloven asunder" in l.lower()
             for l in self._combat_lines
         )
 
@@ -281,6 +355,9 @@ class GamelogParser:
                 body_part=body_part,
                 is_lethal=is_lethal,
                 raw_text=raw_text,
+                blows=blows,
+                injuries=injuries,
+                outcome=outcome,
             ),
         )
         self._combat_lines = []

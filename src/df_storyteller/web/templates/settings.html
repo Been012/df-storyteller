@@ -53,6 +53,12 @@
             <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. Epic world history narrative from legends data. ~500-1000 words.</small>
         </div>
 
+        <div class="form-group">
+            <label>Chat Summary Length (tokens)</label>
+            <input type="number" name="chat_summary_max_tokens" value="{{ config.story.chat_summary_max_tokens }}" min="256" max="4000">
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI summary of dwarf conversations and social happenings.</small>
+        </div>
+
         <div class="btn-row">
             <button type="submit" class="btn btn-primary">Save Settings</button>
         </div>

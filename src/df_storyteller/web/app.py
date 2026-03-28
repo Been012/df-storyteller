@@ -232,12 +232,12 @@ def _linkify_dwarf_names(text: str, dwarf_map: dict[str, int]) -> str:
 
     dwarf_map: {name_fragment: unit_id} — maps various name forms to unit IDs.
     Longest names are matched first to avoid partial matches.
+    Only replaces names that aren't already inside an <a> tag.
     """
     if not dwarf_map:
         return text
 
     # Sort by length descending so longer names match first
-    # (e.g. "Atir Agamost" matches before "Atir")
     sorted_names = sorted(dwarf_map.keys(), key=len, reverse=True)
 
     for name in sorted_names:
@@ -245,7 +245,13 @@ def _linkify_dwarf_names(text: str, dwarf_map: dict[str, int]) -> str:
             continue
         unit_id = dwarf_map[name]
         link = f'<a href="/dwarves/{unit_id}" class="dwarf-link">{name}</a>'
-        text = text.replace(name, link)
+        # Only replace occurrences that aren't already inside a link
+        # Split on existing <a...>...</a> tags, only replace in non-tag parts
+        parts = re.split(r'(<a\b[^>]*>.*?</a>)', text)
+        for i, part in enumerate(parts):
+            if not part.startswith('<a '):
+                parts[i] = part.replace(name, link)
+        text = "".join(parts)
 
     return text
 
@@ -605,6 +611,31 @@ async def dwarf_detail_page(request: Request, unit_id: int):
         for e in reversed(dwarf_events[-20:])
     ]
 
+    # Combat highlights for this dwarf
+    from df_storyteller.schema.events import EventType as ET
+    combat_highlights = []
+    for e in reversed(dwarf_events):
+        if e.event_type != ET.COMBAT:
+            continue
+        d = e.data
+        is_attacker = hasattr(d, "attacker") and d.attacker.unit_id == unit_id
+        opponent = d.defender.name if is_attacker else d.attacker.name if hasattr(d, "attacker") else "Unknown"
+        combat_highlights.append({
+            "role": "attacker" if is_attacker else "defender",
+            "opponent": opponent,
+            "weapon": getattr(d, "weapon", ""),
+            "blow_count": len(d.blows) if hasattr(d, "blows") else 0,
+            "injuries": getattr(d, "injuries", []),
+            "outcome": getattr(d, "outcome", ""),
+            "is_lethal": getattr(d, "is_lethal", False),
+            "season": e.season.value.title(),
+            "year": e.game_year,
+            "body_parts": list({b.body_part for b in d.blows if b.body_part}) if hasattr(d, "blows") else [],
+        })
+        if len(combat_highlights) >= 10:
+            break
+    dwarf_data["combat_highlights"] = combat_highlights
+
     # Load biography history (dated entries) with name hotlinks
     fortress_dir = _get_fortress_dir(config, metadata)
     from df_storyteller.stories.biography import load_biography_history
@@ -641,26 +672,144 @@ async def events_page(request: Request):
     ctx = _base_context(config, "events", metadata)
 
     from df_storyteller.context.context_builder import _format_event
+    SEASON_ORDER = {"spring": 0, "summer": 1, "autumn": 2, "winter": 3}
     events = []
-    for event in reversed(event_store.recent_events(100)):
+    for event in event_store.recent_events(200):
         desc = _format_event(event)
-        # Strip the [Season Year] prefix — the UI shows that separately
+        # Strip the [Season Year] prefix and type label — the UI shows those separately
         desc = re.sub(r"^\[.*?\]\s*", "", desc)
+        desc = re.sub(r"^[A-Za-z_ ]+:\s", "", desc)
+        # Skip empty, session markers, and gamelog announcements (duplicated by DFHack events)
+        if not desc.strip():
+            continue
+        if "Loading Fortress" in desc or "Starting New Outpost" in desc or "STARTING NEW GAME" in desc:
+            continue
+        if event.event_type.value == "announcement":
+            continue
         events.append({
             "type": event.event_type.value,
             "year": event.game_year,
             "season": event.season.value,
+            "_sort": (event.game_year, SEASON_ORDER.get(event.season.value, 0), event.game_tick),
             "description": desc,
         })
 
-    # Linkify dwarf names in event descriptions
-    name_map = _build_dwarf_name_map(character_tracker)
+    # Sort by year/season/tick descending (newest first), then remove sort key
+    events.sort(key=lambda e: e["_sort"], reverse=True)
+    events = events[:100]  # Limit after sorting
     for event in events:
-        event["description"] = _linkify_dwarf_names(event["description"], name_map)
+        del event["_sort"]
+
+    # Build detailed combat encounters with blow-by-blow data
+    from df_storyteller.schema.events import EventType as ET
+    combat_encounters = []
+    for event in reversed(event_store.recent_events(200)):
+        if event.event_type != ET.COMBAT:
+            continue
+        d = event.data
+        blows = []
+        if hasattr(d, "blows"):
+            for b in d.blows:
+                blows.append({
+                    "action": b.action,
+                    "body_part": b.body_part,
+                    "weapon": b.weapon,
+                    "effect": b.effect,
+                })
+        # Pair injuries with the blow they follow (roughly by position in raw_text)
+        # For now, pass all injuries and the raw text lines for full detail
+        raw_lines = d.raw_text.split("\n") if hasattr(d, "raw_text") and d.raw_text else []
+        encounter = {
+            "attacker": d.attacker.name if hasattr(d, "attacker") else "Unknown",
+            "defender": d.defender.name if hasattr(d, "defender") else "Unknown",
+            "weapon": getattr(d, "weapon", ""),
+            "blows": blows,
+            "raw_lines": raw_lines,
+            "outcome": getattr(d, "outcome", ""),
+            "is_lethal": getattr(d, "is_lethal", False),
+            "season": event.season.value,
+            "year": event.game_year,
+        }
+        combat_encounters.append(encounter)
+        if len(combat_encounters) >= 20:
+            break
+
+    # Extract conversation lines from the gamelog for the chat log
+    chat_lines = []
+    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    if gamelog_path and gamelog_path.exists():
+        from df_storyteller.context.loader import _read_current_session_gamelog
+        # Conversation pattern: "Name, Profession: I talked to..."
+        chat_pattern = re.compile(r'^(.+?),\s*(.+?):\s+(.+)$')
+        for line in _read_current_session_gamelog(gamelog_path):
+            m = chat_pattern.match(line)
+            if m:
+                name = m.group(1)
+                profession = m.group(2)
+                message = m.group(3)
+                # Skip lines that are actually cancellation messages
+                if message.startswith("cancels "):
+                    continue
+                chat_lines.append({
+                    "name": name,
+                    "profession": profession,
+                    "message": message,
+                })
 
     return templates.TemplateResponse(request=request, name="events.html", context={
-        **ctx, "events": events,
+        **ctx, "events": events, "combat_encounters": combat_encounters, "chat_lines": chat_lines,
     })
+
+
+@app.post("/api/chat/summarize")
+async def api_summarize_chat(request: Request):
+    """Use AI to summarize the fortress chat log."""
+    config = _get_config()
+    _, _, _, metadata = _load_game_state_safe(config)
+
+    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    if not gamelog_path or not gamelog_path.exists():
+        return StreamingResponse(iter(["No gamelog found."]), media_type="text/plain")
+
+    from df_storyteller.context.loader import _read_current_session_gamelog
+    chat_pattern = re.compile(r'^(.+?),\s*(.+?):\s+(.+)$')
+    chat_text = ""
+    for line in _read_current_session_gamelog(gamelog_path):
+        m = chat_pattern.match(line)
+        if m and not m.group(3).startswith("cancels "):
+            chat_text += f"{m.group(1)}: {m.group(3)}\n"
+
+    if not chat_text.strip():
+        return StreamingResponse(iter(["No conversations found in the current session."]), media_type="text/plain")
+
+    fortress_name = metadata.get("fortress_name", "the fortress")
+    season = metadata.get("season", "").title()
+    year = metadata.get("year", 0)
+
+    from df_storyteller.stories.base import create_provider
+    provider = create_provider(config)
+
+    async def _stream():
+        try:
+            result = await provider.generate(
+                system_prompt="You are a dwarven chronicler summarizing the social life of a fortress. Write in a warm, narrative tone befitting a fantasy chronicle. Focus on relationships, emotions, conflicts, and notable interactions.",
+                user_prompt=f"""Summarize the social happenings in {fortress_name} during {season} of Year {year} based on these dwarf conversations and thoughts:
+
+{chat_text}
+
+Write 2-3 paragraphs summarizing the social mood, notable relationships, tensions, and daily life. Mention specific dwarves by name. Note any new friendships, family bonds, grievances, or emotional states that stand out.""",
+                max_tokens=config.story.chat_summary_max_tokens,
+                temperature=config.llm.temperature,
+            )
+            words = result.split(" ")
+            for i, word in enumerate(words):
+                yield word + (" " if i < len(words) - 1 else "")
+                await asyncio.sleep(0.02)
+        except Exception:
+            logger.exception("Chat summary generation failed")
+            yield "Error: generation failed. Check server logs for details."
+
+    return StreamingResponse(_stream(), media_type="text/plain")
 
 
 @app.get("/lore", response_class=HTMLResponse)
@@ -1071,7 +1220,7 @@ async def save_settings(request: Request):
     if form.get("api_key"):
         config.llm.api_key = form["api_key"]
     config.story.narrative_style = form.get("narrative_style", config.story.narrative_style)
-    for field in ("chronicle_max_tokens", "biography_max_tokens", "saga_max_tokens"):
+    for field in ("chronicle_max_tokens", "biography_max_tokens", "saga_max_tokens", "chat_summary_max_tokens"):
         try:
             val = form.get(field)
             if val:

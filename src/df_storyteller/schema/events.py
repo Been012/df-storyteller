@@ -88,6 +88,16 @@ class DeathEvent(GameEvent):
     data: DeathData  # type: ignore[assignment]
 
 
+class CombatBlow(BaseModel):
+    """A single strike within a combat encounter."""
+    attacker: str = ""
+    defender: str = ""
+    action: str = ""  # hacks, slashes, stabs, punches, etc.
+    body_part: str = ""
+    weapon: str = ""
+    effect: str = ""  # tearing apart the muscle, fracturing the skull, etc.
+
+
 class CombatData(BaseModel):
     attacker: UnitRef
     defender: UnitRef
@@ -96,6 +106,9 @@ class CombatData(BaseModel):
     wound_type: str = ""
     is_lethal: bool = False
     raw_text: str = ""
+    blows: list[CombatBlow] = Field(default_factory=list)
+    injuries: list[str] = Field(default_factory=list)  # "An artery has been opened", etc.
+    outcome: str = ""  # "gives in to pain", "falls over", "cloven asunder", ""
 
 
 class CombatEvent(GameEvent):

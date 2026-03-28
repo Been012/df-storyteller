@@ -51,7 +51,19 @@ def _format_event(event: GameEvent) -> str:
     if hasattr(data, "attacker") and hasattr(data, "defender"):
         atk = data.attacker.name if hasattr(data.attacker, "name") else "Unknown"
         defn = data.defender.name if hasattr(data.defender, "name") else "Unknown"
-        return f"{prefix} COMBAT: {atk} vs {defn}"
+        parts = [f"{prefix} COMBAT: {atk} vs {defn}"]
+        if hasattr(data, "weapon") and data.weapon:
+            parts.append(f"with {data.weapon}")
+        if hasattr(data, "blows") and data.blows:
+            parts.append(f"({len(data.blows)} blows)")
+            targets = {b.body_part for b in data.blows if b.body_part}
+            if targets:
+                parts.append(f"targeting {', '.join(targets)}")
+        if hasattr(data, "outcome") and data.outcome:
+            parts.append(f"— {defn} {data.outcome}")
+        if hasattr(data, "is_lethal") and data.is_lethal:
+            parts.append("[LETHAL]")
+        return " ".join(parts)
 
     if hasattr(data, "mood_type"):
         unit_name = data.unit.name if hasattr(data.unit, "name") else "Unknown"
@@ -76,6 +88,9 @@ def _format_event(event: GameEvent) -> str:
     if isinstance(data, dict):
         etype = event.event_type.value
         unit_name = data.get("unit", {}).get("name", "") if isinstance(data.get("unit"), dict) else ""
+        # Strip profession suffix from name (e.g. 'Urist McName "Nick", Miner' -> 'Urist McName "Nick"')
+        if ", " in unit_name:
+            unit_name = unit_name.rsplit(", ", 1)[0]
 
         if etype == "profession_change":
             return f"{prefix} TITLE: {unit_name} changed from {data.get('old_profession', '?')} to {data.get('new_profession', '?')}"
