@@ -2,8 +2,13 @@
 {% block title %}Dwarves — df-storyteller{% endblock %}
 
 {% block content %}
-<h1 class="page-header">Citizens of {{ fortress_name or "the Fortress" }}</h1>
-<p class="page-subtitle">{{ dwarves | length }} souls call this place home</p>
+<div style="display: flex; justify-content: space-between; align-items: baseline;">
+    <div>
+        <h1 class="page-header">Citizens of {{ fortress_name or "the Fortress" }}</h1>
+        <p class="page-subtitle">{{ dwarves | length }} souls call this place home</p>
+    </div>
+    <a href="/dwarves/relationships" class="btn btn-secondary" style="white-space: nowrap;">View Relationship Web</a>
+</div>
 
 {% if dwarves %}
 <div class="dwarf-grid">

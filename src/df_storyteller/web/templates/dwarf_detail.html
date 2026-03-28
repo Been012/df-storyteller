@@ -56,12 +56,13 @@
             {% endif %}
 
             {% if dwarf.relationships %}
-            <h3>Family</h3>
+            <h3>Relationships</h3>
             <ul class="stat-list">
                 {% for rel in dwarf.relationships %}
                 <li><strong>{{ rel.type }}:</strong> {{ rel.name }}</li>
                 {% endfor %}
             </ul>
+            <a href="/dwarves/relationships" style="font-size: 0.85rem; color: var(--gold-dark);">View Relationship Web &rarr;</a>
             {% endif %}
         </div>
 

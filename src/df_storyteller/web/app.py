@@ -444,6 +444,69 @@ async def dwarves_page(request: Request):
     })
 
 
+@app.get("/dwarves/relationships", response_class=HTMLResponse)
+async def relationships_page(request: Request):
+    """Fortress-wide relationship web visualization."""
+    config = _get_config()
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config)
+    ctx = _base_context(config, "dwarves", metadata)
+    return templates.TemplateResponse(request=request, name="relationships.html", context=ctx)
+
+
+@app.get("/api/relationships")
+async def api_relationships():
+    """Return relationship graph data as JSON for the visualization."""
+    config = _get_config()
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config)
+    ranked = character_tracker.ranked_characters()
+
+    nodes = []
+    edges = []
+    dwarf_ids = {dwarf.unit_id for dwarf, _ in ranked}
+
+    for dwarf, score in ranked:
+        nodes.append({
+            "id": dwarf.unit_id,
+            "name": dwarf.name,
+            "profession": dwarf.profession,
+            "is_alive": dwarf.is_alive,
+            "score": round(score, 1),
+        })
+        for rel in dwarf.relationships:
+            if rel.target_unit_id in dwarf_ids:
+                edges.append({
+                    "source": dwarf.unit_id,
+                    "target": rel.target_unit_id,
+                    "type": rel.relationship_type,
+                })
+
+    # Infer sibling relationships from shared parents
+    parent_to_children: dict[int, list[int]] = {}
+    for dwarf, _ in ranked:
+        for rel in dwarf.relationships:
+            if rel.relationship_type in ("mother", "father") and rel.target_unit_id in dwarf_ids:
+                parent_to_children.setdefault(rel.target_unit_id, []).append(dwarf.unit_id)
+    for parent_id, children in parent_to_children.items():
+        for i in range(len(children)):
+            for j in range(i + 1, len(children)):
+                edges.append({
+                    "source": children[i],
+                    "target": children[j],
+                    "type": "sibling",
+                })
+
+    # Deduplicate symmetric edges — keep most specific type
+    seen: set[tuple[int, int]] = set()
+    unique_edges = []
+    for edge in edges:
+        pair = (min(edge["source"], edge["target"]), max(edge["source"], edge["target"]))
+        if pair not in seen:
+            seen.add(pair)
+            unique_edges.append(edge)
+
+    return {"nodes": nodes, "edges": unique_edges}
+
+
 @app.get("/dwarves/{unit_id}", response_class=HTMLResponse)
 async def dwarf_detail_page(request: Request, unit_id: int):
     config = _get_config()

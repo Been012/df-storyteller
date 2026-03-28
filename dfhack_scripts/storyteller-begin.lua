@@ -312,29 +312,100 @@ local function serialize_unit(unit)
         end
     end)
 
-    -- Relationships (family on the map)
+    -- Relationships: extract all from historical figure links (the reliable API)
+    -- unit.relations/unit.relationship_ids vary between DF versions;
+    -- histfig_links is consistent and covers family + social bonds.
     pcall(function()
-        if unit.relations then
-            if unit.relations.spouse_id and unit.relations.spouse_id >= 0 then
-                local spouse = df.unit.find(unit.relations.spouse_id)
-                if spouse then
-                    table.insert(data.relationships, { type = 'spouse', target_name = safe_unit_name(spouse), target_id = spouse.id })
+        if unit.hist_figure_id and unit.hist_figure_id >= 0 then
+            local hf = df.historical_figure.find(unit.hist_figure_id)
+            if hf and hf.histfig_links then
+                local seen_targets = {}
+
+                -- Map link type class names to readable relationship types
+                local link_type_names = {
+                    histfig_hf_link_spousest = 'spouse',
+                    histfig_hf_link_loverst = 'lover',
+                    histfig_hf_link_motherst = 'mother',
+                    histfig_hf_link_fatherst = 'father',
+                    histfig_hf_link_childst = 'child',
+                    histfig_hf_link_companionst = 'companion',
+                    histfig_hf_link_deityst = 'deity',
+                    histfig_hf_link_former_spousest = 'former spouse',
+                    histfig_hf_link_former_loverst = 'former lover',
+                }
+
+                for _, link in ipairs(hf.histfig_links) do
+                    pcall(function()
+                        local target_hf_id = link.target_hf
+                        if not target_hf_id or target_hf_id < 0 then return end
+
+                        -- Determine relationship type from the link class name
+                        local class_name = tostring(link._type):match('([%w_]+)>') or ''
+                        local rel_type = link_type_names[class_name]
+                        if not rel_type then
+                            -- Fallback: try to read the type enum
+                            pcall(function()
+                                local enum_name = df.histfig_hf_link_type[link.type]
+                                if enum_name then
+                                    rel_type = tostring(enum_name):lower():gsub('_', ' ')
+                                end
+                            end)
+                        end
+                        if not rel_type then rel_type = 'associate' end
+
+                        -- Find the unit on the map by their hist_figure_id
+                        local target_unit = nil
+                        for _, u in ipairs(df.global.world.units.active) do
+                            if u.hist_figure_id == target_hf_id then
+                                target_unit = u
+                                break
+                            end
+                        end
+
+                        -- Also resolve name from the historical figure if unit not on map
+                        local target_name = ''
+                        local target_id = -1
+                        if target_unit then
+                            target_name = safe_unit_name(target_unit)
+                            target_id = target_unit.id
+                        else
+                            local target_hf = df.historical_figure.find(target_hf_id)
+                            if target_hf then
+                                pcall(function()
+                                    target_name = dfhack.df2utf(dfhack.translation.translateName(target_hf.name, true))
+                                end)
+                                target_id = target_hf_id * -1  -- negative ID = off-map HF
+                            end
+                        end
+
+                        if target_name ~= '' and not seen_targets[target_id] then
+                            table.insert(data.relationships, {
+                                type = rel_type,
+                                target_name = target_name,
+                                target_id = target_id,
+                            })
+                            seen_targets[target_id] = true
+                        end
+                    end)
                 end
             end
-            if unit.relations.mother_id and unit.relations.mother_id >= 0 then
-                local m = df.unit.find(unit.relations.mother_id)
-                if m then table.insert(data.relationships, { type = 'mother', target_name = safe_unit_name(m), target_id = m.id }) end
-            end
-            if unit.relations.father_id and unit.relations.father_id >= 0 then
-                local f = df.unit.find(unit.relations.father_id)
-                if f then table.insert(data.relationships, { type = 'father', target_name = safe_unit_name(f), target_id = f.id }) end
-            end
-            if unit.relations.children then
-                for _, cid in ipairs(unit.relations.children) do
-                    local c = df.unit.find(cid)
-                    if c then table.insert(data.relationships, { type = 'child', target_name = safe_unit_name(c), target_id = c.id }) end
+        end
+
+        -- Fallback: try unit.relationship_ids.Spouse if histfig didn't find one
+        local has_spouse = false
+        for _, rel in ipairs(data.relationships) do
+            if rel.type == 'spouse' then has_spouse = true; break end
+        end
+        if not has_spouse then
+            pcall(function()
+                local spouse_id = unit.relationship_ids.Spouse
+                if spouse_id and spouse_id >= 0 then
+                    local spouse = df.unit.find(spouse_id)
+                    if spouse then
+                        table.insert(data.relationships, { type = 'spouse', target_name = safe_unit_name(spouse), target_id = spouse.id })
+                    end
                 end
-            end
+            end)
         end
     end)
 

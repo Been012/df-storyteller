@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+{% block title %}Relationship Web — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: baseline;">
+    <div>
+        <a href="/dwarves" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Citizens</a>
+        <h1 class="page-header" style="margin-top: 0.5rem;">Relationship Web</h1>
+        <p id="graph-stats" class="page-subtitle"></p>
+    </div>
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <label style="font-size: 0.85rem; color: var(--ink-faded);">
+            <input type="checkbox" id="show-labels" checked onchange="toggleLabels()"> Names
+        </label>
+        <label style="font-size: 0.85rem; color: var(--ink-faded);">
+            <input type="checkbox" id="hide-isolated" onchange="toggleIsolated()"> Hide unconnected
+        </label>
+    </div>
+</div>
+
+<div class="parchment" style="padding: 0.5rem; position: relative; min-height: 500px;">
+    <canvas id="graph-canvas" style="width: 100%; height: 600px; cursor: grab;"></canvas>
+    <div id="tooltip" class="graph-tooltip" style="display: none;"></div>
+    <div id="legend" class="graph-legend">
+        <div><span class="legend-line" style="background: #6aaa6a;"></span> Family</div>
+        <div><span class="legend-line" style="background: #6a9fd8;"></span> Friend</div>
+        <div><span class="legend-line" style="background: #d86a6a;"></span> Lover / Spouse</div>
+        <div><span class="legend-line" style="background: #d8a86a;"></span> Grudge</div>
+        <div><span class="legend-line" style="background: #888;"></span> Other</div>
+    </div>
+    <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--ink-faded);">
+        Loading relationships...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.graph-tooltip {
+    position: absolute;
+    background: rgba(30, 20, 10, 0.95);
+    color: var(--parchment);
+    padding: 0.5rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    pointer-events: none;
+    z-index: 10;
+    max-width: 250px;
+    border: 1px solid var(--border);
+}
+.graph-legend {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    background: rgba(30, 20, 10, 0.85);
+    padding: 0.5rem 0.8rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--parchment);
+    border: 1px solid var(--border);
+}
+.graph-legend div { margin: 0.2rem 0; display: flex; align-items: center; gap: 0.4rem; }
+.legend-line { display: inline-block; width: 20px; height: 3px; border-radius: 2px; }
+</style>
+<script>
+const canvas = document.getElementById('graph-canvas');
+const gfx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const loading = document.getElementById('loading');
+const statsEl = document.getElementById('graph-stats');
+
+let nodes = [], edges = [];
+let showLabels = true;
+let hideIsolated = false;
+let dragging = null;
+let hovering = null;
+let focusNode = null;
+let offsetX = 0, offsetY = 0;
+let scale = 1;
+let panX = 0, panY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0;
+let animating = true;
+
+const EDGE_COLORS = {
+    mother: '#6aaa6a', father: '#6aaa6a', parent: '#6aaa6a',
+    child: '#6aaa6a', sibling: '#6aaa6a',
+    friend: '#6a9fd8', companion: '#6a9fd8',
+    lover: '#d86a6a', spouse: '#d86a6a',
+    grudge: '#d8a86a',
+};
+
+function edgeColor(type) {
+    const t = type.toLowerCase();
+    for (const [key, color] of Object.entries(EDGE_COLORS)) {
+        if (t.includes(key)) return color;
+    }
+    return '#888';
+}
+
+function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width;
+    const h = Math.max(500, window.innerHeight - rect.top - 80);
+    canvas.style.height = h + 'px';
+    canvas.width = w * devicePixelRatio;
+    canvas.height = h * devicePixelRatio;
+    gfx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+function getW() { return canvas.width / devicePixelRatio; }
+function getH() { return canvas.height / devicePixelRatio; }
+
+async function loadData() {
+    try {
+        const res = await fetch('/api/relationships');
+        if (!res.ok) throw new Error('API returned ' + res.status);
+        const data = await res.json();
+        nodes = data.nodes;
+        edges = data.edges;
+    } catch (err) {
+        loading.textContent = 'Failed to load relationships: ' + err.message;
+        return;
+    }
+
+    const w = getW(), h = getH();
+    for (const node of nodes) {
+        node.x = w / 2 + (Math.random() - 0.5) * w * 0.6;
+        node.y = h / 2 + (Math.random() - 0.5) * h * 0.6;
+        node.vx = 0;
+        node.vy = 0;
+        node.radius = Math.max(6, Math.min(18, 4 + node.score));
+        node.connected = edges.some(e => e.source === node.id || e.target === node.id);
+        node.neighbors = new Set();
+    }
+
+    const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    for (const edge of edges) {
+        const s = nodeMap[edge.source], t = nodeMap[edge.target];
+        if (s && t) { s.neighbors.add(t.id); t.neighbors.add(s.id); }
+    }
+
+    const connected = nodes.filter(n => n.connected).length;
+    statsEl.textContent = `${nodes.length} dwarves, ${edges.length} connections (${connected} connected)`;
+    loading.style.display = 'none';
+    animate();
+}
+
+function getVisibleNodes() {
+    return hideIsolated ? nodes.filter(n => n.connected) : nodes;
+}
+
+function simulate() {
+    const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    const w = getW(), h = getH();
+    const visible = getVisibleNodes();
+
+    for (let i = 0; i < visible.length; i++) {
+        for (let j = i + 1; j < visible.length; j++) {
+            const a = visible[i], b = visible[j];
+            let dx = b.x - a.x, dy = b.y - a.y;
+            let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            let force = Math.min(800 / (dist * dist), 5);
+            const fx = dx / dist * force, fy = dy / dist * force;
+            if (a !== dragging) { a.vx -= fx; a.vy -= fy; }
+            if (b !== dragging) { b.vx += fx; b.vy += fy; }
+        }
+    }
+
+    for (const edge of edges) {
+        const a = nodeMap[edge.source], b = nodeMap[edge.target];
+        if (!a || !b) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        let force = (dist - 80) * 0.005;
+        const fx = dx / dist * force, fy = dy / dist * force;
+        if (a !== dragging) { a.vx += fx; a.vy += fy; }
+        if (b !== dragging) { b.vx -= fx; b.vy -= fy; }
+    }
+
+    const cx = w / 2, cy = h / 2;
+    let totalMovement = 0;
+    for (const node of visible) {
+        if (node === dragging) continue;
+        node.vx += (cx - node.x) * 0.0005;
+        node.vy += (cy - node.y) * 0.0005;
+        node.vx *= 0.85;
+        node.vy *= 0.85;
+        node.x += node.vx;
+        node.y += node.vy;
+        node.x = Math.max(node.radius, Math.min(w - node.radius, node.x));
+        node.y = Math.max(node.radius, Math.min(h - node.radius, node.y));
+        totalMovement += Math.abs(node.vx) + Math.abs(node.vy);
+    }
+    return totalMovement;
+}
+
+function draw() {
+    const w = getW(), h = getH();
+    gfx.save();
+    gfx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    gfx.clearRect(0, 0, w, h);
+    gfx.translate(panX, panY);
+    gfx.scale(scale, scale);
+
+    const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    const visible = new Set(getVisibleNodes().map(n => n.id));
+
+    // Edges
+    for (const edge of edges) {
+        const a = nodeMap[edge.source], b = nodeMap[edge.target];
+        if (!a || !b || !visible.has(a.id) || !visible.has(b.id)) continue;
+        const dimmed = focusNode && focusNode.id !== a.id && focusNode.id !== b.id;
+        gfx.beginPath();
+        gfx.moveTo(a.x, a.y);
+        gfx.lineTo(b.x, b.y);
+        gfx.strokeStyle = dimmed ? 'rgba(80,80,80,0.15)' : edgeColor(edge.type);
+        gfx.lineWidth = dimmed ? 0.5 : 1.5;
+        gfx.stroke();
+    }
+
+    // Nodes
+    for (const node of nodes) {
+        if (!visible.has(node.id)) continue;
+        const dimmed = focusNode && focusNode.id !== node.id && !focusNode.neighbors.has(node.id);
+        const isHover = hovering === node;
+        const isFocus = focusNode === node;
+
+        gfx.beginPath();
+        gfx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        if (!node.is_alive) {
+            gfx.fillStyle = dimmed ? 'rgba(80,60,60,0.2)' : 'rgba(80,60,60,0.6)';
+        } else if (isFocus) {
+            gfx.fillStyle = '#d4a84b';
+        } else {
+            gfx.fillStyle = dimmed ? 'rgba(180,160,120,0.2)' : '#b4a078';
+        }
+        gfx.fill();
+
+        if (isHover || isFocus) {
+            gfx.strokeStyle = '#d4a84b';
+            gfx.lineWidth = 2;
+            gfx.stroke();
+        }
+
+        if (showLabels && !dimmed) {
+            gfx.fillStyle = node.is_alive ? '#e8dcc0' : '#8a7a6a';
+            gfx.font = '11px "Crimson Text", serif';
+            gfx.textAlign = 'center';
+            gfx.fillText(node.name.split(' ')[0], node.x, node.y - node.radius - 4);
+        }
+    }
+
+    gfx.restore();
+}
+
+function animate() {
+    const movement = simulate();
+    draw();
+    if (movement > 0.5 || dragging) {
+        animating = true;
+        requestAnimationFrame(animate);
+    } else {
+        animating = false;
+    }
+}
+
+function kick() {
+    if (!animating) { animating = true; animate(); }
+}
+
+function canvasToGraph(cx, cy) {
+    return { x: (cx - panX) / scale, y: (cy - panY) / scale };
+}
+
+function nodeAt(cx, cy) {
+    const { x, y } = canvasToGraph(cx, cy);
+    const visible = new Set(getVisibleNodes().map(n => n.id));
+    for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        if (!visible.has(n.id)) continue;
+        const dx = n.x - x, dy = n.y - y;
+        if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+    }
+    return null;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const node = nodeAt(cx, cy);
+    if (node) {
+        dragging = node;
+        offsetX = node.x - (cx - panX) / scale;
+        offsetY = node.y - (cy - panY) / scale;
+        canvas.style.cursor = 'grabbing';
+        kick();
+    } else {
+        isPanning = true;
+        panStartX = e.clientX - panX;
+        panStartY = e.clientY - panY;
+        canvas.style.cursor = 'grabbing';
+    }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+
+    if (dragging) {
+        dragging.x = (cx - panX) / scale + offsetX;
+        dragging.y = (cy - panY) / scale + offsetY;
+        dragging.vx = 0; dragging.vy = 0;
+        kick();
+        return;
+    }
+
+    if (isPanning) {
+        panX = e.clientX - panStartX;
+        panY = e.clientY - panStartY;
+        draw();
+        return;
+    }
+
+    const node = nodeAt(cx, cy);
+    if (node !== hovering) {
+        hovering = node;
+        canvas.style.cursor = node ? 'pointer' : 'grab';
+        if (node) {
+            const rels = edges.filter(e => e.source === node.id || e.target === node.id);
+            let html = `<strong>${node.name}</strong><br>${node.profession}`;
+            if (!node.is_alive) html += '<br><em style="color: #c98b8b;">Deceased</em>';
+            if (rels.length) {
+                const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+                for (const r of rels) {
+                    const other = nodeMap[r.source === node.id ? r.target : r.source];
+                    if (other) html += `<br>${r.type}: ${other.name}`;
+                }
+            }
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = Math.min(cx + 15, canvas.clientWidth - 260) + 'px';
+            tooltip.style.top = (cy + 15) + 'px';
+        } else {
+            tooltip.style.display = 'none';
+        }
+        draw();
+    }
+});
+
+canvas.addEventListener('mouseup', () => {
+    dragging = null;
+    isPanning = false;
+    canvas.style.cursor = 'grab';
+});
+
+canvas.addEventListener('dblclick', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const node = nodeAt(cx, cy);
+    if (node) {
+        if (focusNode === node) {
+            focusNode = null;
+        } else {
+            focusNode = node;
+        }
+        draw();
+    }
+});
+
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.3, Math.min(3, scale * delta));
+    panX = cx - (cx - panX) * (newScale / scale);
+    panY = cy - (cy - panY) * (newScale / scale);
+    scale = newScale;
+    draw();
+}, { passive: false });
+
+function toggleLabels() { showLabels = document.getElementById('show-labels').checked; draw(); }
+function toggleIsolated() { hideIsolated = document.getElementById('hide-isolated').checked; kick(); }
+
+window.addEventListener('resize', () => { resize(); draw(); });
+resize();
+loadData();
+</script>
+{% endblock %}
