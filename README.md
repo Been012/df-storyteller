@@ -60,20 +60,25 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 
 ## Quick Start
 
+**Quick install (from PyPI):**
 ```bash
-# Install
+pip install df-storyteller
+df-storyteller init
+df-storyteller serve
+```
+
+**Or from source:**
+```bash
 git clone https://github.com/Been012/df-storyteller.git
 cd df-storyteller
 pip install -e .
-
-# Configure (one time)
 python -m df_storyteller init
-
-# In DFHack console (first time per fortress)
-storyteller-begin
-
-# Launch web UI
 python -m df_storyteller serve
+```
+
+**In DFHack console (first time per fortress):**
+```
+storyteller-begin
 ```
 
 ## Requirements
