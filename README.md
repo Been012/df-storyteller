@@ -7,21 +7,39 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 
 ## What It Does
 
+### Narrative Generation
 - **Fortress Chronicles** — Seasonal narratives that track what's changing in your fortress. Role assignments, migrations, conflicts, moods — each entry builds on the last.
 - **Character Biographies** — Dated entries that evolve as your dwarves do. A miner who becomes militia commander, gets injured in a siege, and falls into depression gets a biography that reflects that arc.
-- **Epic Sagas** — World history narratives drawn from legends data. Analyzes battle outcomes, civilization power dynamics, beast attacks, and religious conflicts to identify overarching themes.
+- **Dwarf Diary Entries** — First-person journal entries written in the dwarf's voice. Personality traits, beliefs, and stress level heavily influence the tone — an anxious mason writes differently than a confident warrior.
+- **Death Eulogies** — When a dwarf dies, generate a memorial eulogy reflecting their life, achievements, and legacy. Appears in their biography timeline.
+- **Epic Sagas** — World history narratives drawn from legends data. Saved persistently per fortress.
+- **Battle Reports** — Dramatic narratives of combat encounters written by the combatant (first-person if they survived), the fortress chronicler, or a mysterious figure if no one survived. Persistent and rewritable.
+- **Fortress Gazette** — A dwarven newspaper written by the fortress's best writer. Sections: The Fortress Herald, Military Dispatches, Quarry Gossip, Quest Board, and Obituaries. Newspaper-style layout with columns and masthead.
+
+### Quest System
+- **AI-Generated Quests** — Quests generated from your actual fortress state (citizens, buildings, events, religion, military, legends). Grounded in real DF mechanics — the AI knows squad sizes, siege thresholds, temple values, and what the player can and cannot control.
+- **Narrative-Driven** — Quests drive the story forward with character arcs, threats, faith, legacy, and ambition — not just task lists.
+- **Difficulty Tiers** — Easy, Medium, Hard, Legendary — based on actual DF progression requirements.
+- **Category Filters** — Military, Construction, Religious, Crafting, Exploration, Social, Chaos.
+- **Quest Completion Narratives** — When you complete a quest, AI generates a fulfillment story. Completed quests feed into future chronicles for narrative continuity.
+
+### Data & Visualization
 - **Live Event Feed** — Real-time tracking of game events via WebSocket.
-- **World Lore Browser** — Searchable database of civilizations, wars, battles, artifacts, historical figures, assumed identities, written works, and cultural forms from your world.
-- **Player Notes** — Influence stories with your own observations. Tag notes as Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, or What If — each tag controls how the LLM uses the information.
-- **Death Eulogies** — When a dwarf dies, generate a memorial eulogy that reflects their life, achievements, and legacy.
-- **Relationship Web** — Interactive force-directed graph showing family, friend, and rival connections across the fortress.
-- **Combat Log** — Blow-by-blow accounts of fights parsed from the gamelog, with weapon, injury, and outcome details.
+- **Combat Log** — Blow-by-blow accounts of fights parsed from the gamelog. Consecutive fights grouped into siege/battle engagements. Collapsible with color-coded strikes, injuries, and outcomes.
 - **Chat Log** — Dwarf conversation and sentiment tracking with AI-powered social life summaries.
-- **Multi-Fortress Support** — Each fortress gets isolated story storage. Switch between fortresses via the world dropdown.
+- **Relationship Web** — Interactive force-directed graph showing family, friend, and rival connections across the fortress. Hover tooltips, drag, zoom, focus.
+- **Pantheon** — Bar chart of deity worship across the fortress. Deity spheres from legends data. Click to expand worshipper lists.
+- **World Lore Browser** — Searchable database of civilizations, wars, battles, artifacts, historical figures, assumed identities, written works, and cultural forms. Hover tooltips with rich detail (kill counts, battle forces, artifact descriptions, relationship networks).
+- **Player Notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If) that influence how the LLM writes.
+
+### Fortress Management
+- **Multi-Fortress Support** — Each fortress gets isolated story storage (chronicles, bios, diaries, quests, gazette, notes, battle reports). Switch via the world dropdown.
+- **Tabbed Character Sheets** — Notes, Biography, and Diary as separate tabs on each dwarf's page.
+- **Combat Record** — Per-dwarf combat highlights on character sheets.
 
 ## Screenshots
 
-*Coming soon*
+*Coming soon — add screenshots to `docs/screenshots/`*
 
 ## Requirements
 
@@ -29,7 +47,7 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 - **DFHack** (Steam Workshop or [dfhack.org](https://dfhack.org/))
 - **Python 3.11+**
 - **An LLM provider** (one of):
-  - [Ollama](https://ollama.com/) — free, runs locally, no API key needed
+  - [Ollama](https://ollama.com/) — free, runs locally, no API key needed (supports thinking models like gpt-oss, deepseek-r1)
   - [Anthropic Claude](https://console.anthropic.com/) — API key required
   - [OpenAI](https://platform.openai.com/) — API key required
 
@@ -63,7 +81,7 @@ This takes an initial snapshot of your dwarves and starts event monitoring. You 
 
 ### 3. Export world history (optional but recommended)
 
-For richer narratives with world lore, use DFHack's `open-legends` command in-game to export your world's history. This provides civilization data, wars, historical figures, artifacts, and more.
+For richer narratives with world lore, use DFHack's `open-legends` command in-game to export your world's history. This provides civilization data, wars, historical figures, artifacts, deity spheres, and more.
 
 ### 4. Launch the web UI
 
@@ -75,25 +93,28 @@ Opens your browser at `http://localhost:8000` with the full storytelling interfa
 
 ## Web UI
 
-The interface uses a fantasy parchment theme with five tabs:
+The interface uses a fantasy parchment theme with eight tabs:
 
 | Tab | Description |
 |-----|-------------|
-| **Chronicle** | Seasonal journal. Generate entries that reference actual events. Fortress-wide player notes. |
-| **Dwarves** | Character sheets with personality, skills, combat record. Biography timeline. Death eulogies. [Relationship Web](/dwarves/relationships) for the full fortress. |
-| **Events** | Live feed of game events. Combat Log with blow-by-blow fight details. Chat Log with AI-summarized social interactions. |
-| **Lore** | Searchable world history — civilizations with religions/guilds, wars with battle details, historical figures, artifacts, assumed identities, cultural forms with full descriptions. |
-| **Settings** | LLM provider, API key, story length controls (chronicle, biography, saga, chat summary). |
+| **Chronicle** | Seasonal journal. Generate entries that reference actual events. Fortress-wide player notes. Auto-reloads after generation. |
+| **Dwarves** | Character sheets with tabbed Notes/Biography/Diary. Combat record. Relationship Web and Pantheon sub-pages. Death eulogies. |
+| **Events** | Live feed of game events. Combat Log with collapsible blow-by-blow and battle reports. Saved Battle Reports section for sieges. Chat Log with AI social summaries. |
+| **Lore** | Searchable world history with hover tooltips showing rich detail (kill counts, relationships, battle forces, deity spheres). Epic Saga generation with persistence. |
+| **Quests** | AI-generated quest board with category/difficulty filters. Narrative-driven quests grounded in DF mechanics. Completion narratives. |
+| **Gazette** | Dwarven newspaper with five sections. Written by the fortress's best writer in their personality voice. Newspaper-style two-column layout. |
+| **Settings** | LLM provider, API key, token length controls for all generation types. |
 
-### Features
+### Key Features
 
+- **DF Mechanics Grounding** — All AI generation includes a comprehensive Dwarf Fortress mechanics reference (military, construction, crafting, diplomacy, missions, trade, sieges, necromancers, megabeasts) ensuring narratives are accurate to the game.
 - **Dwarf name hotlinks** — Names in stories link to character sheets
 - **Cross-reference search** — Search any name across all lore data
-- **Player notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If) that influence how the LLM writes
-- **What If story hooks** — Player-authored hypothetical scenarios woven into chronicles as speculative subplots
-- **Assumed identity spoiler protection** — Hidden identities (vampires, spies) are collapsed with a warning
+- **Lore hover tooltips** — Rich detail on hover for figures, civilizations, wars, artifacts, sites, written works
+- **What If story hooks** — Player-authored hypothetical scenarios woven into chronicles
+- **Assumed identity spoiler protection** — Hidden identities (vampires, spies) collapsed with a warning
 - **Auto-snapshots** — Dwarf data refreshes every season change
-- **Multi-fortress support** — Each fortress gets isolated story storage (chronicles, bios, notes), switch via dropdown. Worlds merged across save folder names.
+- **Persistent stories** — Chronicles, biographies, diaries, sagas, battle reports, quests, and gazettes all saved per-fortress
 
 ## How It Works
 
@@ -105,9 +126,11 @@ Dwarf Fortress (DFHack Lua)
   JSON files in storyteller_events/{world}/
      ↓
 Python Backend (FastAPI)
-  loader.py                  → Merges snapshots + events + legends
+  loader.py                  → Merges snapshots + events + legends + gamelog
   narrative_formatter.py     → Interprets raw data into prose descriptions
+  df_mechanics.py            → DF mechanics reference for LLM grounding
   notes_store.py             → Player notes with tag system
+  quest_store.py             → AI quest persistence
      ↓
   LLM Provider               → Claude / OpenAI / Ollama
      ↓
@@ -126,7 +149,7 @@ Python Backend (FastAPI)
 | Skills with readable names | DFHack (`soul.skills`) |
 | Noble positions | DFHack (`getNoblePositions`) |
 | Military squad | DFHack (`unit.military`) |
-| Relationships (spouse, family, friends, grudges) | DFHack (`histfig_links` on historical figures) |
+| Relationships (spouse, family, friends, grudges, deities) | DFHack (`histfig_links` on historical figures) |
 | Equipment, wounds, stress | DFHack |
 | Role changes, appointments | Event monitoring (polled) |
 
@@ -147,13 +170,14 @@ Python Backend (FastAPI)
 Both `*-legends.xml` and `*-legends_plus.xml` are loaded and merged:
 
 - Civilizations with race, type, child entities (religions, guilds)
-- Historical figures with spheres (deities), birth/death years
+- Historical figures with spheres (deities), birth/death years, kill counts
 - Wars with named battles, attacker/defender races, casualties, outcomes
 - Artifacts with type, material, holders
+- Sites with type, owner, event history
 - Assumed identities (vampires, spies)
 - Written works (poems, compositions) with authors
 - Relationships between figures
-- Geographic features (mountains, rivers, landmasses)
+- Geographic features (mountains with height/volcano status, rivers, landmasses)
 - Cultural forms (poetry, music, dance) with full prose descriptions
 - Beast attacks, site conquests, persecutions
 
@@ -206,6 +230,9 @@ chronicle_max_tokens = 4096
 biography_max_tokens = 1024
 saga_max_tokens = 4096
 chat_summary_max_tokens = 2048
+gazette_max_tokens = 4096
+quest_generation_max_tokens = 2048
+quest_narrative_max_tokens = 1024
 narrative_style = "dramatic"
 ```
 
@@ -227,8 +254,8 @@ pytest tests/test_gamelog_parser.py::test_parse_death_announcement -v
 - **Backend**: Python 3.11+, FastAPI, Pydantic v2
 - **Frontend**: Jinja2 templates, vanilla CSS/JS (no build step)
 - **Game integration**: DFHack Lua scripts
-- **LLM**: Anthropic SDK, OpenAI SDK, Ollama REST API
-- **Data**: XML parsing (iterparse), JSON file-based IPC
+- **LLM**: Anthropic SDK, OpenAI SDK, Ollama REST API (with thinking model support)
+- **Data**: XML parsing (iterparse), JSON file-based IPC, per-fortress storage
 
 ## Known Limitations
 
@@ -237,6 +264,7 @@ pytest tests/test_gamelog_parser.py::test_parse_death_announcement -v
 - True LLM streaming not yet implemented (simulated word-by-word)
 - Web app routes don't have automated tests yet
 - Gamelog combat/chat parsing only covers the current session (since last fortress load)
+- Deity sphere matching between legends and snapshot uses name-based heuristics (not all deities match)
 
 ## License
 
