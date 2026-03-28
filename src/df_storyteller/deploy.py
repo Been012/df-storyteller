@@ -9,7 +9,7 @@ from rich.console import Console
 
 console = Console()
 
-DFHACK_SCRIPTS_DIR = Path(__file__).parent.parent.parent / "dfhack_scripts"
+DFHACK_SCRIPTS_DIR = Path(__file__).parent / "dfhack_scripts"
 
 
 def deploy_scripts(df_install: Path) -> None:
