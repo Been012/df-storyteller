@@ -124,6 +124,7 @@ async function generateQuests() {
     btn.disabled = true;
     btn.textContent = 'Consulting the fates...';
     loading.style.display = 'block';
+    loading.textContent = 'The quest board shimmers as new challenges emerge...';
 
     try {
         const body = { count: parseInt(count) };
@@ -134,6 +135,7 @@ async function generateQuests() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const quests = await response.json();
         if (quests.length > 0) {
             window.location.reload();
@@ -142,15 +144,22 @@ async function generateQuests() {
         }
     } catch (err) {
         loading.textContent = 'Error: ' + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Seek New Quests';
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Seek New Quests';
 }
 
 async function completeQuest(questId, questTitle) {
     const output = document.getElementById('completion-output');
     const textEl = document.getElementById('completion-text');
+    const card = document.getElementById('quest-' + questId);
+    const completeBtn = card ? card.querySelector('.btn-primary') : null;
+
+    if (completeBtn) {
+        completeBtn.disabled = true;
+        completeBtn.textContent = 'Completing...';
+    }
 
     output.style.display = 'block';
     textEl.innerHTML = '<span class="streaming-cursor"></span>';
@@ -158,6 +167,7 @@ async function completeQuest(questId, questTitle) {
 
     try {
         const response = await fetch('/api/quests/' + questId + '/complete', { method: 'POST' });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -172,29 +182,68 @@ async function completeQuest(questId, questTitle) {
 
         textEl.innerHTML = fullText.replace(/\n/g, '<br>');
 
-        // Hide the quest card and reload after a moment
-        const card = document.getElementById('quest-' + questId);
+        // Hide the quest card — narrative is saved and will appear in Completed section on reload
         if (card) card.style.display = 'none';
-        setTimeout(() => window.location.reload(), 3000);
+        // Reload after user has time to read (narrative persists in completed section)
+        setTimeout(() => window.location.reload(), 8000);
     } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+        textEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+        if (completeBtn) {
+            completeBtn.disabled = false;
+            completeBtn.textContent = 'Complete';
+        }
     }
 }
 
 async function abandonQuest(questId) {
-    await fetch('/api/quests/' + questId + '/abandon', { method: 'POST' });
-    const card = document.getElementById('quest-' + questId);
-    if (card) card.remove();
+    try {
+        const response = await fetch('/api/quests/' + questId + '/abandon', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed');
+        const card = document.getElementById('quest-' + questId);
+        if (card) {
+            card.style.opacity = '0.3';
+            card.style.transition = 'opacity 0.3s';
+            setTimeout(() => card.remove(), 300);
+        }
+    } catch (err) {
+        alert('Failed to abandon quest');
+    }
 }
 
 async function togglePriority(questId) {
-    await fetch('/api/quests/' + questId + '/priority', { method: 'POST' });
-    window.location.reload();
+    try {
+        const response = await fetch('/api/quests/' + questId + '/priority', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed');
+        const card = document.getElementById('quest-' + questId);
+        if (card) {
+            const star = card.querySelector('.quest-star');
+            const isNowPriority = star.textContent.trim() === '\u2606'; // was unstarred
+            star.textContent = isNowPriority ? '\u2605' : '\u2606';
+            star.classList.toggle('starred');
+            card.classList.toggle('quest-priority');
+        }
+    } catch (err) {
+        alert('Failed to update priority');
+    }
 }
 
 async function deleteQuest(questId) {
-    await fetch('/api/quests/' + questId, { method: 'DELETE' });
-    window.location.reload();
+    try {
+        const response = await fetch('/api/quests/' + questId, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed');
+        // Find the closest parent that's a quest card
+        const cards = document.querySelectorAll('.quest-card');
+        for (const card of cards) {
+            if (card.querySelector('[onclick*="' + questId + '"]')) {
+                card.style.opacity = '0.3';
+                card.style.transition = 'opacity 0.3s';
+                setTimeout(() => card.remove(), 300);
+                break;
+            }
+        }
+    } catch (err) {
+        alert('Failed to delete quest');
+    }
 }
 </script>
 {% endblock %}

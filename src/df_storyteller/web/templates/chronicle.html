@@ -158,6 +158,7 @@ function linkifyDwarfNames(text) {
 
 async function generateChronicle() {
     const btn = document.getElementById('generate-btn');
+    const originalText = btn.textContent;
     const output = document.getElementById('stream-output');
     const textEl = document.getElementById('stream-text');
 
@@ -174,6 +175,7 @@ async function generateChronicle() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ context: oneTimeContext }),
         });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -188,19 +190,17 @@ async function generateChronicle() {
             textEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
 
-        // Remove cursor, convert markdown, and linkify dwarf names
         let html = simpleMarkdown(fullText);
         html = linkifyDwarfNames(html);
         textEl.innerHTML = html;
 
-        // Reload after a moment to show the saved entry and update button state
         setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error generating chronicle: ' + err.message + '</em>';
+        textEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Write New Entry';
 }
 </script>
 {% endblock %}

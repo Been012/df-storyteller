@@ -32,25 +32,11 @@ WEB_DIR = Path(__file__).parent
 TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
 
-app = FastAPI(title="df-storyteller")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-
-# In-memory state
-_active_world: str | None = None
-_event_subscribers: list[WebSocket] = []
-_cached_state: tuple | None = None  # (cache_key, (event_store, char_tracker, world_lore, metadata))
-_cache_time: float = 0
-_CACHE_TTL: float = 300  # 5 minutes
-_legends_preloaded: bool = False
+from contextlib import asynccontextmanager
 
 
-def _get_config() -> AppConfig:
-    return load_config()
-
-
-@app.on_event("startup")
-async def preload_legends():
+@asynccontextmanager
+async def lifespan(app):
     """Preload legends data in background at server startup so Lore tab is instant."""
     import threading
 
@@ -68,6 +54,24 @@ async def preload_legends():
             log.warning("Legends preload failed: %s", e)
 
     threading.Thread(target=_bg_load, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="df-storyteller", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# In-memory state
+_active_world: str | None = None
+_event_subscribers: list[WebSocket] = []
+_cached_state: tuple | None = None  # (cache_key, (event_store, char_tracker, world_lore, metadata))
+_cache_time: float = 0
+_CACHE_TTL: float = 300  # 5 minutes
+_legends_preloaded: bool = False
+
+
+def _get_config() -> AppConfig:
+    return load_config()
 
 
 def _get_worlds(config: AppConfig) -> list[str]:

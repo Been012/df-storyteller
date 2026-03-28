@@ -357,6 +357,7 @@ async function generateSaga() {
 
     try {
         const response = await fetch('/api/saga/generate', { method: 'POST' });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -370,12 +371,13 @@ async function generateSaga() {
         }
 
         textEl.innerHTML = fullText.replace(/\n/g, '<br>');
+        setTimeout(() => window.location.reload(), 2000);
     } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+        textEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Write Epic Saga';
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Write Epic Saga';
 }
 
 // ==================== Lore Tooltip ====================

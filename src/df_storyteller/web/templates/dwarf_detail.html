@@ -293,23 +293,57 @@ async function addNote() {
     const text = document.getElementById('note-text').value.trim();
     if (!text) return;
 
-    await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tag, text, target_type: 'dwarf', target_id: UNIT_ID }),
-    });
-    document.getElementById('note-text').value = '';
-    window.location.reload();
+    try {
+        const response = await fetch('/api/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tag, text, target_type: 'dwarf', target_id: UNIT_ID }),
+        });
+        if (!response.ok) throw new Error('Failed');
+        const note = await response.json();
+
+        // Add note to DOM
+        const list = document.getElementById('notes-list');
+        const card = document.createElement('div');
+        card.className = 'note-card';
+        card.dataset.id = note.id;
+        card.innerHTML = '<span class="note-tag tag-' + note.tag + '">' + note.tag + '</span>' +
+            '<span class="note-text">' + text + '</span>' +
+            '<span class="note-actions">' +
+            '<button onclick="resolveNote(\'' + note.id + '\')" class="note-btn" title="Resolve">✓</button>' +
+            '<button onclick="deleteNote(\'' + note.id + '\')" class="note-btn" title="Delete">✕</button>' +
+            '</span>';
+        list.appendChild(card);
+        document.getElementById('note-text').value = '';
+    } catch (err) {
+        alert('Failed to add note');
+    }
 }
 
 async function resolveNote(noteId) {
-    await fetch('/api/notes/' + noteId + '/resolve', { method: 'POST' });
-    window.location.reload();
+    try {
+        const response = await fetch('/api/notes/' + noteId + '/resolve', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed');
+        const card = document.querySelector('.note-card[data-id="' + noteId + '"]');
+        if (card) card.classList.toggle('resolved');
+    } catch (err) {
+        alert('Failed to resolve note');
+    }
 }
 
 async function deleteNote(noteId) {
-    await fetch('/api/notes/' + noteId, { method: 'DELETE' });
-    window.location.reload();
+    try {
+        const response = await fetch('/api/notes/' + noteId, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed');
+        const card = document.querySelector('.note-card[data-id="' + noteId + '"]');
+        if (card) {
+            card.style.opacity = '0.3';
+            card.style.transition = 'opacity 0.3s';
+            setTimeout(() => card.remove(), 300);
+        }
+    } catch (err) {
+        alert('Failed to delete note');
+    }
 }
 
 // Enter key adds note
@@ -318,23 +352,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addNote(); });
 });
 
-async function generateBio(unitId) {
-    const btn = document.getElementById('bio-btn');
-    const textEl = document.getElementById('bio-text');
-    const contextEl = document.getElementById('bio-context');
-    const oneTimeContext = contextEl ? contextEl.value.trim() : '';
-
+// Shared streaming helper — handles fetch, stream, error, and button reset
+async function streamGenerate(url, body, btn, textEl, originalText) {
     btn.disabled = true;
     btn.textContent = 'Writing...';
     textEl.style.display = 'block';
     textEl.innerHTML = '<span class="streaming-cursor"></span>';
 
     try {
-        const response = await fetch('/api/bio/' + unitId, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ context: oneTimeContext }),
+            body: JSON.stringify(body),
         });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -348,89 +379,27 @@ async function generateBio(unitId) {
         }
 
         textEl.innerHTML = fullText.replace(/\n/g, '<br>');
-
-        // Reload page after a moment to show the saved entry in the timeline
         setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+        textEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
+}
 
-    btn.disabled = false;
-    btn.textContent = 'Generate Biography';
+async function generateBio(unitId) {
+    const btn = document.getElementById('bio-btn');
+    const contextEl = document.getElementById('bio-context');
+    await streamGenerate('/api/bio/' + unitId, { context: contextEl ? contextEl.value.trim() : '' }, btn, document.getElementById('bio-text'), btn.textContent);
 }
 
 async function generateEulogy(unitId) {
-    const btn = document.getElementById('eulogy-btn');
-    const textEl = document.getElementById('eulogy-text');
-
-    btn.disabled = true;
-    btn.textContent = 'Writing memorial...';
-    textEl.style.display = 'block';
-    textEl.innerHTML = '<span class="streaming-cursor"></span>';
-
-    try {
-        const response = await fetch('/api/eulogy/' + unitId, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ context: '' }),
-        });
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            fullText += chunk;
-            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
-        }
-
-        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
-        setTimeout(() => window.location.reload(), 1500);
-    } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
-    }
-
-    btn.disabled = false;
-    btn.textContent = 'Write Eulogy';
+    await streamGenerate('/api/eulogy/' + unitId, { context: '' }, document.getElementById('eulogy-btn'), document.getElementById('eulogy-text'), 'Write Eulogy');
 }
 
 async function generateDiary(unitId) {
-    const btn = document.getElementById('diary-btn');
-    const textEl = document.getElementById('diary-text');
-
-    btn.disabled = true;
-    btn.textContent = 'Writing diary...';
-    textEl.style.display = 'block';
-    textEl.innerHTML = '<span class="streaming-cursor"></span>';
-
-    try {
-        const response = await fetch('/api/diary/' + unitId, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ context: '' }),
-        });
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            fullText += chunk;
-            textEl.innerHTML = fullText.replace(/\n/g, '<br>') + '<span class="streaming-cursor"></span>';
-        }
-
-        textEl.innerHTML = fullText.replace(/\n/g, '<br>');
-        setTimeout(() => window.location.reload(), 1500);
-    } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
-    }
-
-    btn.disabled = false;
-    btn.textContent = 'Write Diary Entry';
+    await streamGenerate('/api/diary/' + unitId, { context: '' }, document.getElementById('diary-btn'), document.getElementById('diary-text'), 'Write Diary Entry');
 }
 </script>
 {% endblock %}

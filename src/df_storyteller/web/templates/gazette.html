@@ -129,18 +129,19 @@ async function generateGazette() {
 
     try {
         const response = await fetch('/api/gazette/generate', { method: 'POST' });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const data = await response.json();
         if (data.ok) {
             window.location.reload();
         } else {
-            loading.textContent = 'Error: ' + (data.error || 'generation failed');
+            loading.textContent = 'Generation failed: ' + (data.error || 'unknown error');
         }
     } catch (err) {
-        loading.textContent = 'Error: ' + err.message;
+        loading.textContent = 'Generation failed: ' + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Publish This Season\'s Edition';
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Publish This Season\'s Edition';
 }
 </script>
 {% endblock %}

@@ -333,6 +333,7 @@ async function summarizeChat() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
         });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -347,24 +348,23 @@ async function summarizeChat() {
 
         summaryEl.innerHTML = fullText.replace(/\n/g, '<br>');
     } catch (err) {
-        summaryEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+        summaryEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Summarize with AI';
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Summarize with AI';
 }
 
 async function rewriteBattleReport(index) {
-    // Hide existing report and show streaming area
     const existingEl = document.getElementById('solo-report-' + index) || document.getElementById('engagement-report-' + index);
     if (existingEl) existingEl.style.display = 'none';
-    // Use the same streaming logic as writeBattleReport
     await writeBattleReport(index);
 }
 
 async function writeBattleReport(index) {
     const textEl = document.getElementById('battle-report-' + index);
     const btn = event.target;
+    const originalText = btn.textContent;
 
     btn.disabled = true;
     btn.textContent = 'Writing report...';
@@ -377,6 +377,7 @@ async function writeBattleReport(index) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
         });
+        if (!response.ok) throw new Error('Server error (' + response.status + ')');
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
@@ -391,11 +392,11 @@ async function writeBattleReport(index) {
 
         textEl.innerHTML = fullText.replace(/\n/g, '<br>');
     } catch (err) {
-        textEl.innerHTML = '<em style="color: var(--danger);">Error: ' + err.message + '</em>';
+        textEl.innerHTML = '<em style="color: var(--danger);">Generation failed: ' + err.message + '</em>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Write Battle Report';
 }
 </script>
 {% endblock %}
