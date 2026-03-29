@@ -1,6 +1,6 @@
 # df-storyteller
 
-A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app/975370/Dwarf_Fortress/). Captures game events, dwarf personalities, and world history through [DFHack](https://dfhack.org/), then generates AI-written narratives grounded in your actual gameplay.
+A fortress journal and storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app/975370/Dwarf_Fortress/). Captures game events, dwarf personalities, and world history through [DFHack](https://dfhack.org/). Use AI to generate narratives, or write your own — the choice is yours.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -9,20 +9,32 @@ A storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app
 
 ## Features
 
-### Narrative Generation
-- **Fortress Chronicles** — Seasonal narratives tracking what's changing in your fortress
+### Two Modes: AI or Manual
+- **No-LLM Mode** — Use as a structured fortress journal. Write your own chronicles, biographies, gazette editions, sagas, and quests. No AI required.
+- **LLM Mode** — AI generates narratives grounded in your gameplay. Manual writing is still available alongside AI output.
+- Setup asks upfront — choose your preference during `init`, change anytime in Settings.
+
+### Narrative Generation (AI or Player-Written)
+- **Fortress Chronicles** — Seasonal narratives tracking what's changing in your fortress. Edit entries inline.
 - **Dwarf Diaries** — First-person journal entries shaped by personality, beliefs, and stress
 - **Character Biographies** — Dated entries that evolve as dwarves change over time
 - **Death Eulogies** — Memorial narratives for fallen dwarves
 - **Battle Reports** — Dramatic combat accounts written by survivors or the fortress chronicler
 - **Epic Sagas** — World history narratives from legends data
-- **Fortress Gazette** — A dwarven newspaper with five sections, written by the fortress's best writer
+- **Fortress Gazette** — A dwarven newspaper with five sections. Write your own or generate with AI. Edit published editions.
+
+### Player Agency
+- **Dwarf Highlights** — Mark dwarves as Protagonist, Antagonist, or Watchlist. Highlighted dwarves get more focus in AI narratives and show role badges across the UI.
+- **Player Notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If) that influence how AI writes.
+- **Manual Writing Everywhere** — Write your own entries on every page, even with AI enabled.
+- **Inline Editing** — Edit chronicles, quests, and gazette editions after creation.
 
 ### Quest System
-- **AI-Generated Quests** — Based on your actual fortress state, grounded in real DF mechanics
-- **Narrative-Driven** — Quests that drive the story (character arcs, threats, faith, ambition)
+- **AI-Generated or Player-Created** — Generate quests from fortress state, or create your own with category and difficulty
+- **Resolve with Comments** — Complete quests with a player-written resolution (no AI needed)
+- **Edit on the Go** — Update quest titles and descriptions inline
 - **Difficulty Tiers** — Easy, Medium, Hard, Legendary
-- **Completion Narratives** — AI writes how the quest was fulfilled, feeds into future chronicles
+- **Completion Narratives** — AI writes how the quest was fulfilled (LLM mode), or resolve manually
 
 ### Visualization & Data
 - **Relationship Web** — Interactive force-directed graph of fortress connections
@@ -96,7 +108,7 @@ python -m df_storyteller serve
 - **Dwarf Fortress** v50.x (Steam / DF Premium) — tested with v50.14
 - **DFHack** v50.14-r1+ (Steam Workshop or [dfhack.org](https://dfhack.org/))
 - **Python 3.11+**
-- **An LLM provider** (one of):
+- **An LLM provider** (optional — not needed for No-LLM mode):
   - [Ollama](https://ollama.com/) — free, runs locally, no API key needed (supports thinking models)
   - [Anthropic Claude](https://console.anthropic.com/) — API key required
   - [OpenAI](https://platform.openai.com/) — API key required
