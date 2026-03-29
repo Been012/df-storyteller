@@ -113,8 +113,9 @@ class LegendsData:
             if ec_id:
                 self._event_collections_by_id[str(ec_id)] = ec
 
-        # HF event involvement count
+        # HF event involvement count + per-HF event lists
         self._hf_event_count: dict[int, int] = defaultdict(int)
+        self._hf_events: dict[int, list[dict[str, Any]]] = defaultdict(list)
         # Site event index: site_id -> Counter of event types
         self._site_event_types: dict[int, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for evt in self.historical_events:
@@ -122,7 +123,9 @@ class LegendsData:
                 hfid_str = evt.get(key)
                 if hfid_str:
                     try:
-                        self._hf_event_count[int(hfid_str)] += 1
+                        hfid_int = int(hfid_str)
+                        self._hf_event_count[hfid_int] += 1
+                        self._hf_events[hfid_int].append(evt)
                     except (ValueError, TypeError):
                         pass
             site_id_str = evt.get("site_id")
@@ -131,6 +134,17 @@ class LegendsData:
                     self._site_event_types[int(site_id_str)][evt.get("type", "unknown")] += 1
                 except (ValueError, TypeError):
                     pass
+
+        # HF relationship index: hf_id -> [relationships where they are source or target]
+        self._hf_relationships: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        for rel in self.relationships:
+            for key in ("source_hf", "target_hf"):
+                hfid_str = rel.get(key)
+                if hfid_str:
+                    try:
+                        self._hf_relationships[int(hfid_str)].append(rel)
+                    except (ValueError, TypeError):
+                        pass
 
     def get_event_collection(self, ec_id: int | str) -> dict[str, Any] | None:
         """Get an event collection (war, battle, siege) by ID."""
@@ -152,6 +166,18 @@ class LegendsData:
         if hasattr(self, '_hf_event_count'):
             return self._hf_event_count.get(hf_id, 0)
         return 0
+
+    def get_hf_events(self, hf_id: int) -> list[dict[str, Any]]:
+        """Get all historical events involving a figure. Uses precomputed index."""
+        if hasattr(self, '_hf_events'):
+            return self._hf_events.get(hf_id, [])
+        return []
+
+    def get_hf_relationships(self, hf_id: int) -> list[dict[str, Any]]:
+        """Get all relationships involving a figure. Uses precomputed index."""
+        if hasattr(self, '_hf_relationships'):
+            return self._hf_relationships.get(hf_id, [])
+        return []
 
     def stats(self) -> dict[str, int]:
         return {

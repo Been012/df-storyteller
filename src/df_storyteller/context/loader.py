@@ -397,17 +397,27 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
 
     if legends_path or legends_plus_path:
         from df_storyteller.ingestion.legends_parser import parse_legends_xml
+        from concurrent.futures import ThreadPoolExecutor, Future
 
-        # Load basic legends first (has historical events, event collections)
+        # Parse both XML files in parallel — they're independent until merge
         legends = None
-        if legends_path:
-            legends = parse_legends_xml(legends_path)
+        legends_plus = None
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            basic_future: Future | None = None
+            plus_future: Future | None = None
+            if legends_path:
+                basic_future = executor.submit(parse_legends_xml, legends_path)
+            if legends_plus_path:
+                plus_future = executor.submit(parse_legends_xml, legends_plus_path)
+            if basic_future:
+                legends = basic_future.result()
+            if plus_future:
+                legends_plus = plus_future.result()
 
-        # Load legends_plus and merge — it has richer data (race, type, etc.)
+        # Merge legends_plus into basic — it has richer data (race, type, etc.)
         # Basic legends has: names, birth/death years, events, event collections
         # legends_plus has: race, type, sex, relationships, written contents, etc.
-        if legends_plus_path:
-            legends_plus = parse_legends_xml(legends_plus_path)
+        if legends_plus:
             if legends is None:
                 legends = legends_plus
             else:

@@ -42,16 +42,13 @@ async def lifespan(app):
 
     def _bg_load():
         global _legends_preloaded
-        import logging
-        log = logging.getLogger(__name__)
-        log.info("Preloading legends data in background...")
         try:
             config = _get_config()
             _load_game_state_safe(config, skip_legends=False)
             _legends_preloaded = True
-            log.info("Legends data preloaded successfully.")
         except Exception as e:
-            log.warning("Legends preload failed: %s", e)
+            import logging
+            logging.getLogger(__name__).warning("Legends preload failed: %s", e)
 
     threading.Thread(target=_bg_load, daemon=True).start()
     yield
@@ -64,10 +61,15 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # In-memory state
 _active_world: str | None = None
 _event_subscribers: list[WebSocket] = []
-_cached_state: tuple | None = None  # (cache_key, (event_store, char_tracker, world_lore, metadata))
-_cache_time: float = 0
+# Separate caches: with_legends is a superset of no_legends
+_cached_no_legends: tuple | None = None   # (event_store, char_tracker, world_lore, metadata)
+_cached_with_legends: tuple | None = None  # (event_store, char_tracker, world_lore, metadata)
+_cache_time_no_legends: float = 0
+_cache_time_with_legends: float = 0
 _CACHE_TTL: float = 300  # 5 minutes
 _legends_preloaded: bool = False
+import threading as _threading
+_legends_load_lock = _threading.Lock()
 
 
 def _get_config() -> AppConfig:
@@ -138,33 +140,52 @@ def _load_game_state_safe(config: AppConfig, skip_legends: bool = True):
     Auto-invalidates when a new snapshot is detected.
     skip_legends=True (default) makes page loads fast by not parsing XML.
     Only set skip_legends=False for Lore tab and story generation.
+
+    Uses separate caches for legends/no-legends so navigating between
+    pages doesn't force an expensive XML reparse. A with_legends cache
+    can serve no_legends requests (it's a superset).
     """
     import time
-    global _cached_state, _cache_time
-
-    cache_key = "with_legends" if not skip_legends else "no_legends"
+    global _cached_no_legends, _cached_with_legends
+    global _cache_time_no_legends, _cache_time_with_legends
 
     now = time.time()
-    cache_valid = (
-        _cached_state
-        and _cached_state[0] == cache_key
-        and (now - _cache_time) < _CACHE_TTL
-    )
+    newest = _get_newest_snapshot_time(config)
 
-    # Auto-invalidate if a newer snapshot exists than when we cached
-    if cache_valid:
-        newest = _get_newest_snapshot_time(config)
-        if newest > _cache_time:
-            cache_valid = False
+    # Try to serve from the with_legends cache first (superset of no_legends)
+    if _cached_with_legends and (now - _cache_time_with_legends) < _CACHE_TTL:
+        if newest <= _cache_time_with_legends:
+            return _cached_with_legends
 
-    if cache_valid:
-        return _cached_state[1]
+    # If legends not needed, try the no_legends cache
+    if skip_legends and _cached_no_legends and (now - _cache_time_no_legends) < _CACHE_TTL:
+        if newest <= _cache_time_no_legends:
+            return _cached_no_legends
+
+    # For legends loads, use a lock to prevent duplicate parsing
+    # (e.g., background preload + lore page request racing)
+    if not skip_legends:
+        with _legends_load_lock:
+            # Re-check cache inside lock — preload may have finished while we waited
+            if _cached_with_legends and (now - _cache_time_with_legends) < _CACHE_TTL:
+                if newest <= _cache_time_with_legends:
+                    return _cached_with_legends
+            try:
+                active_world = _get_active_world(config)
+                result = load_game_state(config, skip_legends=False, active_world=active_world)
+                _cached_with_legends = result
+                _cache_time_with_legends = time.time()
+                return result
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Failed to load game state: %s", e)
+                return _empty_state()
 
     try:
         active_world = _get_active_world(config)
-        result = load_game_state(config, skip_legends=skip_legends, active_world=active_world)
-        _cached_state = (cache_key, result)
-        _cache_time = now
+        result = load_game_state(config, skip_legends=True, active_world=active_world)
+        _cached_no_legends = result
+        _cache_time_no_legends = now
         return result
     except Exception as e:
         import logging
@@ -174,9 +195,12 @@ def _load_game_state_safe(config: AppConfig, skip_legends: bool = True):
 
 def _invalidate_cache():
     """Clear the cache (call when world switches or settings change)."""
-    global _cached_state, _cache_time
-    _cached_state = None
-    _cache_time = 0
+    global _cached_no_legends, _cached_with_legends
+    global _cache_time_no_legends, _cache_time_with_legends
+    _cached_no_legends = None
+    _cached_with_legends = None
+    _cache_time_no_legends = 0
+    _cache_time_with_legends = 0
 
 
 def _get_fortress_dir(config: AppConfig, metadata: dict | None = None) -> Path:
@@ -206,8 +230,9 @@ def _base_context(config: AppConfig, active_tab: str, metadata: dict | None = No
     # Last updated timestamp
     import time as _time
     last_updated = ""
-    if _cache_time > 0:
-        age = int(_time.time() - _cache_time)
+    _latest_cache_time = max(_cache_time_no_legends, _cache_time_with_legends)
+    if _latest_cache_time > 0:
+        age = int(_time.time() - _latest_cache_time)
         if age < 60:
             last_updated = f"{age}s ago"
         elif age < 3600:
@@ -1259,6 +1284,7 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
 async def lore_page(request: Request):
     config = _get_config()
     event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+
     ctx = _base_context(config, "lore", metadata)
 
     civilizations = []
@@ -1491,12 +1517,16 @@ async def lore_page(request: Request):
             })
 
         # Relationships (friendships, rivalries, romances)
+        # Count all relationship types but only resolve names for display limit
         rel_counts: dict[str, int] = {}
         for rel in legends.relationships:
             rtype = rel.get("relationship", "unknown")
             rel_counts[rtype] = rel_counts.get(rtype, 0) + 1
-        # Show sample relationships
+        # Show sample relationships — early terminate once we have enough
+        RELATIONSHIP_DISPLAY_LIMIT = 30
         for rel in legends.relationships:
+            if len(relationships) >= RELATIONSHIP_DISPLAY_LIMIT:
+                break
             source_id = rel.get("source_hf")
             target_id = rel.get("target_hf")
             rtype = rel.get("relationship", "")
@@ -1652,10 +1682,11 @@ async def lore_page(request: Request):
         "relationship_counts": rel_counts if world_lore.is_loaded and world_lore._legends else {},
         "identities": identities,
         "geography": geography[:15],
-        "poetic_forms": world_lore._legends.poetic_forms if world_lore.is_loaded and world_lore._legends else [],
-        "musical_forms": world_lore._legends.musical_forms if world_lore.is_loaded and world_lore._legends else [],
-        "dance_forms": world_lore._legends.dance_forms if world_lore.is_loaded and world_lore._legends else [],
+        "poetic_forms": world_lore._legends.poetic_forms[:10] if world_lore.is_loaded and world_lore._legends else [],
+        "musical_forms": world_lore._legends.musical_forms[:10] if world_lore.is_loaded and world_lore._legends else [],
+        "dance_forms": world_lore._legends.dance_forms[:10] if world_lore.is_loaded and world_lore._legends else [],
     })
+
 
 
 # ==================== Gazette ====================
@@ -2323,11 +2354,11 @@ async def api_lore_detail(entity_type: str, entity_id: str):
             if civ:
                 fields.append({"label": "Civilization", "value": civ.name})
 
-        # Relationships from legends
+        # Relationships from legends (uses precomputed index)
         from collections import Counter
         hfid_str = str(eid)
         rel_summaries = []
-        for rel in legends.relationships:
+        for rel in legends.get_hf_relationships(eid):
             if rel.get("source_hf") == hfid_str:
                 other = legends.get_figure(int(rel.get("target_hf", 0)))
                 if other:
@@ -2339,21 +2370,18 @@ async def api_lore_detail(entity_type: str, entity_id: str):
         if rel_summaries:
             fields.append({"label": "Relationships", "value": "; ".join(rel_summaries[:5])})
 
-        # Event type breakdown + kill details in a single pass
+        # Event type breakdown + kill details (uses precomputed index)
         evt_types: Counter[str] = Counter()
         kill_victims: list[tuple[str, str]] = []  # (name, race)
         kill_races: Counter[str] = Counter()
-        for evt in legends.historical_events:
-            for key in ("hfid", "hfid_1", "hfid_2", "slayer_hfid", "group_hfid"):
-                if evt.get(key) == hfid_str:
-                    evt_types[evt.get("type", "unknown")] += 1
-                    # Track kills where this figure is the slayer
-                    if evt.get("type") == "hf died" and evt.get("slayer_hfid") == hfid_str:
-                        victim = legends.get_figure(int(evt.get("hfid", 0))) if evt.get("hfid") else None
-                        if victim:
-                            kill_victims.append((victim.name, victim.race.replace("_", " ").title() if victim.race else ""))
-                            kill_races[victim.race.replace("_", " ").title() if victim.race else "Unknown"] += 1
-                    break
+        for evt in legends.get_hf_events(eid):
+            evt_types[evt.get("type", "unknown")] += 1
+            # Track kills where this figure is the slayer
+            if evt.get("type") == "hf died" and evt.get("slayer_hfid") == hfid_str:
+                victim = legends.get_figure(int(evt.get("hfid", 0))) if evt.get("hfid") else None
+                if victim:
+                    kill_victims.append((victim.name, victim.race.replace("_", " ").title() if victim.race else ""))
+                    kill_races[victim.race.replace("_", " ").title() if victim.race else "Unknown"] += 1
         if evt_types:
             # Only show interesting event types, skip mundane ones
             readable_map = {
