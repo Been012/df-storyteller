@@ -77,13 +77,22 @@ def _get_config() -> AppConfig:
 
 
 def _get_worlds(config: AppConfig) -> list[str]:
-    """List available world subfolders."""
+    """List available world subfolders, most recently active first."""
     base = Path(config.paths.event_dir) if config.paths.event_dir else None
     if not base or not base.exists():
         return []
+
+    def _newest_file_time(folder_name: str) -> float:
+        """Get the newest file modification time inside a world folder."""
+        folder = base / folder_name
+        files = list(folder.glob("*.json"))
+        if files:
+            return max(f.stat().st_mtime for f in files)
+        return folder.stat().st_mtime
+
     return sorted(
         [d.name for d in base.iterdir() if d.is_dir() and d.name != "processed"],
-        key=lambda n: (Path(config.paths.event_dir) / n).stat().st_mtime,
+        key=_newest_file_time,
         reverse=True,
     )
 
@@ -120,7 +129,11 @@ def _empty_state():
 
 
 def _get_newest_snapshot_time(config: AppConfig) -> float:
-    """Get modification time of the newest snapshot file."""
+    """Get modification time of the newest data file (snapshot or event).
+
+    Checks both snapshot files and event JSON files so the cache
+    invalidates when new events arrive, not just on new snapshots.
+    """
     base = Path(config.paths.event_dir) if config.paths.event_dir else None
     if not base or not base.exists():
         return 0
@@ -128,10 +141,11 @@ def _get_newest_snapshot_time(config: AppConfig) -> float:
     if not world_dirs:
         return 0
     world_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
-    snapshots = list(world_dir.glob("snapshot_*.json"))
-    if not snapshots:
+    # Check all JSON files (snapshots + events) for the newest modification
+    all_json = list(world_dir.glob("*.json"))
+    if not all_json:
         return 0
-    return max(s.stat().st_mtime for s in snapshots)
+    return max(f.stat().st_mtime for f in all_json)
 
 
 def _load_game_state_safe(config: AppConfig, skip_legends: bool = True):
@@ -780,6 +794,33 @@ async def dwarf_detail_page(request: Request, unit_id: int):
         for e in reversed(dwarf_events[-20:])
     ]
 
+    # Build timeline: all events grouped by (year, season) in chronological order
+    _TIMELINE_ICONS = {
+        "combat": "sword", "death": "skull", "mood": "star", "artifact": "gem",
+        "birth": "baby", "migrant_arrived": "footsteps", "profession_change": "scroll",
+        "noble_appointment": "crown", "stress_change": "heart", "military_change": "shield",
+        "building": "hammer", "season_change": "calendar",
+    }
+    from collections import defaultdict as _defaultdict
+    _timeline_grouped: dict[tuple[int, str], list[dict]] = _defaultdict(list)
+    for e in dwarf_events:
+        desc = re.sub(r"^\[.*?\]\s*", "", _format_event(e))
+        desc = re.sub(r"^[A-Za-z_ ]+:\s", "", desc)
+        if not desc.strip():
+            continue
+        _timeline_grouped[(e.game_year, e.season.value)].append({
+            "type": e.event_type.value.replace("_", " ").title(),
+            "icon": _TIMELINE_ICONS.get(e.event_type.value, "circle"),
+            "description": desc,
+        })
+    dwarf_data["timeline_events"] = [
+        {"year": year, "season": season.title(), "events": evts}
+        for (year, season), evts in sorted(
+            _timeline_grouped.items(),
+            key=lambda x: (x[0][0], SEASON_ORDER_MAP.get(x[0][1], 0)),
+        )
+    ]
+
     # Combat highlights for this dwarf
     from df_storyteller.schema.events import EventType as ET
     combat_highlights = []
@@ -1306,6 +1347,117 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
             yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
 
     return StreamingResponse(_stream(), media_type="text/plain")
+
+
+# ==================== Dashboard ====================
+
+
+SEASON_ORDER_MAP = {"spring": 0, "summer": 1, "autumn": 2, "winter": 3}
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    config = _get_config()
+    event_store, character_tracker, _, metadata = _load_game_state_safe(config)
+    ctx = _base_context(config, "dashboard", metadata)
+
+    from df_storyteller.schema.events import EventType as ET
+
+    # Build time series data grouped by (year, season)
+    def _season_sort_key(year: int, season: str) -> tuple[int, int]:
+        return (year, SEASON_ORDER_MAP.get(season, 0))
+
+    # Population from season_change events
+    population_series: list[dict] = []
+    for e in event_store.events_by_type(ET.SEASON_CHANGE):
+        data = e.data
+        pop = getattr(data, "population", 0) if not isinstance(data, dict) else data.get("population", 0)
+        if pop > 0:
+            population_series.append({
+                "label": f"{e.season.value.title()} Y{e.game_year}",
+                "value": pop,
+                "_sort": _season_sort_key(e.game_year, e.season.value),
+            })
+    population_series.sort(key=lambda x: x["_sort"])
+    for p in population_series:
+        del p["_sort"]
+
+    # Group events by season for deaths, combat, migration
+    def _count_by_season(event_type: ET) -> list[dict]:
+        from collections import Counter
+        counts: Counter[tuple[int, str]] = Counter()
+        for e in event_store.events_by_type(event_type):
+            counts[(e.game_year, e.season.value)] += 1
+        # Build sorted series with all seasons that have any events
+        result = []
+        for (year, season), count in sorted(counts.items(), key=lambda x: _season_sort_key(*x[0])):
+            result.append({"label": f"{season.title()} Y{year}", "value": count})
+        return result
+
+    deaths_series = _count_by_season(ET.DEATH)
+    combat_series = _count_by_season(ET.COMBAT)
+
+    # Migration: combine MIGRANT_ARRIVED and MIGRATION_WAVE
+    from collections import Counter
+    migration_counts: Counter[tuple[int, str]] = Counter()
+    for e in event_store.events_by_type(ET.MIGRANT_ARRIVED):
+        migration_counts[(e.game_year, e.season.value)] += 1
+    for e in event_store.events_by_type(ET.MIGRATION_WAVE):
+        data = e.data
+        count = data.get("count", 1) if isinstance(data, dict) else getattr(data, "count", 1)
+        migration_counts[(e.game_year, e.season.value)] += count
+    migration_series = [
+        {"label": f"{s.title()} Y{y}", "value": c}
+        for (y, s), c in sorted(migration_counts.items(), key=lambda x: _season_sort_key(*x[0]))
+    ]
+
+    # Milestones: first event of each notable type
+    milestones: list[dict] = []
+    milestone_types = {
+        ET.DEATH: "First death",
+        ET.ARTIFACT: "First artifact",
+        ET.MOOD: "First strange mood",
+        ET.COMBAT: "First combat",
+    }
+    for etype, label in milestone_types.items():
+        events = event_store.events_by_type(etype)
+        if events:
+            first = min(events, key=lambda e: _season_sort_key(e.game_year, e.season.value))
+            from df_storyteller.context.context_builder import _format_event
+            desc = re.sub(r"^\[.*?\]\s*", "", _format_event(first))
+            milestones.append({
+                "label": label,
+                "description": desc[:120],
+                "season": first.season.value.title(),
+                "year": first.game_year,
+            })
+    milestones.sort(key=lambda m: _season_sort_key(m["year"], m["season"].lower()))
+
+    # Summary stats — use season_change events for fortress age (these are fortress-specific)
+    season_years = [e.game_year for e in event_store.events_by_type(ET.SEASON_CHANGE) if e.game_year > 0]
+    if season_years:
+        years_active = max(season_years) - min(season_years) + 1
+    else:
+        years_active = 1 if metadata.get("year", 0) > 0 else 0
+
+    dashboard = {
+        "summary": {
+            "population": metadata.get("population", 0),
+            "years_active": years_active,
+            "total_deaths": len(event_store.events_by_type(ET.DEATH)),
+            "total_artifacts": len(event_store.events_by_type(ET.ARTIFACT)),
+            "total_combats": len(event_store.events_by_type(ET.COMBAT)),
+        },
+        "population_series": population_series,
+        "deaths_series": deaths_series,
+        "combat_series": combat_series,
+        "migration_series": migration_series,
+        "milestones": milestones,
+    }
+
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={
+        **ctx, "dashboard": dashboard,
+    })
 
 
 @app.get("/lore", response_class=HTMLResponse)

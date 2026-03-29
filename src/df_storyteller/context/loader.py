@@ -144,25 +144,43 @@ def _read_current_session_gamelog(path: Path) -> list[str]:
 
 
 def _get_folder_identity(folder: Path) -> str | None:
-    """Get a stable identity for a world folder by reading its most recent snapshot.
+    """Get a stable identity for a world folder.
 
-    Returns 'civ_id:fortress_name' which stays constant even when the save
-    folder name changes (e.g. region2 vs autosave 1).
+    Uses session_id (unique per fortress instance) when available.
+    Falls back to 'civ_id:fortress_name' for older snapshots without session_id,
+    but this can incorrectly merge different fortress attempts at the same site.
     """
+    # Check for session_id marker file first (most reliable)
+    session_file = folder / ".session_id"
+    session_id = ""
+    if session_file.exists():
+        try:
+            session_id = session_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            pass
+
     snapshots = sorted(folder.glob("snapshot_*.json"), reverse=True)
     if not snapshots:
-        return None
+        # No snapshots — use session_id alone if available
+        return f"session:{session_id}" if session_id else None
     try:
         with open(snapshots[0], encoding="utf-8", errors="replace") as f:
             snap = json.load(f)
         fi = snap.get("data", {}).get("fortress_info", {})
         civ_id = fi.get("civ_id", "")
         name = fi.get("fortress_name", "")
+
+        # Prefer session_id from snapshot or marker file
+        sid = fi.get("session_id", "") or session_id
+        if sid:
+            return f"{civ_id}:{name}:{sid}"
         if civ_id and name:
             return f"{civ_id}:{name}"
     except (json.JSONDecodeError, OSError):
         pass
     return None
+
+
 
 
 def get_fortress_output_dir(config: AppConfig, metadata: dict | None = None) -> Path:
@@ -238,7 +256,9 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             event_dir = primary_dir
             event_dirs = [primary_dir]
 
-            # Read its fortress identity to find sibling folders
+            # Read its fortress identity to find sibling folders.
+            # Folders with the same identity (including session_id) are merged —
+            # this handles DF renaming save folders on autosave.
             primary_identity = _get_folder_identity(primary_dir)
             if primary_identity:
                 for wd in world_dirs:
@@ -283,6 +303,7 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 metadata["site_name"] = fi.get("site_name", "")
                 metadata["civ_name"] = fi.get("civ_name", "")
                 metadata["biome"] = fi.get("biome", "")
+                metadata["session_id"] = fi.get("session_id", "")
 
                 # Store visitors, animals, buildings in metadata
                 metadata["visitors"] = data.get("visitors", [])
@@ -306,6 +327,9 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 logger.warning("Failed to load snapshot %s: %s", latest_snapshot, e)
 
     # 2. Load event files from all matching folders
+    # Filter by session_id if available to avoid loading events from a
+    # previous fortress that shared the same save folder.
+    active_session_id = metadata.get("session_id", "")
     if event_dirs:
         event_files: list[Path] = []
         for ed in event_dirs:
@@ -318,6 +342,17 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         for path in event_files:
             if path.name.startswith("snapshot_"):
                 continue
+            # Quick session_id check before full parse (avoid loading stale events)
+            if active_session_id:
+                try:
+                    with open(path, encoding="utf-8", errors="replace") as f:
+                        raw = json.load(f)
+                    event_sid = raw.get("session_id", "")
+                    # Skip events from different sessions (but keep events without session_id for compatibility)
+                    if event_sid and event_sid != active_session_id:
+                        continue
+                except (json.JSONDecodeError, OSError):
+                    pass
             event = parse_dfhack_file(path)
             if event:
                 idx = event_store.add(event)

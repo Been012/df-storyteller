@@ -169,6 +169,7 @@
                 <button class="dwarf-tab active" onclick="switchTab('notes')">Notes</button>
                 <button class="dwarf-tab" onclick="switchTab('biography')">Biography{% if dwarf.bio_entries %} ({{ dwarf.bio_entries | length }}){% endif %}</button>
                 <button class="dwarf-tab" onclick="switchTab('diary')">Diary{% if dwarf.diary_entries %} ({{ dwarf.diary_entries | length }}){% endif %}</button>
+                <button class="dwarf-tab" onclick="switchTab('timeline')">Timeline{% if dwarf.timeline_events %} ({{ dwarf.timeline_events | length }}){% endif %}</button>
             </div>
 
             <!-- Notes Tab -->
@@ -311,6 +312,38 @@
                     <em style="color: var(--ink-faded);">
                         No diary entries yet. Click above to hear this dwarf's inner thoughts.
                     </em>
+                {% endif %}
+            </div>
+
+            <!-- Timeline Tab -->
+            <div class="dwarf-tab-content" id="tab-timeline" style="display: none;">
+                {% if dwarf.highlight_role %}
+                <div style="margin-bottom: 1rem;">
+                    <span class="role-badge role-{{ dwarf.highlight_role }}">{{ dwarf.highlight_role }}</span>
+                </div>
+                {% endif %}
+
+                {% if dwarf.timeline_events %}
+                <div class="dwarf-timeline">
+                    {% for period in dwarf.timeline_events %}
+                    <div class="timeline-period">
+                        <div class="timeline-period-label">{{ period.season }} of Year {{ period.year }}</div>
+                        {% for evt in period.events %}
+                        <div class="timeline-event">
+                            <div class="timeline-node timeline-icon-{{ evt.icon }}"></div>
+                            <div class="timeline-event-card">
+                                <span class="timeline-event-type">{{ evt.type }}</span>
+                                <span class="timeline-event-desc">{{ evt.description }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <em style="color: var(--ink-faded);">
+                    No events recorded for this dwarf yet. Play through some seasons to build their story.
+                </em>
                 {% endif %}
             </div>
         </div>

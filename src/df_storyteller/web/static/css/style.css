@@ -1155,11 +1155,191 @@ details[open] .lore-summary h2::before {
     border: 1px solid rgba(119, 136, 153, 0.5);
 }
 
+/* ========== Dwarf Timeline ========== */
+
+.dwarf-timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.dwarf-timeline::before {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--gold-dark);
+}
+
+.timeline-period {
+    margin-bottom: 1.5rem;
+}
+
+.timeline-period-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+    position: relative;
+    left: -1.2rem;
+}
+
+.timeline-event {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.8rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+}
+
+.timeline-node {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 0.35rem;
+    position: absolute;
+    left: -1.95rem;
+    background: var(--parchment-dark);
+    border: 1px solid var(--border);
+}
+
+.timeline-icon-sword { background: #c98b8b; border-color: #a05050; }
+.timeline-icon-skull { background: #8b2500; border-color: #6b1500; }
+.timeline-icon-star { background: var(--gold); border-color: var(--gold-dark); }
+.timeline-icon-gem { background: #c9a84c; border-color: #a08030; }
+.timeline-icon-baby { background: #8bc98b; border-color: #5a9a5a; }
+.timeline-icon-footsteps { background: var(--parchment); border-color: var(--border); }
+.timeline-icon-scroll { background: #b4a078; border-color: #8a7050; }
+.timeline-icon-crown { background: var(--gold); border-color: var(--gold-dark); }
+.timeline-icon-heart { background: #c98bbb; border-color: #a06090; }
+.timeline-icon-shield { background: #8b9cc9; border-color: #5060a0; }
+.timeline-icon-hammer { background: #b4a078; border-color: #8a7050; }
+
+.timeline-event-card {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--ink-light);
+}
+
+.timeline-event-type {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ink-faded);
+    margin-right: 0.5rem;
+}
+
+.timeline-event-desc {
+    color: var(--ink-light);
+}
+
+/* ========== Dashboard ========== */
+
+.dashboard-summary {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+
+.stat-card {
+    background: rgba(244, 232, 193, 0.08);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    min-width: 100px;
+}
+
+.stat-value {
+    font-family: 'Cinzel', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--gold);
+}
+
+.stat-label {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.85rem;
+    color: var(--parchment-dark);
+    margin-top: 0.3rem;
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.chart-container {
+    padding: 1rem;
+    position: relative;
+    height: 280px;
+}
+
+.chart-container canvas {
+    max-height: 220px;
+}
+
+.chart-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    color: var(--gold-dark);
+    margin-bottom: 0.8rem;
+}
+
+.milestones-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.milestone-item {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px dotted var(--border);
+}
+
+.milestone-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.milestone-when {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.8rem;
+    color: var(--ink-faded);
+    white-space: nowrap;
+    min-width: 120px;
+}
+
+.milestone-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    color: var(--gold);
+    white-space: nowrap;
+    min-width: 130px;
+}
+
+.milestone-desc {
+    font-family: 'Crimson Text', serif;
+    font-size: 0.9rem;
+    color: var(--ink-light);
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {
     .content { padding: 1rem; }
     .char-sheet { grid-template-columns: 1fr; }
     .dwarf-grid { grid-template-columns: 1fr; }
+    .dashboard-grid { grid-template-columns: 1fr; }
     .nav-title { display: none; }
 }

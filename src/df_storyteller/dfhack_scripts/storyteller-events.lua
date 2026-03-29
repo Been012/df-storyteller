@@ -19,6 +19,16 @@ local world_folder = dfhack.world.ReadWorldFolder()
 local output_dir = dfhack.getDFPath() .. '/storyteller_events/' .. world_folder .. '/'
 local poll_interval_ticks = 100
 
+-- Read fortress session ID (written by storyteller-begin) to tag events
+local fortress_session_id = ''
+pcall(function()
+    local f = io.open(output_dir .. '.session_id', 'r')
+    if f then
+        fortress_session_id = f:read('*a'):match('^%s*(.-)%s*$') or ''
+        f:close()
+    end
+end)
+
 local event_flags = {
     death = true,
     combat = true,
@@ -47,6 +57,7 @@ if not dfhack.storyteller_state then
         prev_squads = {},
         prev_population = 0,
         prev_stress = {},
+        poll_count = 0,
     }
 end
 local state = dfhack.storyteller_state
@@ -90,6 +101,7 @@ local function write_event(event_type, data)
         game_year = year,
         game_tick = tick,
         season = season,
+        session_id = fortress_session_id,
         data = data,
     }
 
@@ -448,6 +460,7 @@ end
 --- Main tick handler.
 local function on_tick()
     if not state.enabled then return end
+    state.poll_count = (state.poll_count or 0) + 1
 
     local ok, err = pcall(function()
         poll_moods()
@@ -568,8 +581,11 @@ end
 local function status()
     if state.enabled then
         print('[storyteller] Running. Events written: ' .. state.sequence)
+        print('[storyteller] Poll ticks: ' .. tostring(state.poll_count or 0))
         print('[storyteller] Output directory: ' .. output_dir)
         print('[storyteller] Tracking ' .. tostring(state.prev_population) .. ' dwarves')
+        print('[storyteller] Last season: ' .. tostring(state.last_season))
+        print('[storyteller] Current season: ' .. get_season(df.global.cur_year_tick))
     else
         print('[storyteller] Not running.')
     end
@@ -577,16 +593,44 @@ end
 
 --- Manually run one poll cycle and report what happened (for debugging).
 local function debug_poll()
-    print('[storyteller] Running manual poll...')
+    print('[storyteller] === Debug Poll ===')
+    print('[storyteller] Output dir: ' .. output_dir)
+    print('[storyteller] Enabled: ' .. tostring(state.enabled))
+    print('[storyteller] Sequence (events written): ' .. tostring(state.sequence))
+    print('[storyteller] Poll count (ticks fired): ' .. tostring(state.poll_count or 0))
+    print('[storyteller] Prev population: ' .. tostring(state.prev_population))
+
+    -- Show season state
+    local current_season = get_season(df.global.cur_year_tick)
+    print('[storyteller] Current season: ' .. current_season .. ' | Last recorded: ' .. tostring(state.last_season))
+    print('[storyteller] Year: ' .. tostring(df.global.cur_year) .. ' | Tick: ' .. tostring(df.global.cur_year_tick))
+
+    -- Check if poll loop is alive (poll_count should increase over time)
+    if (state.poll_count or 0) == 0 and state.enabled then
+        print('[storyteller] WARNING: Poll loop appears dead (0 ticks fired). Restarting...')
+        local function poll_loop()
+            if not state.enabled then return end
+            on_tick()
+            dfhack.timeout(poll_interval_ticks, 'ticks', poll_loop)
+        end
+        dfhack.timeout(poll_interval_ticks, 'ticks', poll_loop)
+        print('[storyteller] Poll loop restarted.')
+    end
+
     local before = state.sequence
+
+    -- Run full poll cycle (same as on_tick)
     local ok, err = pcall(function()
+        poll_moods()
+        poll_season()
+        poll_births()
         poll_changes()
     end)
     if not ok then
-        print('[storyteller] poll_changes ERROR: ' .. tostring(err))
+        print('[storyteller] Poll ERROR: ' .. tostring(err))
     end
     local after = state.sequence
-    print('[storyteller] Poll complete. Events this cycle: ' .. (after - before))
+    print('[storyteller] Events written this cycle: ' .. (after - before))
 
     -- Show current state of tracked dwarves
     local player_race = df.global.plotinfo.race_id

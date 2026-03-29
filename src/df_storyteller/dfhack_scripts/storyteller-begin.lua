@@ -505,8 +505,32 @@ print('')
 
 ensure_output_dir()
 
--- Step 0: Gather fortress info
+-- Step 0: Gather fortress info + unique session ID
+-- The session ID is generated once per fortress instance and stored in a marker
+-- file. This disambiguates different fortress attempts at the same site.
+local session_id_path = output_dir .. '.session_id'
+local fortress_session_id = ''
+pcall(function()
+    local f = io.open(session_id_path, 'r')
+    if f then
+        fortress_session_id = f:read('*a'):match('^%s*(.-)%s*$') or ''
+        f:close()
+    end
+end)
+if fortress_session_id == '' then
+    fortress_session_id = tostring(os.time())
+    pcall(function()
+        local f = io.open(session_id_path, 'w')
+        if f then
+            f:write(fortress_session_id)
+            f:close()
+        end
+    end)
+    print('[storyteller] New fortress session: ' .. fortress_session_id)
+end
+
 local fortress_info = get_fortress_info()
+fortress_info.session_id = fortress_session_id
 if fortress_info.fortress_name ~= '' then
     print('[storyteller] Fortress: ' .. fortress_info.fortress_name)
 end

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Fortress Dashboard</h1>
+<p class="page-subtitle">{{ fortress_name or "The Fortress" }} — a chronicle in numbers</p>
+
+{% if dashboard.summary.years_active > 0 %}
+
+<!-- Summary Stats -->
+<div class="dashboard-summary">
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.population }}</div>
+        <div class="stat-label">Population</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.years_active }}</div>
+        <div class="stat-label">Years Active</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.total_deaths }}</div>
+        <div class="stat-label">Deaths</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.total_artifacts }}</div>
+        <div class="stat-label">Artifacts</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.total_combats }}</div>
+        <div class="stat-label">Combats</div>
+    </div>
+</div>
+
+<!-- Charts Grid -->
+<div class="dashboard-grid">
+    {% if dashboard.population_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Population Over Time</h3>
+        <canvas id="population-chart"></canvas>
+    </div>
+    {% endif %}
+
+    {% if dashboard.deaths_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Deaths Per Season</h3>
+        <canvas id="deaths-chart"></canvas>
+    </div>
+    {% endif %}
+
+    {% if dashboard.combat_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Combat Activity</h3>
+        <canvas id="combat-chart"></canvas>
+    </div>
+    {% endif %}
+
+    {% if dashboard.migration_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Migration Waves</h3>
+        <canvas id="migration-chart"></canvas>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Milestones -->
+{% if dashboard.milestones %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Notable Firsts</h3>
+    <div class="milestones-list">
+        {% for m in dashboard.milestones %}
+        <div class="milestone-item">
+            <div class="milestone-when">{{ m.season }} of Year {{ m.year }}</div>
+            <div class="milestone-label">{{ m.label }}</div>
+            <div class="milestone-desc">{{ m.description }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="parchment" style="text-align: center; padding: 2rem;">
+    <p style="color: var(--ink-faded); font-style: italic;">
+        No fortress data yet. Take a snapshot in DFHack
+        (<code>storyteller-begin</code>) and play through a few seasons to see trends.
+    </p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const dashboardData = {{ dashboard | tojson | safe }};
+
+// Theme colors
+Chart.defaults.color = '#d4bc7c';
+Chart.defaults.borderColor = 'rgba(184, 160, 120, 0.2)';
+Chart.defaults.font.family = "'Crimson Text', serif";
+
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { display: false },
+    },
+    scales: {
+        x: {
+            ticks: { maxRotation: 45, font: { size: 11 } },
+            grid: { color: 'rgba(184, 160, 120, 0.1)' },
+        },
+        y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1, font: { size: 11 } },
+            grid: { color: 'rgba(184, 160, 120, 0.1)' },
+        },
+    },
+};
+
+function makeChart(canvasId, data, type, color, fillColor) {
+    const el = document.getElementById(canvasId);
+    if (!el || !data.length) return;
+    new Chart(el, {
+        type: type,
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+                data: data.map(d => d.value),
+                borderColor: color,
+                backgroundColor: fillColor || color,
+                borderWidth: 2,
+                tension: 0.3,
+                fill: type === 'line',
+                pointRadius: 3,
+                pointBackgroundColor: color,
+            }],
+        },
+        options: chartOptions,
+    });
+}
+
+makeChart('population-chart', dashboardData.population_series, 'line', '#c9a84c', 'rgba(201, 168, 76, 0.15)');
+makeChart('deaths-chart', dashboardData.deaths_series, 'bar', '#8b2500', 'rgba(139, 37, 0, 0.6)');
+makeChart('combat-chart', dashboardData.combat_series, 'bar', '#d4bc7c', 'rgba(212, 188, 124, 0.5)');
+makeChart('migration-chart', dashboardData.migration_series, 'bar', '#8a6d3b', 'rgba(138, 109, 59, 0.6)');
+</script>
+{% endblock %}
