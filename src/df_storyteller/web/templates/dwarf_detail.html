@@ -24,6 +24,15 @@
                 Mood: {{ dwarf.stress_desc }}
             </div>
             {% endif %}
+            <div style="margin-top: 0.5rem;">
+                <select id="dwarf-role" onchange="setHighlight({{ dwarf.unit_id }}, '{{ dwarf.name | replace("'", "\\'") }}', this.value)"
+                    style="font-family: 'Crimson Text', serif; padding: 0.3rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment); font-size: 0.85rem;">
+                    <option value="">No highlight</option>
+                    <option value="protagonist" {% if dwarf.highlight_role == 'protagonist' %}selected{% endif %}>Protagonist</option>
+                    <option value="antagonist" {% if dwarf.highlight_role == 'antagonist' %}selected{% endif %}>Antagonist</option>
+                    <option value="watchlist" {% if dwarf.highlight_role == 'watchlist' %}selected{% endif %}>Watchlist</option>
+                </select>
+            </div>
         </div>
 
         <!-- Left Column: Personality -->
@@ -196,6 +205,7 @@
 
             <!-- Biography Tab -->
             <div class="dwarf-tab-content" id="tab-biography" style="display: none;">
+                {% if not no_llm_mode %}
                 {% if not dwarf.is_alive and not dwarf.has_eulogy %}
                 <div class="memorial-section" style="margin-bottom: 1rem;">
                     <div class="btn-row">
@@ -222,12 +232,27 @@
                 </div>
 
                 <div class="story-text streaming-text" id="bio-text" style="display: none;"></div>
+                {% endif %}
+
+                <!-- Manual biography writing -->
+                <details style="margin-bottom: 0.8rem;" {% if no_llm_mode %}open{% endif %}>
+                    <summary style="cursor: pointer; color: var(--ink-faded); font-size: 0.9rem;">
+                        {% if no_llm_mode %}Write a biography entry{% else %}Write your own entry{% endif %}
+                    </summary>
+                    <div style="margin-top: 0.5rem;">
+                        <textarea id="manual-bio-text" rows="6" placeholder="Write about this dwarf..."
+                            class="manual-textarea"></textarea>
+                        <div class="btn-row" style="margin-top: 0.5rem;">
+                            <button class="btn btn-primary" onclick="saveManualBio({{ dwarf.unit_id }})">Save Entry</button>
+                        </div>
+                    </div>
+                </details>
 
                 {% if dwarf.bio_entries %}
                     {% for entry in dwarf.bio_entries | reverse %}
                     <div class="chronicle-entry{% if entry.get('is_eulogy') %} eulogy-entry{% endif %}" style="margin-bottom: 1.5rem;">
                         <div class="season-header" style="font-size: 1rem;">
-                            {% if entry.get('is_eulogy') %}Memorial — {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                            {% if entry.get('is_eulogy') %}Memorial — {% endif %}{% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
                         <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
                     </div>
@@ -244,6 +269,7 @@
 
             <!-- Diary Tab -->
             <div class="dwarf-tab-content" id="tab-diary" style="display: none;">
+                {% if not no_llm_mode %}
                 {% if dwarf.is_alive %}
                 <div class="btn-row" style="margin-bottom: 1rem;">
                     <button class="btn btn-primary" id="diary-btn" onclick="generateDiary({{ dwarf.unit_id }})">
@@ -253,12 +279,27 @@
                 {% endif %}
 
                 <div class="story-text streaming-text" id="diary-text" style="display: none;"></div>
+                {% endif %}
+
+                <!-- Manual diary writing -->
+                <details style="margin-bottom: 0.8rem;" {% if no_llm_mode %}open{% endif %}>
+                    <summary style="cursor: pointer; color: var(--ink-faded); font-size: 0.9rem;">
+                        {% if no_llm_mode %}Write a diary entry{% else %}Write your own diary entry{% endif %}
+                    </summary>
+                    <div style="margin-top: 0.5rem;">
+                        <textarea id="manual-diary-text" rows="6" placeholder="Write a diary entry in this dwarf's voice..."
+                            class="manual-textarea"></textarea>
+                        <div class="btn-row" style="margin-top: 0.5rem;">
+                            <button class="btn btn-primary" onclick="saveManualDiary({{ dwarf.unit_id }})">Save Entry</button>
+                        </div>
+                    </div>
+                </details>
 
                 {% if dwarf.diary_entries %}
                     {% for entry in dwarf.diary_entries | reverse %}
                     <div class="chronicle-entry diary-entry" style="margin-bottom: 1.5rem;">
                         <div class="season-header" style="font-size: 1rem;">
-                            {{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
+                            {% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
                         <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
                     </div>
@@ -280,6 +321,50 @@
 {% block scripts %}
 <script>
 const UNIT_ID = {{ dwarf.unit_id }};
+
+async function setHighlight(unitId, name, role) {
+    if (!role) {
+        await fetch('/api/highlights/' + unitId, { method: 'DELETE' });
+    } else {
+        await fetch('/api/highlights', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unit_id: unitId, name: name, role: role }),
+        });
+    }
+}
+
+async function saveManualBio(unitId) {
+    const text = document.getElementById('manual-bio-text').value.trim();
+    if (!text) return;
+    try {
+        const resp = await fetch('/api/bio/' + unitId + '/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
+}
+
+async function saveManualDiary(unitId) {
+    const text = document.getElementById('manual-diary-text').value.trim();
+    if (!text) return;
+    try {
+        const resp = await fetch('/api/diary/' + unitId + '/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
+}
 
 function switchTab(tabName) {
     document.querySelectorAll('.dwarf-tab-content').forEach(el => el.style.display = 'none');

@@ -112,6 +112,12 @@ async def generate_biography(
     all_notes = dwarf_notes + fortress_notes
     notes_text = format_player_notes(all_notes, one_time_context=one_time_context)
 
+    # Add highlight role context if this dwarf is highlighted
+    from df_storyteller.context.highlights_store import get_highlight_for_dwarf
+    dwarf_highlight = get_highlight_for_dwarf(config, dwarf.unit_id, output_dir)
+    if dwarf_highlight:
+        notes_text += f"\n\nThis dwarf is marked as a {dwarf_highlight.role.value.upper()} by the player. Frame the biography accordingly."
+
     # Quests involving this dwarf
     from df_storyteller.context.quest_store import load_all_quests
     all_quests = load_all_quests(config, output_dir)

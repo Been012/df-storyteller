@@ -265,6 +265,7 @@ def _base_context(config: AppConfig, active_tab: str, metadata: dict | None = No
         "event_count": event_count,
         "last_updated": last_updated,
         "setup_step": setup_step,
+        "no_llm_mode": config.story.no_llm_mode,
     }
 
 
@@ -428,9 +429,24 @@ def _parse_journal(config: AppConfig, metadata: dict | None = None) -> list[dict
             body = header_match.group(2)
 
         if body.strip():
+            # Strip manual marker for display, but track it
+            raw_body = body.strip()
+            is_manual = raw_body.startswith("<!-- source:manual -->")
+            if is_manual:
+                raw_body = raw_body.replace("<!-- source:manual -->", "").strip()
+
+            # Parse season/year from header for editing
+            season_match = re.match(r"(\w+) of Year (\d+)", header)
+            entry_season = season_match.group(1).lower() if season_match else ""
+            entry_year = int(season_match.group(2)) if season_match else 0
+
             entries.append({
                 "header": header,
-                "text": _markdown_to_html(body),
+                "text": _markdown_to_html(raw_body),
+                "raw_text": raw_body,
+                "season": entry_season,
+                "year": entry_year,
+                "is_manual": is_manual,
             })
 
     return entries
@@ -481,6 +497,11 @@ async def dwarves_page(request: Request):
     ctx = _base_context(config, "dwarves", metadata)
     ranked = character_tracker.ranked_characters()
 
+    # Load highlights for badge display
+    from df_storyteller.context.highlights_store import load_all_highlights
+    fortress_dir = _get_fortress_dir(config, metadata)
+    highlights_map = {h.unit_id: h.role.value for h in load_all_highlights(config, output_dir=fortress_dir)}
+
     dwarves = []
     for dwarf, score in ranked:
         notable_traits = ""
@@ -495,6 +516,7 @@ async def dwarves_page(request: Request):
             "age": dwarf.age,
             "noble_positions": dwarf.noble_positions,
             "notable_traits": notable_traits,
+            "highlight_role": highlights_map.get(dwarf.unit_id, ""),
         })
 
     return templates.TemplateResponse(request=request, name="dwarves.html", context={
@@ -719,6 +741,11 @@ async def dwarf_detail_page(request: Request, unit_id: int):
         for r in dwarf.relationships
     ]
 
+    # Load highlight for this dwarf
+    from df_storyteller.context.highlights_store import get_highlight_for_dwarf
+    fortress_dir = _get_fortress_dir(config, metadata)
+    dwarf_highlight = get_highlight_for_dwarf(config, unit_id, output_dir=fortress_dir)
+
     dwarf_data = {
         "unit_id": dwarf.unit_id,
         "name": dwarf.name,
@@ -737,6 +764,7 @@ async def dwarf_detail_page(request: Request, unit_id: int):
         "equipment": dwarf.equipment,
         "wounds": dwarf.wounds,
         "is_alive": dwarf.is_alive,
+        "highlight_role": dwarf_highlight.role.value if dwarf_highlight else "",
     }
 
     # Load events for this dwarf
@@ -2125,6 +2153,88 @@ async def api_list_quests(status: str | None = None):
     return [q.model_dump(mode="json") for q in quests]
 
 
+@app.post("/api/quests/manual")
+async def api_create_manual_quest(request: Request):
+    """Create a player-written quest."""
+    from df_storyteller.context.quest_store import add_quest
+    from df_storyteller.schema.quests import Quest, QuestCategory, QuestDifficulty
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    title = data.get("title", "").strip()
+    description = data.get("description", "").strip()
+    if not title or not description:
+        return JSONResponse({"error": "Title and description are required"}, status_code=400)
+
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+
+    try:
+        category = QuestCategory(data.get("category", "exploration"))
+        difficulty = QuestDifficulty(data.get("difficulty", "medium"))
+    except ValueError:
+        category = QuestCategory.EXPLORATION
+        difficulty = QuestDifficulty.MEDIUM
+
+    quest = Quest(
+        title=title,
+        description=description,
+        category=category,
+        difficulty=difficulty,
+        game_year=metadata.get("year", 0),
+        game_season=metadata.get("season", "spring"),
+        context_snapshot="Player-created quest",
+    )
+    add_quest(config, quest, fortress_dir)
+    return quest.model_dump(mode="json")
+
+
+@app.post("/api/quests/{quest_id}/edit")
+async def api_edit_quest(quest_id: str, request: Request):
+    """Edit a quest's title and description."""
+    from df_storyteller.context.quest_store import load_all_quests, save_all_quests
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    title = data.get("title", "").strip()
+    description = data.get("description", "").strip()
+    if not title or not description:
+        return JSONResponse({"error": "Title and description are required"}, status_code=400)
+
+    fortress_dir = _get_fortress_dir(config)
+    quests = load_all_quests(config, fortress_dir)
+    for q in quests:
+        if q.id == quest_id:
+            q.title = title
+            q.description = description
+            save_all_quests(config, quests, fortress_dir)
+            return {"ok": True}
+    return JSONResponse({"error": "Quest not found"}, status_code=404)
+
+
+@app.post("/api/quests/{quest_id}/resolve")
+async def api_resolve_quest(quest_id: str, request: Request):
+    """Resolve a quest with a player-written comment (no AI)."""
+    from df_storyteller.context.quest_store import complete_quest
+    config = _get_config()
+    comment = ""
+    try:
+        data = await request.json()
+        comment = data.get("comment", "").strip()
+    except Exception:
+        pass
+
+    fortress_dir = _get_fortress_dir(config)
+    ok = complete_quest(config, quest_id, comment or "Quest resolved by player.", fortress_dir)
+    return {"ok": ok}
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, saved: bool = False):
     config = _get_config()
@@ -2152,6 +2262,7 @@ async def save_settings(request: Request):
     config = _get_config()
 
     config.paths.df_install = form.get("df_install", config.paths.df_install)
+    config.story.no_llm_mode = form.get("no_llm_mode") == "true"
     config.llm.provider = form.get("llm_provider", config.llm.provider)
     if form.get("api_key"):
         config.llm.api_key = form["api_key"]
@@ -2167,6 +2278,55 @@ async def save_settings(request: Request):
     save_config(config)
     _invalidate_cache()
     return RedirectResponse("/settings?saved=true", status_code=303)
+
+
+# ==================== Highlights API ====================
+
+
+@app.get("/api/highlights")
+async def api_highlights_list():
+    """List all dwarf highlights."""
+    from df_storyteller.context.highlights_store import load_all_highlights
+    config = _get_config()
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    highlights = load_all_highlights(config, output_dir=fortress_dir)
+    return [h.model_dump() for h in highlights]
+
+
+@app.post("/api/highlights")
+async def api_highlights_set(request: Request):
+    """Set or update a highlight on a dwarf."""
+    from df_storyteller.context.highlights_store import set_highlight
+    from df_storyteller.schema.highlights import DwarfHighlight
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    try:
+        highlight = DwarfHighlight.model_validate(data)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    set_highlight(config, highlight, output_dir=fortress_dir)
+    return {"ok": True}
+
+
+@app.delete("/api/highlights/{unit_id}")
+async def api_highlights_remove(unit_id: int):
+    """Remove a highlight from a dwarf."""
+    from df_storyteller.context.highlights_store import remove_highlight
+    config = _get_config()
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    removed = remove_highlight(config, unit_id, output_dir=fortress_dir)
+    if not removed:
+        return JSONResponse({"error": "No highlight found"}, status_code=404)
+    return {"ok": True}
 
 
 # ==================== Refresh ====================
@@ -2758,6 +2918,179 @@ async def _stream_chronicle(config: AppConfig, one_time_context: str = "") -> As
     except Exception as e:
         logger.exception("Generation failed")
         yield "Error: generation failed. Check server logs for details."
+
+
+# ==================== Manual Writing APIs ====================
+
+
+@app.post("/api/chronicle/manual")
+async def api_chronicle_manual(request: Request):
+    """Save a player-written chronicle entry."""
+    from df_storyteller.output.journal import append_to_journal
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = data.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Text is required"}, status_code=400)
+
+    _, _, _, metadata = _load_game_state_safe(config)
+    season = data.get("season", metadata.get("season", "spring"))
+    year = data.get("year", metadata.get("year", 0))
+    fortress_dir = _get_fortress_dir(config, metadata)
+
+    # Mark as manual so the UI can distinguish from AI entries
+    marked_text = f"<!-- source:manual -->\n{text}"
+    append_to_journal(config, marked_text, int(year), season, output_dir=fortress_dir)
+
+    return {"ok": True, "season": season, "year": int(year)}
+
+
+@app.post("/api/bio/{unit_id}/manual")
+async def api_bio_manual(unit_id: int, request: Request):
+    """Save a player-written biography entry."""
+    from df_storyteller.stories.biography import _save_biography_entry
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = data.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Text is required"}, status_code=400)
+
+    _, character_tracker, _, metadata = _load_game_state_safe(config)
+    dwarf = character_tracker.get_dwarf(unit_id)
+    fortress_dir = _get_fortress_dir(config, metadata)
+
+    entry = {
+        "year": metadata.get("year", 0),
+        "season": metadata.get("season", "spring"),
+        "text": text,
+        "profession": dwarf.profession if dwarf else "",
+        "stress_category": dwarf.stress_category if dwarf else 0,
+        "is_manual": True,
+    }
+    if data.get("is_diary"):
+        entry["is_diary"] = True
+
+    _save_biography_entry(config, unit_id, entry, output_dir=fortress_dir)
+    return {"ok": True}
+
+
+@app.post("/api/diary/{unit_id}/manual")
+async def api_diary_manual(unit_id: int, request: Request):
+    """Save a player-written diary entry."""
+    from df_storyteller.stories.biography import _save_biography_entry
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = data.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Text is required"}, status_code=400)
+
+    _, character_tracker, _, metadata = _load_game_state_safe(config)
+    dwarf = character_tracker.get_dwarf(unit_id)
+    fortress_dir = _get_fortress_dir(config, metadata)
+
+    _save_biography_entry(config, unit_id, {
+        "year": metadata.get("year", 0),
+        "season": metadata.get("season", "spring"),
+        "text": text,
+        "profession": dwarf.profession if dwarf else "",
+        "stress_category": dwarf.stress_category if dwarf else 0,
+        "is_diary": True,
+        "is_manual": True,
+    }, output_dir=fortress_dir)
+    return {"ok": True}
+
+
+@app.post("/api/saga/manual")
+async def api_saga_manual(request: Request):
+    """Save a player-written saga entry."""
+    import json as _json
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = data.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Text is required"}, status_code=400)
+
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    saga_path = fortress_dir / "saga.json"
+
+    existing = []
+    if saga_path.exists():
+        try:
+            existing = _json.loads(saga_path.read_text(encoding="utf-8", errors="replace"))
+        except (ValueError, OSError):
+            pass
+
+    existing.append({
+        "text": text,
+        "year": metadata.get("year", 0),
+        "season": metadata.get("season", "spring"),
+        "is_manual": True,
+    })
+    saga_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True}
+
+
+@app.post("/api/gazette/manual")
+async def api_gazette_manual(request: Request):
+    """Save a player-written gazette."""
+    import json as _json
+    config = _get_config()
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    gazette_path = fortress_dir / "gazette.json"
+
+    season = metadata.get("season", "spring")
+    year = metadata.get("year", 0)
+
+    gazette = {
+        "season": season,
+        "year": year,
+        "author": "The Player",
+        "sections": {
+            "herald": data.get("herald", ""),
+            "military": data.get("military", ""),
+            "gossip": data.get("gossip", ""),
+            "quests": data.get("quests", ""),
+            "obituaries": data.get("obituaries", ""),
+        },
+        "is_manual": True,
+    }
+
+    # Load existing gazettes and append/replace for this season
+    existing = []
+    if gazette_path.exists():
+        try:
+            existing = _json.loads(gazette_path.read_text(encoding="utf-8", errors="replace"))
+        except (ValueError, OSError):
+            pass
+
+    # Replace gazette for same season/year if exists
+    existing = [g for g in existing if not (g.get("season") == season and g.get("year") == year)]
+    existing.append(gazette)
+    gazette_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True}
 
 
 @app.post("/api/bio/{unit_id}")

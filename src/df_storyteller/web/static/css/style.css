@@ -1077,6 +1077,84 @@ details[open] .lore-summary h2::before {
     font-size: 0.9rem;
 }
 
+/* ========== Manual Writing ========== */
+
+.manual-textarea {
+    width: 100%;
+    font-family: 'Crimson Text', serif;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    resize: vertical;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+/* On dark page background (chronicle, lore) */
+.manual-textarea {
+    background: rgba(244,232,193,0.1);
+    color: var(--parchment);
+}
+
+/* Inside parchment cards (dwarf detail, gazette, settings) */
+.parchment .manual-textarea {
+    background: var(--parchment-light);
+    color: var(--ink);
+}
+
+.manual-textarea:focus {
+    outline: none;
+    border-color: var(--gold-dark);
+    box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.2);
+}
+
+.manual-textarea::placeholder {
+    color: var(--ink-faded);
+    font-style: italic;
+}
+
+/* ========== Manual/Highlight Badges ========== */
+
+.manual-badge {
+    display: inline-block;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--gold-dark);
+    border: 1px solid var(--gold-dark);
+    border-radius: 3px;
+    padding: 0 0.3rem;
+    margin-right: 0.3rem;
+    vertical-align: middle;
+}
+
+.role-badge {
+    display: inline-block;
+    font-family: 'Crimson Text', serif;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    vertical-align: middle;
+    font-weight: bold;
+}
+.role-protagonist {
+    background: rgba(218, 165, 32, 0.25);
+    color: #daa520;
+    border: 1px solid rgba(218, 165, 32, 0.5);
+}
+.role-antagonist {
+    background: rgba(178, 34, 34, 0.25);
+    color: #cd5c5c;
+    border: 1px solid rgba(178, 34, 34, 0.5);
+}
+.role-watchlist {
+    background: rgba(119, 136, 153, 0.25);
+    color: #a0aec0;
+    border: 1px solid rgba(119, 136, 153, 0.5);
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {

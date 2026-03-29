@@ -20,6 +20,7 @@
         style="width: 100%; font-family: 'Crimson Text', serif; font-size: 1rem; padding: 0.6rem 1rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
 </div>
 
+{% if not no_llm_mode %}
 <div class="btn-row" style="justify-content: center;">
     <button class="btn btn-primary" id="saga-btn" onclick="generateSaga()">
         Write Epic Saga
@@ -33,6 +34,21 @@
     </div>
     <div class="divider">&loz;</div>
 </div>
+{% else %}
+<!-- Manual saga writing -->
+<details style="max-width: 600px; margin: 0 auto 1rem;" open>
+    <summary style="cursor: pointer; color: var(--parchment-dark); font-size: 0.9rem; text-align: center;">
+        Write your own epic saga
+    </summary>
+    <div style="margin-top: 0.5rem;">
+        <textarea id="manual-saga-text" rows="10" placeholder="Write your world's epic history..."
+            class="manual-textarea"></textarea>
+        <div class="btn-row" style="justify-content: center; margin-top: 0.5rem;">
+            <button class="btn btn-primary" onclick="saveManualSaga()">Save Saga</button>
+        </div>
+    </div>
+</details>
+{% endif %}
 
 {% if saved_sagas %}
 <details style="margin-bottom: 1rem;">
@@ -342,6 +358,22 @@ function searchLore(query) {
     searchInput.value = query;
     filterLore(query);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function saveManualSaga() {
+    const text = document.getElementById('manual-saga-text').value.trim();
+    if (!text) return;
+    try {
+        const resp = await fetch('/api/saga/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
 }
 
 async function generateSaga() {

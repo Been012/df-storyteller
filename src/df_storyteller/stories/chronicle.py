@@ -141,6 +141,14 @@ async def generate_chronicle(
         active_context = "ACTIVE QUESTS (reference these as ongoing ambitions or challenges):\n" + "\n".join(active_lines)
         ctx.lore_text = (ctx.lore_text + "\n\n" + active_context).strip()
 
+    # Add player-highlighted dwarves for narrative focus
+    from df_storyteller.context.highlights_store import load_all_highlights
+    highlights = load_all_highlights(config, output_dir)
+    if highlights:
+        highlight_lines = [f"- {h.name}: {h.role.value.upper()}" for h in highlights]
+        highlights_text = "PLAYER-HIGHLIGHTED DWARVES (give these characters more narrative focus):\n" + "\n".join(highlight_lines)
+        ctx.lore_text = (ctx.lore_text + "\n\n" + highlights_text).strip()
+
     system_prompt = render_system_prompt(ctx)
     user_prompt = render_user_prompt(ctx)
 

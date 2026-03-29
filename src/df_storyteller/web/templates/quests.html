@@ -5,6 +5,44 @@
 <h1 class="page-header">Quest Board of {{ fortress_name or "the Fortress" }}</h1>
 <p class="page-subtitle">Challenges and deeds to bring glory to the fortress</p>
 
+<!-- Manual quest creation -->
+<details style="max-width: 600px; margin: 0 auto 1.5rem;">
+    <summary style="cursor: pointer; color: var(--parchment-dark); font-size: 0.9rem; text-align: center;">
+        Create your own quest
+    </summary>
+    <div class="parchment" style="margin-top: 0.5rem; padding: 1rem;">
+        <div style="margin-bottom: 0.8rem;">
+            <input type="text" id="manual-quest-title" placeholder="Quest title..."
+                class="manual-textarea" style="resize: none; height: auto; padding: 0.4rem;">
+        </div>
+        <div style="margin-bottom: 0.8rem;">
+            <textarea id="manual-quest-desc" rows="3" placeholder="Describe the challenge..."
+                class="manual-textarea"></textarea>
+        </div>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem; flex-wrap: wrap;">
+            <select id="manual-quest-category" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                <option value="military">Military</option>
+                <option value="construction">Construction</option>
+                <option value="religious">Religious</option>
+                <option value="crafting">Crafting</option>
+                <option value="exploration">Exploration</option>
+                <option value="social">Social</option>
+                <option value="chaos">Chaos</option>
+            </select>
+            <select id="manual-quest-difficulty" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px;">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="legendary">Legendary</option>
+            </select>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-primary" onclick="createManualQuest()">Post Quest</button>
+        </div>
+    </div>
+</details>
+
+{% if not no_llm_mode %}
 <div style="display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap;">
     <button class="btn btn-primary" id="generate-btn" onclick="generateQuests()">Seek New Quests</button>
     <select id="quest-count" style="font-family: 'Crimson Text', serif; padding: 0.4rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment);">
@@ -41,6 +79,7 @@
         <div class="story-text streaming-text" id="completion-text"></div>
     </div>
 </div>
+{% endif %}
 
 {% if active_quests %}
 <h2 style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold-dark); margin-bottom: 0.8rem;">
@@ -74,15 +113,29 @@
     <div class="quest-meta">
         Issued: {{ quest.game_season | title }} of Year {{ quest.game_year }}
     </div>
+    <!-- Edit form (hidden) -->
+    <div id="quest-edit-{{ quest.id }}" style="display: none; margin-bottom: 0.8rem;">
+        <input type="text" id="quest-edit-title-{{ quest.id }}" value="{{ quest.title }}"
+            class="manual-textarea" style="resize: none; height: auto; padding: 0.4rem; margin-bottom: 0.5rem;">
+        <textarea id="quest-edit-desc-{{ quest.id }}" rows="3" class="manual-textarea">{{ quest.description }}</textarea>
+        <div class="btn-row" style="margin-top: 0.5rem; gap: 0.5rem;">
+            <button class="btn btn-primary" onclick="saveQuestEdit('{{ quest.id }}')">Save</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('quest-edit-{{ quest.id }}').style.display='none'">Cancel</button>
+        </div>
+    </div>
     <div class="quest-actions">
+        {% if not no_llm_mode %}
         <button class="btn btn-primary" onclick="completeQuest('{{ quest.id }}', '{{ quest.title | e }}')">Complete</button>
+        {% endif %}
+        <button class="btn btn-primary" onclick="resolveQuest('{{ quest.id }}')">Resolve</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('quest-edit-{{ quest.id }}').style.display='block'">Edit</button>
         <button class="btn btn-secondary" onclick="abandonQuest('{{ quest.id }}')">Abandon</button>
     </div>
 </div>
 {% endfor %}
 {% else %}
 <div class="parchment" style="text-align: center; color: var(--ink-faded); font-style: italic; padding: 2rem;">
-    No active quests. Click "Seek New Quests" above to generate challenges for your fortress.
+    No active quests. {% if no_llm_mode %}Create your own quest above, or disable No-LLM Mode in <a href="/settings" style="color: var(--gold-dark);">Settings</a> to generate quests with AI.{% else %}Click "Seek New Quests" above to generate challenges, or create your own.{% endif %}
 </div>
 {% endif %}
 
@@ -114,6 +167,58 @@
 
 {% block scripts %}
 <script>
+async function createManualQuest() {
+    const title = document.getElementById('manual-quest-title').value.trim();
+    const description = document.getElementById('manual-quest-desc').value.trim();
+    const category = document.getElementById('manual-quest-category').value;
+    const difficulty = document.getElementById('manual-quest-difficulty').value;
+    if (!title || !description) { alert('Title and description are required.'); return; }
+    try {
+        const resp = await fetch('/api/quests/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, category, difficulty }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to create quest: ' + err.message);
+    }
+}
+
+async function saveQuestEdit(questId) {
+    const title = document.getElementById('quest-edit-title-' + questId).value.trim();
+    const description = document.getElementById('quest-edit-desc-' + questId).value.trim();
+    if (!title || !description) { alert('Title and description are required.'); return; }
+    try {
+        const resp = await fetch('/api/quests/' + questId + '/edit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
+}
+
+async function resolveQuest(questId) {
+    const comment = prompt('How was this quest resolved? (optional)');
+    if (comment === null) return; // cancelled
+    try {
+        const resp = await fetch('/api/quests/' + questId + '/resolve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment: comment }),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to resolve quest: ' + err.message);
+    }
+}
+
 async function generateQuests() {
     const btn = document.getElementById('generate-btn');
     const loading = document.getElementById('quest-loading');

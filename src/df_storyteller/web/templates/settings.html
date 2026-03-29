@@ -13,6 +13,17 @@
         </div>
 
         <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" name="no_llm_mode" value="true"
+                    {% if config.story.no_llm_mode %}checked{% endif %}
+                    onchange="document.getElementById('llm-settings').style.opacity = this.checked ? '0.4' : '1'; document.getElementById('llm-settings').style.pointerEvents = this.checked ? 'none' : 'auto';">
+                No-LLM Mode
+            </label>
+            <small style="color: var(--ink-faded); font-size: 0.8rem;">Disable AI generation. The UI becomes a structured journal for player-written entries. Data visualization pages (events, relationships, lore) are unaffected.</small>
+        </div>
+
+        <div id="llm-settings" style="{% if config.story.no_llm_mode %}opacity: 0.4; pointer-events: none;{% endif %}">
+        <div class="form-group">
             <label>LLM Provider</label>
             <select name="llm_provider">
                 <option value="claude" {% if config.llm.provider == 'claude' %}selected{% endif %}>Claude (Anthropic)</option>
@@ -76,6 +87,8 @@
             <input type="number" name="quest_narrative_max_tokens" value="{{ config.story.quest_narrative_max_tokens }}" min="256" max="4000">
             <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 1024. Narrative written when completing a quest.</small>
         </div>
+
+        </div>{# end llm-settings #}
 
         <div class="btn-row">
             <button type="submit" class="btn btn-primary">Save Settings</button>

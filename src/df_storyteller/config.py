@@ -49,6 +49,7 @@ class WatchConfig(BaseModel):
 
 
 class StoryConfig(BaseModel):
+    no_llm_mode: bool = False  # Disable AI generation, UI becomes a structured journal
     chronicle_auto_generate: bool = False
     chronicle_trigger: str = "season"  # season | manual
     narrative_style: str = "dramatic"  # dramatic | factual | humorous

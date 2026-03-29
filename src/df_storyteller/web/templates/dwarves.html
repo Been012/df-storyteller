@@ -17,7 +17,7 @@
 <div class="dwarf-grid">
     {% for dwarf in dwarves %}
     <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;">
-        <div class="dwarf-name">{{ dwarf.name }}</div>
+        <div class="dwarf-name">{{ dwarf.name }}{% if dwarf.highlight_role %} <span class="role-badge role-{{ dwarf.highlight_role }}">{{ dwarf.highlight_role }}</span>{% endif %}</div>
         <div class="dwarf-profession">
             {{ dwarf.profession }}{% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
             &middot; Age {{ dwarf.age | int }}

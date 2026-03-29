@@ -78,7 +78,7 @@
 
 {% if combat_encounters %}
 <h2 class="page-header" style="margin-top: 2rem;">Combat Log</h2>
-<p class="page-subtitle">Expand a fight to see blow-by-blow details or generate a battle report</p>
+<p class="page-subtitle">Expand a fight to see blow-by-blow details{% if not no_llm_mode %} or generate a battle report{% endif %}</p>
 
 <div class="parchment">
     {% for encounter in combat_encounters %}
@@ -124,12 +124,14 @@
             </details>
             {% endfor %}
 
+            {% if not no_llm_mode %}
             <div style="margin-top: 0.6rem;">
                 <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="writeBattleReport({{ loop.index0 }})">
                     Write Siege Report
                 </button>
                 <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
             </div>
+            {% endif %}
         </div>
     </details>
 
@@ -166,15 +168,19 @@
                         — {{ solo_reports[loop.index0].author }}
                     </div>
                 </div>
+                {% if not no_llm_mode %}
                 <button class="btn btn-secondary" style="font-size: 0.8rem; margin-top: 0.3rem;" onclick="rewriteBattleReport({{ loop.index0 }})">
                     Rewrite
                 </button>
                 <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
+                {% endif %}
                 {% else %}
+                {% if not no_llm_mode %}
                 <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="writeBattleReport({{ loop.index0 }})">
                     Write Battle Report
                 </button>
                 <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
+                {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -203,7 +209,7 @@
             <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--ink-faded); text-align: right; font-style: italic;">
                 — {{ report.author }}
             </div>
-            {% if report.encounter_index is defined %}
+            {% if report.encounter_index is defined and not no_llm_mode %}
             <button class="btn btn-secondary" style="font-size: 0.8rem; margin-top: 0.3rem;" onclick="rewriteBattleReport({{ report.encounter_index }})">
                 Rewrite
             </button>
@@ -220,10 +226,12 @@
 <p class="page-subtitle">What the dwarves have been saying and feeling</p>
 
 <div class="parchment">
+    {% if not no_llm_mode %}
     <div style="margin-bottom: 1rem;">
         <button class="btn btn-primary" id="chat-summarize-btn" onclick="summarizeChat()">Summarize with AI</button>
         <div class="story-text streaming-text" id="chat-summary" style="display: none; margin-top: 0.8rem;"></div>
     </div>
+    {% endif %}
 
     <div style="max-height: 500px; overflow-y: auto;">
         {% for chat in chat_lines %}

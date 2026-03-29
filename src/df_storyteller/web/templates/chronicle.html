@@ -46,6 +46,7 @@
     <button class="btn btn-secondary" onclick="addFortressNote()" style="padding: 0.4rem 1rem; color: var(--parchment);">Add</button>
 </div>
 
+{% if not no_llm_mode %}
 <details style="max-width: 600px; margin: 0 auto 1rem;">
     <summary style="cursor: pointer; color: var(--parchment-dark); font-size: 0.9rem; text-align: center;">
         Add context for this entry (optional)
@@ -70,15 +71,43 @@
     </div>
     <div class="divider">&loz;</div>
 </div>
+{% endif %}
+
+<!-- Manual writing area -->
+<details style="max-width: 600px; margin: 0 auto 1rem;" {% if no_llm_mode %}open{% endif %}>
+    <summary style="cursor: pointer; color: var(--parchment-dark); font-size: 0.9rem; text-align: center;">
+        {% if no_llm_mode %}Write your chronicle entry{% else %}Write your own entry{% endif %}
+    </summary>
+    <div style="margin-top: 0.5rem;">
+        <textarea id="manual-chronicle-text" rows="8" placeholder="Write your chronicle entry for this season..."
+            class="manual-textarea"></textarea>
+        <div class="btn-row" style="justify-content: center; margin-top: 0.5rem;">
+            <button class="btn btn-primary" onclick="saveManualChronicle()">Save Entry</button>
+        </div>
+    </div>
+</details>
 
 <!-- Existing journal entries -->
 {% if entries %}
     {% for entry in entries %}
-    <div class="parchment chronicle-entry">
+    <div class="parchment chronicle-entry" id="chronicle-entry-{{ loop.index0 }}">
         {% if entry.header %}
-        <h2 class="season-header">{{ entry.header }}</h2>
+        <h2 class="season-header">
+            {{ entry.header }}
+            {% if entry.is_manual %}<span class="manual-badge">Player</span>{% endif %}
+        </h2>
         {% endif %}
-        <div class="story-text">{{ entry.text | safe }}</div>
+        <div class="story-text" id="chronicle-text-{{ loop.index0 }}">{{ entry.text | safe }}</div>
+        <div style="text-align: right; margin-top: 0.5rem;">
+            <button class="btn btn-secondary" style="font-size: 0.8rem;" onclick="editChronicle({{ loop.index0 }}, '{{ entry.season }}', {{ entry.year }})">Edit</button>
+        </div>
+        <div id="chronicle-edit-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;">
+            <textarea id="chronicle-edit-text-{{ loop.index0 }}" rows="8" class="manual-textarea">{{ entry.raw_text }}</textarea>
+            <div class="btn-row" style="margin-top: 0.5rem; gap: 0.5rem;">
+                <button class="btn btn-primary" onclick="saveChronicleEdit({{ loop.index0 }}, '{{ entry.season }}', {{ entry.year }})">Save</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('chronicle-edit-{{ loop.index0 }}').style.display='none'">Cancel</button>
+            </div>
+        </div>
     </div>
     {% if not loop.last %}
     <div class="divider">&loz;</div>
@@ -88,7 +117,7 @@
     <div class="parchment">
         <p style="text-align: center; color: var(--ink-faded); font-style: italic;">
             No chronicle entries yet. Take a snapshot in DFHack
-            (<code>storyteller-begin</code>), then click "Write New Entry" to begin.
+            (<code>storyteller-begin</code>), then {% if no_llm_mode %}write your first entry below{% else %}click "Write New Entry" to begin{% endif %}.
         </p>
     </div>
 {% endif %}
@@ -154,6 +183,42 @@ function linkifyDwarfNames(text) {
         text = text.replace(regex, `<a href="/dwarves/${unitId}" class="dwarf-link">${name}</a>`);
     }
     return text;
+}
+
+function editChronicle(index, season, year) {
+    document.getElementById('chronicle-edit-' + index).style.display = 'block';
+}
+
+async function saveChronicleEdit(index, season, year) {
+    const text = document.getElementById('chronicle-edit-text-' + index).value.trim();
+    if (!text) return;
+    try {
+        const resp = await fetch('/api/chronicle/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, season, year }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
+}
+
+async function saveManualChronicle() {
+    const text = document.getElementById('manual-chronicle-text').value.trim();
+    if (!text) return;
+    try {
+        const resp = await fetch('/api/chronicle/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        if (!resp.ok) throw new Error('Save failed');
+        window.location.reload();
+    } catch (err) {
+        alert('Failed to save: ' + err.message);
+    }
 }
 
 async function generateChronicle() {

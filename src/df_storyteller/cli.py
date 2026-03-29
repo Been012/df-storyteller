@@ -47,32 +47,45 @@ def init(ctx: click.Context, df_path: str | None) -> None:
     config.paths.gamelog = str(df_dir / "gamelog.txt")
     config.paths.event_dir = str(df_dir / "storyteller_events")
 
-    # 2. LLM provider
-    provider = click.prompt(
-        "LLM provider",
-        type=click.Choice(["claude", "openai", "ollama"]),
-        default="ollama",
+    # 2. Ask about AI usage
+    use_ai = click.confirm(
+        "Use AI for story generation? (You can always change this later in Settings)",
+        default=True,
     )
-    config.llm.provider = provider
 
-    # 3. Provider-specific config
-    if provider in ("claude", "openai"):
-        api_key = click.prompt("API key", hide_input=True)
-        config.llm.api_key = api_key
-    elif provider == "ollama":
-        console.print("\n[bold]Ollama setup[/bold]")
-        console.print("Make sure Ollama is installed and running ([bold]ollama serve[/bold])")
-        console.print("You can see available models with: [bold]ollama list[/bold]")
-        ollama_model = click.prompt(
-            "Ollama model name",
-            default="llama3",
+    if not use_ai:
+        config.story.no_llm_mode = True
+        console.print("[dim]No-LLM mode enabled. The web UI will be a structured journal for player-written entries.[/dim]")
+        console.print("[dim]You can enable AI later in Settings.[/dim]")
+    else:
+        config.story.no_llm_mode = False
+
+        # 3. LLM provider
+        provider = click.prompt(
+            "LLM provider",
+            type=click.Choice(["claude", "openai", "ollama"]),
+            default="ollama",
         )
-        config.llm.ollama.model = ollama_model
-        ollama_url = click.prompt(
-            "Ollama URL",
-            default="http://localhost:11434",
-        )
-        config.llm.ollama.base_url = ollama_url
+        config.llm.provider = provider
+
+        # 4. Provider-specific config
+        if provider in ("claude", "openai"):
+            api_key = click.prompt("API key", hide_input=True)
+            config.llm.api_key = api_key
+        elif provider == "ollama":
+            console.print("\n[bold]Ollama setup[/bold]")
+            console.print("Make sure Ollama is installed and running ([bold]ollama serve[/bold])")
+            console.print("You can see available models with: [bold]ollama list[/bold]")
+            ollama_model = click.prompt(
+                "Ollama model name",
+                default="llama3",
+            )
+            config.llm.ollama.model = ollama_model
+            ollama_url = click.prompt(
+                "Ollama URL",
+                default="http://localhost:11434",
+            )
+            config.llm.ollama.base_url = ollama_url
 
     # 4. Save config
     save_config(config)
