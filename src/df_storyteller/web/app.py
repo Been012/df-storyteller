@@ -533,8 +533,22 @@ async def dwarves_page(request: Request):
             "highlight_role": highlights_map.get(dwarf.unit_id, ""),
         })
 
+    # Build visitors list from metadata
+    visitors = []
+    for v in metadata.get("visitors", []):
+        name = v.get("name", "Unknown")
+        hfid = v.get("hist_figure_id")
+        visitors.append({
+            "name": name,
+            "profession": v.get("profession", ""),
+            "race": v.get("race", "").replace("_", " ").title(),
+            "age": v.get("age", 0),
+            "role": v.get("role", "visitor"),
+            "hfid": hfid if hfid and hfid > 0 else None,
+        })
+
     return templates.TemplateResponse(request=request, name="dwarves.html", context={
-        **ctx, "dwarves": dwarves,
+        **ctx, "dwarves": dwarves, "visitors": visitors,
     })
 
 

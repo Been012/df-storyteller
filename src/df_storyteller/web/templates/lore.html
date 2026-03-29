@@ -257,6 +257,36 @@ searchResults.style.display = 'none';
 document.addEventListener('DOMContentLoaded', () => {
     const searchBar = document.getElementById('lore-search');
     if (searchBar) searchBar.parentElement.after(searchResults);
+
+    // Auto-search from URL param (e.g. /lore?search=Urist)
+    const params = new URLSearchParams(window.location.search);
+    const autoSearch = params.get('search');
+    if (autoSearch && searchBar) {
+        searchBar.value = autoSearch;
+        filterLore(autoSearch);
+    }
+
+    // Auto-show figure detail from URL param (e.g. /lore?hfid=123)
+    const hfid = params.get('hfid');
+    if (hfid) {
+        fetch('/api/lore/detail?entity_type=figure&entity_id=' + hfid)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) return;
+                let html = '<div class="parchment" style="max-width: 600px; margin: 1rem auto;">';
+                html += '<h3 style="color: var(--gold);">' + (data.name || 'Historical Figure') + '</h3>';
+                if (data.fields) {
+                    for (const f of data.fields) {
+                        html += '<p><strong style="color: var(--gold-dark);">' + f.label + ':</strong> ' + f.value + '</p>';
+                    }
+                }
+                html += '</div>';
+                const container = document.createElement('div');
+                container.innerHTML = html;
+                document.querySelector('.page-header').after(container);
+            })
+            .catch(() => {});
+    }
 });
 
 function filterLore(query) {

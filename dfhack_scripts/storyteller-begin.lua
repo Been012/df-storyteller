@@ -197,6 +197,7 @@ local function serialize_unit(unit)
 
     local data = {
         unit_id = unit.id,
+        hist_figure_id = unit.hist_figure_id or -1,
         name = safe_unit_name(unit),
         race = df.creature_raw.find(unit.race).creature_id,
         profession = dfhack.units.getProfessionName(unit),
@@ -584,14 +585,14 @@ for _, unit in ipairs(df.global.world.units.active) do
     if dfhack.units.isAlive(unit) then
         local ok, data = pcall(serialize_unit, unit)
         if ok then
-            if unit.race == player_race then
-                data.role = 'citizen'
-                table.insert(citizens, data)
-            elseif dfhack.units.isAnimal(unit) or dfhack.units.isWildlife(unit) then
+            if dfhack.units.isAnimal(unit) or dfhack.units.isWildlife(unit) then
                 data.role = 'animal'
                 table.insert(animals, data)
-            elseif dfhack.units.isVisiting(unit) then
-                -- Actual visitors: merchants, diplomats, travelers
+            elseif unit.race == player_race and dfhack.units.isFortControlled(unit) then
+                data.role = 'citizen'
+                table.insert(citizens, data)
+            elseif dfhack.units.isVisiting(unit) or (unit.race == player_race and not dfhack.units.isFortControlled(unit)) then
+                -- Visitors: merchants, diplomats, travelers, or same-race non-fort units
                 data.role = 'visitor'
                 table.insert(visitors, data)
             end

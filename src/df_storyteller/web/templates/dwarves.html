@@ -35,4 +35,77 @@
     </p>
 </div>
 {% endif %}
+
+{% if visitors %}
+<h2 class="page-header" style="margin-top: 2rem;">Visitors</h2>
+<p class="page-subtitle">{{ visitors | length }} traveler{{ 's' if visitors | length != 1 else '' }} currently at the fortress</p>
+
+<div class="dwarf-grid">
+    {% for v in visitors %}
+    <div class="dwarf-card" style="opacity: 0.85;">
+        <div class="dwarf-name">{{ v.name }}</div>
+        <div class="dwarf-profession">
+            {{ v.profession }}{% if v.race %} &middot; {{ v.race }}{% endif %}
+            &middot; Age {{ v.age | int }}
+        </div>
+        {% if v.hfid %}
+        <div style="margin-top: 0.4rem; font-size: 0.8rem; display: flex; gap: 0.5rem;">
+            <a href="#" onclick="showVisitorDetail({{ v.hfid }}, this); return false;" style="color: var(--gold-dark); text-decoration: none;">Details</a>
+            <a href="/lore?hfid={{ v.hfid }}" style="color: var(--gold-dark); text-decoration: none;">View in Lore</a>
+        </div>
+        <div class="visitor-detail" id="visitor-detail-{{ v.hfid }}" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dotted var(--border); font-size: 0.85rem; color: var(--ink-light);"></div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function showVisitorDetail(hfid, linkEl) {
+    const detailEl = document.getElementById('visitor-detail-' + hfid);
+    if (!detailEl) return;
+
+    // Toggle if already showing
+    if (detailEl.style.display === 'block') {
+        detailEl.style.display = 'none';
+        return;
+    }
+
+    // Already loaded?
+    if (detailEl.dataset.loaded) {
+        detailEl.style.display = 'block';
+        return;
+    }
+
+    detailEl.innerHTML = '<em>Loading...</em>';
+    detailEl.style.display = 'block';
+
+    try {
+        const resp = await fetch('/api/lore/detail?entity_type=figure&entity_id=' + hfid);
+        if (!resp.ok) {
+            detailEl.innerHTML = '<em>Legends data not available. Export legends in DFHack for visitor details.</em>';
+            return;
+        }
+        const data = await resp.json();
+        if (data.error) {
+            detailEl.innerHTML = '<em>Figure not found in legends data.</em>';
+            return;
+        }
+
+        let html = '';
+        if (data.name) html += '<strong>' + data.name + '</strong><br>';
+        if (data.fields) {
+            for (const f of data.fields) {
+                html += '<span style="color: var(--gold-dark);">' + f.label + ':</span> ' + f.value + '<br>';
+            }
+        }
+        detailEl.innerHTML = html || '<em>No details available.</em>';
+        detailEl.dataset.loaded = 'true';
+    } catch (err) {
+        detailEl.innerHTML = '<em>Failed to load details.</em>';
+    }
+}
+</script>
 {% endblock %}
