@@ -28,11 +28,23 @@ from df_storyteller.schema.events import (
     GameEvent,
     JobData,
     JobEvent,
+    MigrantArrivedData,
+    MigrantArrivedEvent,
+    MigrationWaveData,
+    MigrationWaveEvent,
+    MilitaryChangeData,
+    MilitaryChangeEvent,
     MoodData,
     MoodEvent,
+    NobleAppointmentData,
+    NobleAppointmentEvent,
+    ProfessionChangeData,
+    ProfessionChangeEvent,
     Season,
     SeasonChangeData,
     SeasonChangeEvent,
+    StressChangeData,
+    StressChangeEvent,
     UnitRef,
     Location,
 )
@@ -181,16 +193,66 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                 ),
             )
 
-        case "profession_change" | "noble_appointment" | "military_change" | "stress_change" | "migrant_arrived" | "migration_wave":
-            # Change-detection events — store with their proper type and raw dict data
-            try:
-                etype = EventType(event_type_str)
-            except ValueError:
-                etype = EventType.ANNOUNCEMENT
-            return GameEvent(
-                event_type=etype,
+        case "profession_change":
+            unit_data = data.get("unit", {})
+            return ProfessionChangeEvent(
                 **base_kwargs,
-                data=data,
+                data=ProfessionChangeData(
+                    unit=_parse_unit_ref(unit_data) if isinstance(unit_data, dict) else UnitRef(unit_id=0, name="Unknown"),
+                    old_profession=data.get("old_profession", ""),
+                    new_profession=data.get("new_profession", ""),
+                ),
+            )
+
+        case "noble_appointment":
+            unit_data = data.get("unit", {})
+            positions = data.get("positions", [])
+            return NobleAppointmentEvent(
+                **base_kwargs,
+                data=NobleAppointmentData(
+                    unit=_parse_unit_ref(unit_data) if isinstance(unit_data, dict) else UnitRef(unit_id=0, name="Unknown"),
+                    positions=positions if isinstance(positions, list) else [str(positions)],
+                ),
+            )
+
+        case "military_change":
+            unit_data = data.get("unit", {})
+            return MilitaryChangeEvent(
+                **base_kwargs,
+                data=MilitaryChangeData(
+                    unit=_parse_unit_ref(unit_data) if isinstance(unit_data, dict) else UnitRef(unit_id=0, name="Unknown"),
+                    squad_name=data.get("squad_name", ""),
+                    squad_id=data.get("squad_id", -1),
+                ),
+            )
+
+        case "stress_change":
+            unit_data = data.get("unit", {})
+            return StressChangeEvent(
+                **base_kwargs,
+                data=StressChangeData(
+                    unit=_parse_unit_ref(unit_data) if isinstance(unit_data, dict) else UnitRef(unit_id=0, name="Unknown"),
+                    old_stress=data.get("old_stress", ""),
+                    new_stress=data.get("new_stress", ""),
+                ),
+            )
+
+        case "migrant_arrived":
+            unit_data = data.get("unit", {})
+            return MigrantArrivedEvent(
+                **base_kwargs,
+                data=MigrantArrivedData(
+                    unit=_parse_unit_ref(unit_data) if isinstance(unit_data, dict) else UnitRef(unit_id=0, name="Unknown"),
+                ),
+            )
+
+        case "migration_wave":
+            return MigrationWaveEvent(
+                **base_kwargs,
+                data=MigrationWaveData(
+                    new_arrivals=data.get("new_arrivals", 0),
+                    total_population=data.get("total_population", 0),
+                ),
             )
 
         case _:

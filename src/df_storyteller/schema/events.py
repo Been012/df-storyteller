@@ -184,3 +184,65 @@ class SeasonChangeData(BaseModel):
 class SeasonChangeEvent(GameEvent):
     event_type: Literal[EventType.SEASON_CHANGE] = EventType.SEASON_CHANGE
     data: SeasonChangeData  # type: ignore[assignment]
+
+
+class ProfessionChangeData(BaseModel):
+    unit: UnitRef
+    old_profession: str
+    new_profession: str
+
+
+class ProfessionChangeEvent(GameEvent):
+    event_type: Literal[EventType.PROFESSION_CHANGE] = EventType.PROFESSION_CHANGE
+    data: ProfessionChangeData  # type: ignore[assignment]
+
+
+class NobleAppointmentData(BaseModel):
+    unit: UnitRef
+    positions: list[str] = Field(default_factory=list)
+
+
+class NobleAppointmentEvent(GameEvent):
+    event_type: Literal[EventType.NOBLE_APPOINTMENT] = EventType.NOBLE_APPOINTMENT
+    data: NobleAppointmentData  # type: ignore[assignment]
+
+
+class MilitaryChangeData(BaseModel):
+    unit: UnitRef
+    squad_name: str = ""
+    squad_id: int = -1
+
+
+class MilitaryChangeEvent(GameEvent):
+    event_type: Literal[EventType.MILITARY_CHANGE] = EventType.MILITARY_CHANGE
+    data: MilitaryChangeData  # type: ignore[assignment]
+
+
+class StressChangeData(BaseModel):
+    unit: UnitRef
+    old_stress: str
+    new_stress: str
+
+
+class StressChangeEvent(GameEvent):
+    event_type: Literal[EventType.STRESS_CHANGE] = EventType.STRESS_CHANGE
+    data: StressChangeData  # type: ignore[assignment]
+
+
+class MigrantArrivedData(BaseModel):
+    unit: UnitRef
+
+
+class MigrantArrivedEvent(GameEvent):
+    event_type: Literal[EventType.MIGRANT_ARRIVED] = EventType.MIGRANT_ARRIVED
+    data: MigrantArrivedData  # type: ignore[assignment]
+
+
+class MigrationWaveData(BaseModel):
+    new_arrivals: int = 0
+    total_population: int = 0
+
+
+class MigrationWaveEvent(GameEvent):
+    event_type: Literal[EventType.MIGRATION_WAVE] = EventType.MIGRATION_WAVE
+    data: MigrationWaveData  # type: ignore[assignment]

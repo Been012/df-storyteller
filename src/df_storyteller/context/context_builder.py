@@ -12,7 +12,17 @@ from dataclasses import dataclass, field
 from df_storyteller.context.character_tracker import CharacterTracker
 from df_storyteller.context.event_store import EventStore
 from df_storyteller.context.world_lore import WorldLore
-from df_storyteller.schema.events import EventType, GameEvent, Season
+from df_storyteller.schema.events import (
+    EventType,
+    GameEvent,
+    MigrantArrivedData,
+    MigrationWaveData,
+    MilitaryChangeData,
+    NobleAppointmentData,
+    ProfessionChangeData,
+    Season,
+    StressChangeData,
+)
 
 
 @dataclass
@@ -84,30 +94,28 @@ def _format_event(event: GameEvent) -> str:
     if hasattr(data, "building_type"):
         return f"{prefix} BUILDING: {data.building_type} constructed"
 
-    # Dict-based events (new change-detection events from Lua)
+    # Typed change-detection events
+    def _strip_profession(name: str) -> str:
+        """Strip profession suffix from name (e.g. 'Urist McName "Nick", Miner' -> 'Urist McName "Nick"')."""
+        return name.rsplit(", ", 1)[0] if ", " in name else name
+
+    if isinstance(data, ProfessionChangeData):
+        return f"{prefix} TITLE: {_strip_profession(data.unit.name)} changed from {data.old_profession} to {data.new_profession}"
+    if isinstance(data, NobleAppointmentData):
+        return f"{prefix} APPOINTMENT: {_strip_profession(data.unit.name)} appointed as {', '.join(data.positions)}"
+    if isinstance(data, MilitaryChangeData):
+        return f"{prefix} MILITARY: {_strip_profession(data.unit.name)} joined {data.squad_name or 'a squad'}"
+    if isinstance(data, StressChangeData):
+        return f"{prefix} MOOD SHIFT: {_strip_profession(data.unit.name)} went from {data.old_stress} to {data.new_stress}"
+    if isinstance(data, MigrantArrivedData):
+        return f"{prefix} MIGRANT: {_strip_profession(data.unit.name)} arrived at the fortress"
+    if isinstance(data, MigrationWaveData):
+        return f"{prefix} MIGRANTS: {data.new_arrivals} new dwarves arrived (population: {data.total_population})"
+
+    # Fallback for any remaining dict-based events
     if isinstance(data, dict):
-        etype = event.event_type.value
-        unit_name = data.get("unit", {}).get("name", "") if isinstance(data.get("unit"), dict) else ""
-        # Strip profession suffix from name (e.g. 'Urist McName "Nick", Miner' -> 'Urist McName "Nick"')
-        if ", " in unit_name:
-            unit_name = unit_name.rsplit(", ", 1)[0]
-
-        if etype == "profession_change":
-            return f"{prefix} TITLE: {unit_name} changed from {data.get('old_profession', '?')} to {data.get('new_profession', '?')}"
-        if etype == "noble_appointment":
-            positions = data.get("positions", [])
-            return f"{prefix} APPOINTMENT: {unit_name} appointed as {', '.join(positions)}"
-        if etype == "military_change":
-            return f"{prefix} MILITARY: {unit_name} joined {data.get('squad_name', 'a squad')}"
-        if etype == "stress_change":
-            return f"{prefix} MOOD SHIFT: {unit_name} went from {data.get('old_stress', '?')} to {data.get('new_stress', '?')}"
-        if etype == "migrant_arrived":
-            return f"{prefix} MIGRANT: {unit_name} arrived at the fortress"
-        if etype == "migration_wave":
-            return f"{prefix} MIGRANTS: {data.get('new_arrivals', '?')} new dwarves arrived (population: {data.get('total_population', '?')})"
-
         raw = data.get("raw_text", "")
-        return f"{prefix} {etype}: {raw}" if raw else f"{prefix} {etype}"
+        return f"{prefix} {event.event_type.value}: {raw}" if raw else f"{prefix} {event.event_type.value}"
 
     return f"{prefix} {event.event_type.value}"
 
