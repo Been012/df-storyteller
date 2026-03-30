@@ -72,6 +72,7 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
 
     return Dwarf(
         unit_id=citizen.get("unit_id", 0),
+        hist_figure_id=citizen.get("hist_figure_id", -1),
         name=citizen.get("name", "Unknown"),
         profession=citizen.get("profession", ""),
         race=citizen.get("race", "DWARF"),

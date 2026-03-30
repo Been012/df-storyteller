@@ -24,6 +24,11 @@
                 Mood: {{ dwarf.stress_desc }}
             </div>
             {% endif %}
+            {% if dwarf.hist_figure_id %}
+            <div style="margin-top: 0.4rem;">
+                <a href="/lore/figure/{{ dwarf.hist_figure_id }}" class="lore-link" style="font-size: 0.85rem;">View in Legends &rarr;</a>
+            </div>
+            {% endif %}
             <div style="margin-top: 0.5rem;">
                 <select id="dwarf-role" onchange="setHighlight({{ dwarf.unit_id }}, '{{ dwarf.name | replace("'", "\\'") }}', this.value)"
                     style="font-family: 'Crimson Text', serif; padding: 0.3rem; border: 1px solid var(--border); border-radius: 3px; background: rgba(244,232,193,0.1); color: var(--parchment); font-size: 0.85rem;">

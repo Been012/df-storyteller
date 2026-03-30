@@ -792,6 +792,7 @@ async def dwarf_detail_page(request: Request, unit_id: int):
 
     dwarf_data = {
         "unit_id": dwarf.unit_id,
+        "hist_figure_id": dwarf.hist_figure_id if dwarf.hist_figure_id > 0 else None,
         "name": dwarf.name,
         "profession": dwarf.profession,
         "age": dwarf.age,

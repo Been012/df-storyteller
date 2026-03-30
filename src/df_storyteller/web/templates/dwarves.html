@@ -51,7 +51,7 @@
         {% if v.hfid %}
         <div style="margin-top: 0.4rem; font-size: 0.8rem; display: flex; gap: 0.5rem;">
             <a href="#" onclick="showVisitorDetail({{ v.hfid }}, this); return false;" style="color: var(--gold-dark); text-decoration: none;">Details</a>
-            <a href="/lore?hfid={{ v.hfid }}" style="color: var(--gold-dark); text-decoration: none;">View in Lore</a>
+            <a href="/lore/figure/{{ v.hfid }}" style="color: var(--gold-dark); text-decoration: none;">View in Legends</a>
         </div>
         <div class="visitor-detail" id="visitor-detail-{{ v.hfid }}" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dotted var(--border); font-size: 0.85rem; color: var(--ink-light);"></div>
         {% endif %}

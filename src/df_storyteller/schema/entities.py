@@ -23,6 +23,7 @@ class Dwarf(BaseModel):
     """A living fortress citizen tracked for narrative purposes."""
 
     unit_id: int
+    hist_figure_id: int = -1  # Links to historical figure in legends
     name: str
     profession: str = ""
     race: str = "DWARF"
