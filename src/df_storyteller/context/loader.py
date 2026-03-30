@@ -361,24 +361,50 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 for uid in event_store._extract_unit_ids(event):
                     character_tracker.add_event(uid, event)
 
-    # 3. Parse gamelog.txt for combat and other events (current session only)
-    # The session marker (** Loading Fortress ** / ** Starting New Outpost **)
-    # already scopes to the current fortress — DF writes a new marker each time
-    # a fortress is loaded, so we only see events from the active fortress.
+    # 3. Parse gamelog.txt for combat and other events.
+    # Loads saved history from previous sessions + current session lines,
+    # deduplicates, and persists the combined set for next time.
     gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
     if gamelog_path and gamelog_path.exists():
         from df_storyteller.ingestion.gamelog_parser import GamelogParser
         from df_storyteller.schema.events import Season as SeasonEnum
-        gamelog_lines = _read_current_session_gamelog(gamelog_path)
+
+        fortress_dir = get_fortress_output_dir(config, metadata)
+        history_file = fortress_dir / "gamelog_history.txt"
+
+        # Load saved lines from previous sessions
+        saved_lines: list[str] = []
+        if history_file.exists():
+            try:
+                with open(history_file, encoding="utf-8", errors="replace") as f:
+                    saved_lines = [l.rstrip("\r\n") for l in f if l.strip()]
+            except OSError:
+                pass
+
+        # Read current session lines from gamelog.txt
+        current_lines = _read_current_session_gamelog(gamelog_path)
+
+        # Merge: saved history + current session, deduplicate while preserving order
+        saved_set = set(saved_lines)
+        new_lines = [l for l in current_lines if l not in saved_set]
+        all_lines = saved_lines + new_lines
+
+        # Persist the combined lines for next session
+        if new_lines:
+            try:
+                with open(history_file, "w", encoding="utf-8") as f:
+                    f.write("\n".join(all_lines) + "\n")
+            except OSError as e:
+                logger.warning("Failed to save gamelog history: %s", e)
+
+        # Parse all lines
         gamelog_parser = GamelogParser()
         gamelog_parser.set_year(metadata.get("year", 0))
-        # Set current season from snapshot so events before the first season
-        # change line in this session get the correct season
         try:
             gamelog_parser.set_season(SeasonEnum(metadata.get("season", "spring")))
         except ValueError:
             pass
-        gamelog_events = list(gamelog_parser.parse_lines(gamelog_lines))
+        gamelog_events = list(gamelog_parser.parse_lines(all_lines))
         # Assign incrementing ticks so gamelog events sort after DFHack events
         # within the same season (DFHack ticks are real game ticks, gamelog has 0)
         max_tick = max((e.game_tick for e in event_store.recent_events(50)), default=0)
@@ -390,7 +416,10 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             event_store.add(event)
             if event.event_type == EventType.COMBAT:
                 combat_count += 1
-        logger.info("Gamelog parsed: %d events (%d combat) from current session (%d lines)", len(gamelog_events), combat_count, len(gamelog_lines))
+        logger.info(
+            "Gamelog parsed: %d events (%d combat) from %d lines (%d saved + %d new)",
+            len(gamelog_events), combat_count, len(all_lines), len(saved_lines), len(new_lines),
+        )
 
     # 4. Load legends if available (skip if told to — expensive for large files)
     if skip_legends:
