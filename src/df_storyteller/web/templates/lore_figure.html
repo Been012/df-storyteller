@@ -106,7 +106,7 @@
         <div class="bio-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
             <div>
                 <h3>Family Tree</h3>
-                <div id="family-tree" style="height: 280px; border: 1px solid var(--border); border-radius: 4px; background: rgba(244,232,193,0.3);"></div>
+                <div id="family-tree" style="height: 350px; border: 1px solid var(--border); border-radius: 4px; background: rgba(244,232,193,0.3);"></div>
                 <p id="family-tree-empty" style="display: none; color: var(--ink-faded); font-style: italic; font-size: 0.9rem;">No family connections found.</p>
             </div>
             {% if event_count > 5 %}
@@ -232,17 +232,20 @@ fetch('/api/lore/graph/family/{{ figure.hf_id }}')
         const edges = new vis.DataSet(data.edges.map(e => ({
             from: e.from,
             to: e.to,
-            label: e.label === 'spouse' ? '♥' : '',
+            label: e.label === 'spouse' ? '\u2665' : '',
             dashes: e.label === 'spouse',
-            color: { color: '#b8a078', highlight: '#8a6d3b' },
-            arrows: e.label === 'parent' ? { to: { enabled: true, scaleFactor: 0.5 } } : {},
-            width: e.label === 'spouse' ? 2 : 1,
+            color: { color: e.label === 'spouse' ? '#c98b8b' : 'rgba(184,160,120,0.5)', highlight: '#8a6d3b' },
+            arrows: e.label === 'parent' ? { to: { enabled: true, scaleFactor: 0.3, type: 'arrow' } } : {},
+            width: e.label === 'spouse' ? 1.5 : 1,
+            smooth: e.label === 'parent' ? { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.5 } : false,
+            font: { size: 10, color: '#c98b8b' },
         })));
 
         const network = new vis.Network(container, { nodes, edges }, {
-            layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 80, nodeSpacing: 120 } },
+            layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 90, nodeSpacing: 140, treeSpacing: 200, parentCentralization: true, blockShifting: true, edgeMinimization: true } },
             physics: false,
             interaction: { hover: true },
+            edges: { smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.5 } },
         });
 
         network.on('click', params => {

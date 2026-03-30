@@ -112,12 +112,13 @@ function loadFamilyTree() {
                 data.edges.map(e => ({
                     from: e.source,
                     to: e.target,
-                    color: { color: e.type === 'spouse' ? '#d86a6a' : '#6aaa6a' },
+                    color: { color: e.type === 'spouse' ? '#c98b8b' : 'rgba(106,170,106,0.6)' },
                     dashes: e.type === 'spouse',
-                    arrows: e.type === 'parent' ? { to: { enabled: true, scaleFactor: 0.5 } } : {},
-                    width: e.type === 'spouse' ? 2 : 1.5,
+                    arrows: e.type === 'parent' ? { to: { enabled: true, scaleFactor: 0.3, type: 'arrow' } } : {},
+                    width: e.type === 'spouse' ? 1.5 : 1,
+                    smooth: e.type === 'parent' ? { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.5 } : false,
                     label: e.type === 'spouse' ? String.fromCharCode(9829) : '',
-                    font: { size: 10, color: '#d86a6a' },
+                    font: { size: 10, color: '#c98b8b' },
                 }))
             );
 
@@ -127,13 +128,17 @@ function loadFamilyTree() {
                     hierarchical: {
                         direction: 'UD',
                         sortMethod: 'directed',
-                        levelSeparation: 100,
-                        nodeSpacing: 150,
+                        levelSeparation: 90,
+                        nodeSpacing: 140,
+                        treeSpacing: 200,
                         parentCentralization: true,
+                        blockShifting: true,
+                        edgeMinimization: true,
                     }
                 },
                 physics: false,
                 interaction: { hover: true },
+                edges: { smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.5 } },
             });
 
             network.on('click', params => {
