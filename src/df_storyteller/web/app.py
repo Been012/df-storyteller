@@ -3995,6 +3995,165 @@ async def api_lore_stats_world():
     }
 
 
+@app.get("/api/lore/stats/timeline")
+async def api_lore_stats_timeline():
+    """Timeline data for vis-timeline: eras, wars, conflicts, notable deaths."""
+    config = _get_config()
+    _, _, world_lore, _ = _load_game_state_safe(config, skip_legends=False)
+
+    if not world_lore.is_loaded or not world_lore._legends:
+        return JSONResponse({"error": "Legends not loaded"}, status_code=503)
+
+    legends = world_lore._legends
+
+    groups = [
+        {"id": "eras", "content": "Eras", "order": 1},
+        {"id": "wars", "content": "Wars", "order": 2},
+        {"id": "conflicts", "content": "Conflicts", "order": 3},
+        {"id": "deaths", "content": "Notable Deaths", "order": 4},
+    ]
+
+    items: list[dict[str, Any]] = []
+    item_id = 0
+
+    # Eras — background range items, infer end_year from next era
+    sorted_eras = sorted(
+        legends.historical_eras,
+        key=lambda e: int(e.get("start_year", "0")),
+    )
+    for i, era in enumerate(sorted_eras):
+        name = era.get("name", "")
+        start = era.get("start_year", "")
+        if not name or not start:
+            continue
+        end = era.get("end_year", "")
+        if not end and i + 1 < len(sorted_eras):
+            end = sorted_eras[i + 1].get("start_year", "")
+        items.append({
+            "id": item_id,
+            "group": "eras",
+            "content": name,
+            "start": start,
+            "end": end or None,
+            "type": "background",
+            "className": "timeline-era",
+        })
+        item_id += 1
+
+    # Wars — range items
+    for ec in legends.event_collections:
+        if ec.get("type") != "war":
+            continue
+        name = ec.get("name", "Unknown War")
+        start = ec.get("start_year", "")
+        end = ec.get("end_year", "")
+        if not start:
+            continue
+        ec_id = ec.get("id", "")
+        has_duration = end and end != start
+        items.append({
+            "id": item_id,
+            "group": "wars",
+            "content": name,
+            "start": start,
+            "end": end if has_duration else None,
+            "type": "range" if has_duration else "point",
+            "className": "timeline-war",
+            "link": f"/lore/war/{ec_id}" if ec_id else None,
+            "subtype": "war",
+        })
+        item_id += 1
+
+    # Conflicts — aggregate by year per subtype to avoid overwhelming the timeline
+    # Named events (conquests, duels, coups, purges) are few enough to show individually.
+    # Beast attacks and persecutions are aggregated by year.
+    from collections import defaultdict
+
+    individual_conflict_sources = [
+        (legends.site_conquests, "site_conquest", "Conquest"),
+        (legends.duels, "duel", "Duel"),
+        (legends.entity_overthrown, "coup", "Coup"),
+        (legends.purges, "purge", "Purge"),
+    ]
+    for source_list, subtype, default_name in individual_conflict_sources:
+        for item in source_list:
+            start = item.get("start_year", "")
+            if not start:
+                continue
+            end = item.get("end_year", "")
+            ec_id = item.get("id", "")
+            has_duration = end and end != start
+            items.append({
+                "id": item_id,
+                "group": "conflicts",
+                "content": item.get("name", default_name),
+                "start": start,
+                "end": end if has_duration else None,
+                "type": "range" if has_duration else "point",
+                "className": f"timeline-{subtype}",
+                "link": f"/lore/event/{ec_id}" if ec_id else None,
+                "subtype": subtype,
+            })
+            item_id += 1
+
+    # Beast attacks — aggregate by year with count
+    beast_by_year: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in legends.beast_attacks:
+        start = item.get("start_year", "")
+        if start:
+            beast_by_year[start].append(item)
+    for year, attacks in sorted(beast_by_year.items(), key=lambda x: int(x[0])):
+        items.append({
+            "id": item_id,
+            "group": "conflicts",
+            "content": f"{len(attacks)} beast attack{'s' if len(attacks) > 1 else ''}",
+            "start": year,
+            "type": "point",
+            "subtype": "beast_attack",
+            "count": len(attacks),
+        })
+        item_id += 1
+
+    # Persecutions — aggregate by year with count
+    persc_by_year: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in legends.persecutions:
+        start = item.get("start_year", "")
+        if start:
+            persc_by_year[start].append(item)
+    for year, perscs in sorted(persc_by_year.items(), key=lambda x: int(x[0])):
+        items.append({
+            "id": item_id,
+            "group": "conflicts",
+            "content": f"{len(perscs)} persecution{'s' if len(perscs) > 1 else ''}",
+            "start": year,
+            "type": "point",
+            "subtype": "persecution",
+            "count": len(perscs),
+        })
+        item_id += 1
+
+    # Notable deaths — aggregate by year with actual count
+    deaths_by_year: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for death in legends.notable_deaths:
+        year = death.get("year", "")
+        if year:
+            deaths_by_year[year].append(death)
+
+    for year, deaths in sorted(deaths_by_year.items(), key=lambda x: int(x[0])):
+        items.append({
+            "id": item_id,
+            "group": "deaths",
+            "content": f"{len(deaths)} notable death{'s' if len(deaths) > 1 else ''}",
+            "start": year,
+            "type": "point",
+            "subtype": "death",
+            "count": len(deaths),
+        })
+        item_id += 1
+
+    return {"groups": groups, "items": items}
+
+
 @app.get("/api/lore/stats/figure/{hf_id}")
 async def api_lore_stats_figure(hf_id: int):
     """Per-figure event timeline for charts."""

@@ -73,6 +73,7 @@
 .legends-tab-content.active {
     display: block;
 }
+
 </style>
 
 <!-- Search bar -->
@@ -230,6 +231,15 @@
             <h3 style="text-align: center; font-size: 0.95rem;">Event Types</h3>
             <canvas id="types-chart"></canvas>
         </div>
+    </div>
+</div>
+
+<!-- World Timeline -->
+<div class="parchment" id="world-timeline-container" style="display: none;">
+    <h2>World Timeline</h2>
+    <p style="text-align: center; font-size: 0.85rem; color: var(--ink-light); margin-bottom: 0.8rem;">Events by decade across world history</p>
+    <div style="position: relative; width: 100%; height: 350px;">
+        <canvas id="world-timeline-chart"></canvas>
     </div>
 </div>
 
@@ -794,6 +804,167 @@ fetch('/api/lore/stats/world')
         }
     })
     .catch(() => {});
+
+// World Timeline (Chart.js stacked bar)
+(function() {
+    const canvas = document.getElementById('world-timeline-chart');
+    if (!canvas) return;
+
+    fetch('/api/lore/stats/timeline')
+        .then(r => r.json())
+        .then(data => {
+            if (data.error || !data.items || !data.items.length) return;
+            document.getElementById('world-timeline-container').style.display = '';
+
+            // Defer chart creation so browser lays out the now-visible container
+            setTimeout(() => { createTimelineChart(data); }, 50);
+        })
+        .catch(() => {});
+
+    function createTimelineChart(data) {
+            // Find year range
+            let minY = Infinity, maxY = -Infinity;
+            for (const it of data.items) {
+                const s = parseInt(it.start);
+                if (s < minY) minY = s;
+                if (s > maxY) maxY = s;
+                if (it.end) { const e = parseInt(it.end); if (e > maxY) maxY = e; }
+            }
+            minY = Math.max(0, minY);
+
+            // Choose bucket size based on span
+            const span = maxY - minY;
+            const bucket = span > 500 ? 50 : span > 200 ? 20 : 10;
+
+            // Build decade labels
+            const startBucket = Math.floor(minY / bucket) * bucket;
+            const endBucket = Math.ceil(maxY / bucket) * bucket;
+            const labels = [];
+            for (let b = startBucket; b <= endBucket; b += bucket) {
+                labels.push(b);
+            }
+
+            // Category definitions
+            const categories = [
+                { key: 'war', label: 'Wars', color: '#8b2500', match: i => i.subtype === 'war' },
+                { key: 'beast_attack', label: 'Beast Attacks', color: '#2d5a27', match: i => i.subtype === 'beast_attack' },
+                { key: 'site_conquest', label: 'Conquests', color: '#4a3728', match: i => i.subtype === 'site_conquest' },
+                { key: 'persecution', label: 'Persecutions', color: '#7a6558', match: i => i.subtype === 'persecution' },
+                { key: 'duel', label: 'Duels', color: '#a83a1a', match: i => i.subtype === 'duel' },
+                { key: 'coup', label: 'Coups', color: '#5c3d2e', match: i => i.subtype === 'coup' },
+                { key: 'purge', label: 'Purges', color: '#2c1810', match: i => i.subtype === 'purge' },
+                { key: 'death', label: 'Notable Deaths', color: '#8a6d3b', match: i => i.subtype === 'death' },
+            ];
+
+            // Bucket items (skip eras — they're background annotations)
+            const nonEraItems = data.items.filter(i => i.group !== 'eras');
+            const datasets = categories.map(cat => {
+                const counts = new Array(labels.length).fill(0);
+                nonEraItems.filter(cat.match).forEach(it => {
+                    const yr = parseInt(it.start);
+                    const idx = Math.floor((yr - startBucket) / bucket);
+                    const n = it.count || 1; // use actual count if available
+                    if (idx >= 0 && idx < counts.length) counts[idx] += n;
+                    // For range items, also count in subsequent buckets
+                    if (it.end) {
+                        const endYr = parseInt(it.end);
+                        for (let b = idx + 1; b < counts.length && labels[b] <= endYr; b++) {
+                            counts[b] += n;
+                        }
+                    }
+                });
+                return {
+                    label: cat.label,
+                    data: counts,
+                    backgroundColor: cat.color,
+                    borderWidth: 0,
+                    barPercentage: 0.9,
+                    categoryPercentage: 0.95,
+                };
+            });
+
+            // Build era annotations for background shading
+            const eras = data.items.filter(i => i.group === 'eras');
+            const eraColors = ['rgba(201,168,76,0.12)', 'rgba(139,109,59,0.10)', 'rgba(168,128,60,0.12)'];
+            const annotations = {};
+            eras.forEach((era, i) => {
+                const eStart = parseInt(era.start);
+                const eEnd = era.end ? parseInt(era.end) : maxY;
+                // Map era years to label index positions
+                const xMin = (eStart - startBucket) / bucket - 0.5;
+                const xMax = (eEnd - startBucket) / bucket - 0.5;
+                annotations['era' + i] = {
+                    type: 'box',
+                    xMin: xMin,
+                    xMax: xMax,
+                    backgroundColor: eraColors[i % eraColors.length],
+                    borderWidth: 0,
+                    label: {
+                        content: era.content,
+                        display: true,
+                        position: 'start',
+                        color: '#8a6d3b',
+                        font: { family: "'Cinzel', serif", size: 10, weight: 'bold' },
+                        padding: 3,
+                    },
+                };
+            });
+
+            // Annotations require chartjs-plugin-annotation (not loaded), skip for now
+            const pluginOpts = {};
+
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels.map(b => {
+                        if (bucket >= 20) return `${b}–${b + bucket - 1}`;
+                        return String(b) + 's';
+                    }),
+                    datasets: datasets,
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: { color: '#4a3728', font: { family: "'Cinzel', serif", size: 10 } },
+                            grid: { color: 'rgba(184,160,120,0.15)' },
+                            title: { display: true, text: 'Years', color: '#8a6d3b', font: { family: "'Cinzel', serif", size: 11 } },
+                        },
+                        y: {
+                            stacked: true,
+                            ticks: { color: '#4a3728', font: { family: "'Crimson Text', serif", size: 11 } },
+                            grid: { color: 'rgba(184,160,120,0.15)' },
+                            title: { display: true, text: 'Events', color: '#8a6d3b', font: { family: "'Cinzel', serif", size: 11 } },
+                            beginAtZero: true,
+                        },
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#4a3728',
+                                font: { family: "'Crimson Text', serif", size: 11 },
+                                boxWidth: 12,
+                                padding: 12,
+                            },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(244,232,193,0.97)',
+                            titleColor: '#2c1810',
+                            bodyColor: '#4a3728',
+                            borderColor: '#b8a078',
+                            borderWidth: 1,
+                            titleFont: { family: "'Cinzel', serif", weight: 'bold' },
+                            bodyFont: { family: "'Crimson Text', serif" },
+                        },
+                        ...pluginOpts,
+                    },
+                },
+            });
+    }
+})();
 
 let searchTimeout = null;
 const searchResults = document.createElement('div');
