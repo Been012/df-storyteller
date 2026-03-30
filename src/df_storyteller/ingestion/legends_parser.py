@@ -152,37 +152,31 @@ class LegendsData:
                         pass
 
         # Family relationship index: hf_id -> {"parents": [ids], "children": [ids], "spouse": [ids]}
-        _family_types = {"mother", "father", "parent"}
-        _child_types = {"child", "offspring"}
-        _spouse_types = {"spouse", "married", "lover", "former_lover"}
+        # Built from hf_links on historical figures (the authoritative source for family data)
         self._hf_family: dict[int, dict[str, list[int]]] = defaultdict(lambda: {"parents": [], "children": [], "spouse": []})
-        for rel in self.relationships:
-            rtype = rel.get("relationship", "").lower().replace(" ", "_")
-            src = rel.get("source_hf")
-            tgt = rel.get("target_hf")
-            if not src or not tgt:
-                continue
-            try:
-                src_id = int(src)
-                tgt_id = int(tgt)
-            except (ValueError, TypeError):
-                continue
-            if rtype in _family_types:
-                # source is parent-type of target: target's parent is source
-                if src_id not in self._hf_family[tgt_id]["parents"]:
-                    self._hf_family[tgt_id]["parents"].append(src_id)
-                if tgt_id not in self._hf_family[src_id]["children"]:
-                    self._hf_family[src_id]["children"].append(tgt_id)
-            elif rtype in _child_types:
-                if tgt_id not in self._hf_family[src_id]["children"]:
-                    self._hf_family[src_id]["children"].append(tgt_id)
-                if src_id not in self._hf_family[tgt_id]["parents"]:
-                    self._hf_family[tgt_id]["parents"].append(src_id)
-            elif rtype in _spouse_types:
-                if tgt_id not in self._hf_family[src_id]["spouse"]:
-                    self._hf_family[src_id]["spouse"].append(tgt_id)
-                if src_id not in self._hf_family[tgt_id]["spouse"]:
-                    self._hf_family[tgt_id]["spouse"].append(src_id)
+        for hfid, hf in self.historical_figures.items():
+            for link in hf.hf_links:
+                ltype = link.get("type", "").lower().replace(" ", "_")
+                other_id = link.get("hfid")
+                if other_id is None:
+                    continue
+                if ltype in ("mother", "father"):
+                    # This HF's mother/father is other_id
+                    if other_id not in self._hf_family[hfid]["parents"]:
+                        self._hf_family[hfid]["parents"].append(other_id)
+                    if hfid not in self._hf_family[other_id]["children"]:
+                        self._hf_family[other_id]["children"].append(hfid)
+                elif ltype == "child":
+                    # This HF's child is other_id
+                    if other_id not in self._hf_family[hfid]["children"]:
+                        self._hf_family[hfid]["children"].append(other_id)
+                    if hfid not in self._hf_family[other_id]["parents"]:
+                        self._hf_family[other_id]["parents"].append(hfid)
+                elif ltype in ("spouse", "deceased_spouse", "former_spouse"):
+                    if other_id not in self._hf_family[hfid]["spouse"]:
+                        self._hf_family[hfid]["spouse"].append(other_id)
+                    if hfid not in self._hf_family[other_id]["spouse"]:
+                        self._hf_family[other_id]["spouse"].append(hfid)
 
     def get_event_collection(self, ec_id: int | str) -> dict[str, Any] | None:
         """Get an event collection (war, battle, siege) by ID."""
@@ -286,6 +280,19 @@ def _parse_historical_figure(elem: Any) -> HistoricalFigure:
         if deed.text:
             notable_deeds.append(deed.text.replace("_", " "))
 
+    # HF links (family: child, mother, father, spouse, lover, deity, etc.)
+    hf_links = []
+    for link in elem.findall("hf_link"):
+        link_data: dict[str, Any] = {}
+        lt = link.find("link_type")
+        if lt is not None and lt.text:
+            link_data["type"] = lt.text
+        hfid_el = link.find("hfid")
+        if hfid_el is not None and hfid_el.text:
+            link_data["hfid"] = int(hfid_el.text)
+        if link_data:
+            hf_links.append(link_data)
+
     # Entity links (positions held in civilizations)
     entity_links = []
     for link in elem.findall("entity_link"):
@@ -330,6 +337,7 @@ def _parse_historical_figure(elem: Any) -> HistoricalFigure:
         is_deity=is_deity,
         hf_type=hf_type,
         notable_deeds=notable_deeds,
+        hf_links=hf_links,
         entity_links=entity_links,
         active_interactions=active_interactions,
         skills=skills,

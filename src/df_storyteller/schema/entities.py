@@ -60,6 +60,7 @@ class HistoricalFigure(BaseModel):
     is_deity: bool = False
     hf_type: str = ""  # deity, megabeast, historical figure, etc.
     entity_links: list[dict] = Field(default_factory=list)  # [{type, entity_id, position}]
+    hf_links: list[dict] = Field(default_factory=list)  # [{type, hfid}] — family: child, mother, father, spouse
     active_interactions: list[str] = Field(default_factory=list)  # curses: vampirism, lycanthropy
     skills: list[dict] = Field(default_factory=list)  # [{skill, total_ip}]
     journey_pets: list[str] = Field(default_factory=list)

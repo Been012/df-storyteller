@@ -476,6 +476,8 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                             basic_hf.caste = plus_hf.caste
                         if plus_hf.hf_type:
                             basic_hf.hf_type = plus_hf.hf_type
+                        if plus_hf.hf_links and not basic_hf.hf_links:
+                            basic_hf.hf_links = plus_hf.hf_links
                         if plus_hf.entity_links:
                             basic_hf.entity_links = plus_hf.entity_links
                         if plus_hf.active_interactions:
