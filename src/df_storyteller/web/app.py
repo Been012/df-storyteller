@@ -1915,7 +1915,7 @@ async def lore_page(request: Request):
 
         # Entity overthrown
         overthrown = []
-        for ov in legends.entity_overthrown[:10]:
+        for ov in legends.entity_overthrown:
             year = ov.get("start_year", "")
             site_id = ov.get("site_id")
             site_name = ""
@@ -1985,7 +1985,7 @@ async def lore_page(request: Request):
             legends.historical_figures.items(),
             key=lambda x: legends.get_hf_event_count(x[0]),
             reverse=True,
-        )[:50]
+        )[:500]
 
         for hfid, hf in ranked_hfs:
             if not hf.name:
@@ -2245,35 +2245,35 @@ async def lore_page(request: Request):
         "saved_sagas": saved_sagas,
         "player_civ": player_civ_data,
         "eras": eras if world_lore.is_loaded and world_lore._legends else [],
-        "civilizations": civilizations[:100],
-        "wars": wars[:100],
-        "battles": battles[:100],
-        "figures": figures[:100],
-        "artifacts": artifacts[:100],
-        "written_works": written_works[:100],
-        "relationships": relationships[:100],
+        "civilizations": civilizations[:500],
+        "wars": wars[:500],
+        "battles": battles[:500],
+        "figures": figures[:500],
+        "artifacts": artifacts[:500],
+        "written_works": written_works[:500],
+        "relationships": relationships[:500],
         "relationship_counts": rel_counts if world_lore.is_loaded and world_lore._legends else {},
         "identities": identities,
-        "geography": geography[:100],
+        "geography": geography[:500],
         "poetic_forms": world_lore._legends.poetic_forms if world_lore.is_loaded and world_lore._legends else [],
         "musical_forms": world_lore._legends.musical_forms if world_lore.is_loaded and world_lore._legends else [],
         "dance_forms": world_lore._legends.dance_forms if world_lore.is_loaded and world_lore._legends else [],
-        "beast_attacks": beast_attacks[:100],
-        "site_conquests": site_conquests[:100],
-        "persecutions": persecutions[:100],
-        "duels": duels[:100],
-        "abductions": abductions[:100],
-        "thefts": thefts[:100],
-        "purges": purges[:100],
-        "overthrown": overthrown[:100],
-        "notable_deaths": notable_deaths[:100],
-        "regions_data": regions_data[:100],
+        "beast_attacks": beast_attacks[:500],
+        "site_conquests": site_conquests[:500],
+        "persecutions": persecutions[:500],
+        "duels": duels[:500],
+        "abductions": abductions[:500],
+        "thefts": thefts[:500],
+        "purges": purges[:500],
+        "overthrown": overthrown[:500],
+        "notable_deaths": notable_deaths[:500],
+        "regions_data": regions_data[:500],
         # True total counts for section headers
         "total_counts": {
             "civilizations": len(civilizations),
             "wars": len(wars),
             "battles": len(battles),
-            "figures": len(figures),
+            "figures": sum(1 for hf in legends.historical_figures.values() if hf.name),
             "artifacts": len(artifacts),
             "written_works": len(written_works),
             "relationships": len(relationships),
@@ -2604,7 +2604,7 @@ def _build_civ_context(legends: Any, entity_id: int) -> dict | None:
         "wars": wars,
         "leaders": leaders,
         "sub_entities": sub_entities[:15],
-        "notable_figures": notable_figures[:50],
+        "notable_figures": notable_figures[:200],
         "event_count": event_count,
         "populations": populations,
         # Sidebar
