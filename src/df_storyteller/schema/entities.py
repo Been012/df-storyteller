@@ -50,6 +50,7 @@ class HistoricalFigure(BaseModel):
     hf_id: int
     name: str
     race: str = ""
+    caste: str = ""  # male, female
     birth_year: int = 0
     death_year: int | None = None
     associated_civ_id: int | None = None
@@ -57,6 +58,10 @@ class HistoricalFigure(BaseModel):
     spheres: list[str] = Field(default_factory=list)  # deity domains: death, wealth, nature, etc.
     is_deity: bool = False
     hf_type: str = ""  # deity, megabeast, historical figure, etc.
+    entity_links: list[dict] = Field(default_factory=list)  # [{type, entity_id, position}]
+    active_interactions: list[str] = Field(default_factory=list)  # curses: vampirism, lycanthropy
+    skills: list[dict] = Field(default_factory=list)  # [{skill, total_ip}]
+    journey_pets: list[str] = Field(default_factory=list)
 
 
 class Artifact(BaseModel):
@@ -76,6 +81,7 @@ class Site(BaseModel):
     owner_civ_id: int | None = None
     coordinates: tuple[int, int] | None = None
     events: list[int] = Field(default_factory=list)
+    structures: list[dict] = Field(default_factory=list)  # [{id, name, type, deity_hf_id, entity_id}]
 
 
 class Civilization(BaseModel):

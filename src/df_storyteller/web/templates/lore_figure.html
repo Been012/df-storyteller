@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}{{ figure.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="lore-detail-layout">
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ figure.name }}</div>
+            <div class="char-title">
+                {{ figure.race | default('Unknown race') }}{% if figure.caste %} ({{ figure.caste }}){% endif %}
+                {% if figure.hf_type %} &middot; {{ figure.hf_type }}{% endif %}
+                {% if figure.birth_year %} &middot; Born year {{ figure.birth_year }}{% endif %}
+                {% if figure.death_year %} &middot; Died year {{ figure.death_year }}{% endif %}
+                {% if figure.is_deity %}
+                <span style="display: inline-block; background: var(--gold-dark); color: #1a1a2e; padding: 0.1rem 0.5rem; border-radius: 3px; font-size: 0.8rem; margin-left: 0.5rem;">Deity</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Left Column: Identity & Connections -->
+        <div class="stat-section">
+            {% if figure.is_deity and figure.spheres %}
+            <h3>Spheres</h3>
+            <ul class="stat-list">
+                {% for sphere in figure.spheres %}
+                <li>{{ sphere }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if civ_name %}
+            <h3>Civilization</h3>
+            <p>{{ lore_link("civilization", civ_id, civ_name) | safe }}</p>
+            {% endif %}
+
+            {% if entity_positions %}
+            <h3>Positions Held</h3>
+            <ul class="stat-list">
+                {% for pos in entity_positions %}
+                <li>{{ pos }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if active_interactions %}
+            <h3>Supernatural</h3>
+            <ul class="stat-list">
+                {% for interaction in active_interactions %}
+                <li style="color: var(--danger);">{{ interaction }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if relationships %}
+            <h3>Relationships</h3>
+            <ul class="stat-list">
+                {% for rel in relationships %}
+                <li><strong>{{ rel.type }}:</strong> {{ lore_link("figure", rel.other_id, rel.other_name) | safe }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Right Column: Stats & Skills -->
+        <div class="stat-section">
+            {% if notable_events_summary %}
+            <h3>Notable Events</h3>
+            <p style="color: var(--ink-light);">{{ notable_events_summary }}</p>
+            <p style="font-size: 0.85rem; color: var(--ink-faded);">{{ event_count }} total events</p>
+            {% endif %}
+
+            {% if deeds %}
+            <h3>Deeds</h3>
+            <ul class="stat-list">
+                {% for deed in deeds %}
+                <li>{{ deed }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if skills %}
+            <h3>Skills</h3>
+            <ul class="stat-list">
+                {% for skill in skills %}
+                <li>{{ skill }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if journey_pets %}
+            <h3>Journey Pets</h3>
+            <ul class="stat-list">
+                {% for pet in journey_pets %}
+                <li>{{ pet }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Full-width: Family Tree + Activity Chart side by side -->
+        <div class="bio-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            <div>
+                <h3>Family Tree</h3>
+                <div id="family-tree" style="height: 280px; border: 1px solid var(--border); border-radius: 4px; background: rgba(244,232,193,0.3);"></div>
+                <p id="family-tree-empty" style="display: none; color: var(--ink-faded); font-style: italic; font-size: 0.9rem;">No family connections found.</p>
+            </div>
+            {% if event_count > 5 %}
+            <div>
+                <h3>Activity</h3>
+                <div style="height: 280px;">
+                    <canvas id="figure-timeline-chart"></canvas>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Full-width: Kills & Artifacts side by side -->
+        {% if kills or artifacts %}
+        <div class="bio-section" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+            {% if kills %}
+            <div>
+                <h3>Kills ({{ kills | length }})</h3>
+                <ul class="stat-list">
+                    {% for kill in kills %}
+                    <li>{{ lore_link("figure", kill.hf_id, kill.name) | safe }}{% if kill.race %} <span style="color: var(--ink-faded);">({{ kill.race }})</span>{% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if artifacts %}
+            <div>
+                <h3>Artifacts</h3>
+                <ul class="stat-list">
+                    {% for art in artifacts %}
+                    <li>{{ lore_link("artifact", art.artifact_id, art.name) | safe }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if events %}
+        <div class="bio-section">
+            <h3>Event Timeline</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif; width: 80px;">Year</th>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif;">Event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for evt in events %}
+                    <tr class="event-row" {% if loop.index > 50 %}style="display: none;"{% endif %}>
+                        <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); vertical-align: top; font-size: 0.9rem;">{{ evt.year }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if events | length > 50 %}
+            <div style="text-align: center; margin-top: 0.8rem;">
+                <button class="btn btn-secondary" id="load-more-btn" onclick="loadMoreEvents()">
+                    Show more ({{ events | length - 50 }} remaining)
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% include "lore_sidebar.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9/dist/vis-network.min.js"></script>
+<script>
+// Load figure activity chart
+fetch('/api/lore/stats/figure/{{ figure.hf_id }}')
+    .then(r => r.json())
+    .then(data => {
+        const canvas = document.getElementById('figure-timeline-chart');
+        if (!canvas || !data.event_timeline || !data.event_timeline.labels.length) return;
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: data.event_timeline.labels,
+                datasets: [{ label: 'Events', data: data.event_timeline.values, borderColor: '#8a6d3b', backgroundColor: 'rgba(138,109,59,0.1)', fill: true, tension: 0.3 }]
+            },
+            options: {
+                scales: { x: { ticks: { color: '#4a3728', maxTicksLimit: 10 } }, y: { ticks: { color: '#4a3728' }, beginAtZero: true } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    })
+    .catch(() => {});
+
+// Load family tree
+fetch('/api/lore/graph/family/{{ figure.hf_id }}')
+    .then(r => r.json())
+    .then(data => {
+        const container = document.getElementById('family-tree');
+        if (!container || !data.nodes || data.nodes.length <= 1) {
+            container.style.display = 'none';
+            document.getElementById('family-tree-empty').style.display = '';
+            return;
+        }
+
+        const nodes = new vis.DataSet(data.nodes.map(n => ({
+            id: n.id,
+            label: n.label + (n.race ? '\n(' + n.race + ')' : ''),
+            level: n.level,
+            color: {
+                background: n.is_target ? '#c9a84c' : n.dead ? '#7a6558' : '#e8d5a3',
+                border: n.is_deity ? '#8a6d3b' : n.is_target ? '#8a6d3b' : '#b8a078',
+                highlight: { background: '#d4bc7c', border: '#8a6d3b' }
+            },
+            borderWidth: n.is_target || n.is_deity ? 3 : 1,
+            font: { color: n.dead ? '#7a6558' : '#2c1810', size: 12, face: "'Crimson Text', serif" },
+            shape: n.is_deity ? 'star' : 'box',
+            opacity: n.dead ? 0.6 : 1.0,
+        })));
+
+        const edges = new vis.DataSet(data.edges.map(e => ({
+            from: e.from,
+            to: e.to,
+            label: e.label === 'spouse' ? '♥' : '',
+            dashes: e.label === 'spouse',
+            color: { color: '#b8a078', highlight: '#8a6d3b' },
+            arrows: e.label === 'parent' ? { to: { enabled: true, scaleFactor: 0.5 } } : {},
+            width: e.label === 'spouse' ? 2 : 1,
+        })));
+
+        const network = new vis.Network(container, { nodes, edges }, {
+            layout: { hierarchical: { direction: 'UD', sortMethod: 'directed', levelSeparation: 80, nodeSpacing: 120 } },
+            physics: false,
+            interaction: { hover: true },
+        });
+
+        network.on('click', params => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                if (nodeId !== {{ figure.hf_id }}) {
+                    window.location.href = '/lore/figure/' + nodeId;
+                }
+            }
+        });
+    })
+    .catch(() => {
+        const container = document.getElementById('family-tree');
+        if (container) container.style.display = 'none';
+    });
+
+function loadMoreEvents() {
+    const rows = document.querySelectorAll('.event-row[style*="display: none"]');
+    let shown = 0;
+    rows.forEach(row => {
+        if (shown < 50) {
+            row.style.display = '';
+            shown++;
+        }
+    });
+    const remaining = document.querySelectorAll('.event-row[style*="display: none"]').length;
+    const btn = document.getElementById('load-more-btn');
+    if (remaining === 0) {
+        btn.style.display = 'none';
+    } else {
+        btn.textContent = 'Show more (' + remaining + ' remaining)';
+    }
+}
+</script>
+{% endblock %}

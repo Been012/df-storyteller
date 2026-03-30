@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}World Map — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+{% if not lore_loaded %}
+<div class="parchment">
+    <p style="text-align: center; color: var(--ink-faded); font-style: italic;">
+        No legends data loaded. Export from Legends mode in Dwarf Fortress, then restart the server.
+    </p>
+</div>
+{% else %}
+<div class="parchment" style="padding: 0.5rem;">
+    <div id="map-container" style="height: calc(100vh - 220px); min-height: 400px; border-radius: 4px; background: #1a1a2e;"></div>
+    <div id="map-error" style="display: none; text-align: center; padding: 2rem; color: var(--ink-faded); font-style: italic;"></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+    const container = document.getElementById('map-container');
+    if (!container) return;
+
+    // Race -> marker color
+    const RACE_COLORS = {
+        'Dwarf': '#8a6d3b',
+        'Elf': '#2d5a27',
+        'Human': '#4a6fa5',
+        'Goblin': '#8b2500',
+        'Kobold': '#7a6558',
+        'Necromancer': '#4a3728',
+    };
+    const DEFAULT_MARKER_COLOR = '#b8a078';
+
+    // Site type -> marker symbol + size
+    const SITE_MARKERS = {
+        'fortress': { symbol: '\u25A0', size: 10 },       // filled square
+        'dark fortress': { symbol: '\u25A0', size: 10 },
+        'mountain halls': { symbol: '\u25B2', size: 10 },  // triangle up
+        'town': { symbol: '\u25CF', size: 9 },             // filled circle
+        'dark pits': { symbol: '\u25BC', size: 9 },        // triangle down
+        'hillocks': { symbol: '\u25A0', size: 7 },         // small square
+        'hamlet': { symbol: '\u25CF', size: 7 },            // small circle
+        'cave': { symbol: '\u25C6', size: 7 },             // diamond
+        'vault': { symbol: '\u2605', size: 10 },            // star
+        'tower': { symbol: '\u2666', size: 9 },             // diamond
+        'shrine': { symbol: '\u271A', size: 8 },            // cross
+        'tomb': { symbol: '\u2020', size: 9 },              // dagger
+        'camp': { symbol: '\u25B3', size: 7 },              // triangle outline
+        'forest retreat': { symbol: '\u2663', size: 9 },    // club
+        'monastery': { symbol: '\u271A', size: 8 },
+        'lair': { symbol: '\u25C6', size: 7 },
+    };
+    const DEFAULT_SITE_MARKER = { symbol: '\u25CF', size: 7 };
+
+    const SCALE = 4; // Must match server scale
+
+    // Load terrain image
+    const terrainUrl = '/api/lore/map/terrain';
+    const sitesUrl = '/api/lore/map/sites';
+
+    Promise.all([
+        fetch(terrainUrl).then(r => {
+            if (!r.ok) throw new Error('Terrain not available');
+            return r.blob();
+        }),
+        fetch(sitesUrl).then(r => r.json()),
+    ])
+    .then(([terrainBlob, siteData]) => {
+        const terrainImageUrl = URL.createObjectURL(terrainBlob);
+        const worldW = siteData.world_size[0];
+        const worldH = siteData.world_size[1];
+
+        // Leaflet CRS.Simple: [y, x] format
+        // DF has Y increasing downward, Leaflet has Y increasing upward
+        // Use bounds that flip Y: image top-left maps to [worldH, 0], bottom-right to [0, worldW]
+        const bounds = [[worldH, 0], [0, worldW]];
+
+        const map = L.map('map-container', {
+            crs: L.CRS.Simple,
+            minZoom: -2,
+            maxZoom: 4,
+            attributionControl: false,
+        });
+
+        L.imageOverlay(terrainImageUrl, bounds).addTo(map);
+        map.fitBounds(bounds);
+
+        // Group sites by site type
+        const typeLayers = {};
+
+        // Display names and colors for site types
+        const SITE_TYPE_DISPLAY = {
+            'fortress': { label: 'Fortresses', color: '#8a6d3b' },
+            'dark fortress': { label: 'Dark Fortresses', color: '#8b2500' },
+            'mountain halls': { label: 'Mountain Halls', color: '#7a6558' },
+            'town': { label: 'Towns', color: '#4a6fa5' },
+            'hillocks': { label: 'Hillocks', color: '#8a6d3b' },
+            'hamlet': { label: 'Hamlets', color: '#4a6fa5' },
+            'dark pits': { label: 'Dark Pits', color: '#8b2500' },
+            'cave': { label: 'Caves', color: '#7a6558' },
+            'vault': { label: 'Vaults', color: '#c9a84c' },
+            'tower': { label: 'Towers', color: '#4a3728' },
+            'tomb': { label: 'Tombs', color: '#4a3728' },
+            'shrine': { label: 'Shrines', color: '#c9a84c' },
+            'camp': { label: 'Camps', color: '#2d5a27' },
+            'forest retreat': { label: 'Forest Retreats', color: '#2d5a27' },
+            'monastery': { label: 'Monasteries', color: '#c9a84c' },
+            'lair': { label: 'Lairs', color: '#8b2500' },
+        };
+
+        for (const site of siteData.sites) {
+            // Convert DF coords to Leaflet coords (flip Y)
+            const lat = worldH - site.y - 0.5;
+            const lng = site.x + 0.5;
+
+            const markerDef = SITE_MARKERS[site.type] || DEFAULT_SITE_MARKER;
+            const raceColor = site.owner_race ? (RACE_COLORS[site.owner_race] || DEFAULT_MARKER_COLOR) : DEFAULT_MARKER_COLOR;
+
+            const icon = L.divIcon({
+                className: 'map-site-marker',
+                html: '<span style="color:' + raceColor + ';font-size:' + markerDef.size + 'px;text-shadow:0 0 2px #000,0 0 2px #000;">' + markerDef.symbol + '</span>',
+                iconSize: [markerDef.size + 4, markerDef.size + 4],
+                iconAnchor: [(markerDef.size + 4) / 2, (markerDef.size + 4) / 2],
+            });
+
+            const marker = L.marker([lat, lng], { icon: icon });
+
+            // Popup
+            let popupHtml = '<div style="font-family: \'Crimson Text\', serif; min-width: 120px;">';
+            popupHtml += '<strong><a href="/lore/site/' + site.id + '" style="color: #8a6d3b;">' + site.name + '</a></strong><br>';
+            popupHtml += '<span style="color: #7a6558; font-size: 0.9em;">' + (site.type || 'unknown') + '</span>';
+            if (site.owner_name) {
+                popupHtml += '<br><a href="/lore/civ/' + site.owner_civ_id + '" style="color: #4a3728; font-size: 0.85em;">' + site.owner_name + '</a>';
+                if (site.owner_race) popupHtml += ' <span style="color: #7a6558; font-size: 0.8em;">(' + site.owner_race + ')</span>';
+            }
+            popupHtml += '</div>';
+            marker.bindPopup(popupHtml);
+
+            // Add to site type layer group
+            const typeKey = site.type || 'unknown';
+            if (!typeLayers[typeKey]) {
+                typeLayers[typeKey] = { layer: L.layerGroup(), count: 0 };
+            }
+            typeLayers[typeKey].layer.addLayer(marker);
+            typeLayers[typeKey].count++;
+        }
+
+        // Add all layers to map and build control
+        const overlays = {};
+        // Sort by count descending
+        const sortedTypes = Object.entries(typeLayers).sort((a, b) => b[1].count - a[1].count);
+        for (const [siteType, info] of sortedTypes) {
+            info.layer.addTo(map);
+            const display = SITE_TYPE_DISPLAY[siteType] || { label: siteType || 'Unknown', color: DEFAULT_MARKER_COLOR };
+            const markerDef = SITE_MARKERS[siteType] || DEFAULT_SITE_MARKER;
+            const label = '<span style="color:' + display.color + ';">' + markerDef.symbol + '</span> ' + display.label + ' (' + info.count + ')';
+            overlays[label] = info.layer;
+        }
+
+        // World constructions (roads, tunnels) as polylines
+        if (siteData.constructions && siteData.constructions.length) {
+            const CONSTRUCTION_COLORS = { 'road': '#b8a078', 'tunnel': '#7a6558', 'bridge': '#8a6d3b' };
+            const constructionLayer = L.layerGroup();
+            for (const wc of siteData.constructions) {
+                const latlngs = wc.points.map(p => [worldH - p[1] - 0.5, p[0] + 0.5]);
+                const color = CONSTRUCTION_COLORS[wc.type] || '#b8a078';
+                const line = L.polyline(latlngs, {
+                    color: color, weight: 2, opacity: 0.7, dashArray: wc.type === 'tunnel' ? '4 4' : null,
+                });
+                line.bindPopup('<div style="font-family: \'Crimson Text\', serif;"><strong>' + wc.name + '</strong><br><span style="color: #7a6558;">' + wc.type + '</span></div>');
+                constructionLayer.addLayer(line);
+            }
+            constructionLayer.addTo(map);
+            const label = '<span style="color:#b8a078;">&#9473;</span> Roads & Tunnels (' + siteData.constructions.length + ')';
+            overlays[label] = constructionLayer;
+        }
+
+        L.control.layers(null, overlays, { collapsed: false, position: 'topright' }).addTo(map);
+    })
+    .catch(err => {
+        container.style.display = 'none';
+        const errorDiv = document.getElementById('map-error');
+        errorDiv.style.display = '';
+        errorDiv.textContent = 'Could not load world map: ' + err.message + '. Make sure legends_plus XML is available (run exportlegends in DFHack).';
+    });
+})();
+</script>
+<style>
+.map-site-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none !important;
+    border: none !important;
+}
+.leaflet-control-layers {
+    background: rgba(244, 232, 193, 0.95) !important;
+    border: 1px solid #b8a078 !important;
+    border-radius: 4px !important;
+    color: #2c1810 !important;
+    font-family: 'Crimson Text', serif !important;
+    font-size: 0.85rem !important;
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+}
+.leaflet-control-layers-selector {
+    margin-right: 0.3rem;
+}
+.leaflet-popup-content-wrapper {
+    background: rgba(244, 232, 193, 0.95) !important;
+    border: 1px solid #b8a078 !important;
+    border-radius: 4px !important;
+    color: #2c1810 !important;
+}
+.leaflet-popup-tip {
+    background: rgba(244, 232, 193, 0.95) !important;
+}
+</style>
+{% endblock %}

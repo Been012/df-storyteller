@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ artifact.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ artifact.name }}</div>
+        </div>
+
+        <div class="stat-section">
+            {% if artifact.item_type %}
+            <h3>Type</h3>
+            <p>{{ artifact.item_type }}</p>
+            {% endif %}
+
+            {% if artifact.material %}
+            <h3>Material</h3>
+            <p>{{ artifact.material }}</p>
+            {% endif %}
+
+            {% if creator_name %}
+            <h3>Creator</h3>
+            <p>{{ lore_link("figure", creator_id, creator_name) | safe }}</p>
+            {% endif %}
+
+            {% if site_name %}
+            <h3>Location</h3>
+            <p>{{ lore_link("site", site_id, site_name) | safe }}</p>
+            {% endif %}
+        </div>
+
+        {% if artifact.description %}
+        <div class="bio-section">
+            <h3>Description</h3>
+            <p style="color: var(--ink-light); line-height: 1.7;">{{ artifact.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

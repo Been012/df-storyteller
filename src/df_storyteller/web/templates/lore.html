@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}World Lore — df-storyteller{% endblock %}
+{% block title %}Legends Mode — df-storyteller{% endblock %}
 
 {% block content %}
-<h1 class="page-header">World Lore</h1>
+<h1 class="page-header">Legends Mode</h1>
 <p class="page-subtitle">The histories and legends of this world</p>
 
 {% if not lore_loaded %}
@@ -12,6 +12,68 @@
     </p>
 </div>
 {% else %}
+
+<style>
+.legends-stats {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+}
+.legends-stat {
+    text-align: center;
+    padding: 0.5rem 1rem;
+    background: rgba(244, 232, 193, 0.08);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+.legends-stat .stat-value {
+    font-family: 'Cinzel', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--gold);
+    display: block;
+}
+.legends-stat .stat-label {
+    font-size: 0.8rem;
+    color: var(--parchment-dark);
+}
+
+.legends-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 0;
+}
+.legends-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    padding: 0.6rem 1.5rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--parchment-dark);
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+}
+.legends-tab:hover {
+    color: var(--gold);
+}
+.legends-tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+}
+.legends-tab-content {
+    display: none;
+}
+.legends-tab-content.active {
+    display: block;
+}
+</style>
 
 <!-- Search bar -->
 <div style="max-width: 500px; margin: 0 auto 1.5rem;">
@@ -80,7 +142,7 @@
 <!-- Player's Civilization (always open) -->
 {% if player_civ %}
 <div class="parchment" style="border: 2px solid var(--gold-dark);">
-    <h2 style="color: var(--gold-dark);">Your Civilization: {{ player_civ.name }} ({{ player_civ.race }})</h2>
+    <h2 style="color: var(--gold-dark);">Your Civilization: {{ lore_link("civilization", player_civ.id, player_civ.name) | safe }} ({{ player_civ.race }})</h2>
     {% if player_civ.details %}
     <p>{{ player_civ.details }}</p>
     {% endif %}
@@ -106,61 +168,229 @@
 </div>
 {% endif %}
 
-<!-- Collapsible sections — content only renders when opened -->
+<!-- Inline World Map -->
+<div class="parchment" id="inline-map-container">
+    <h2>World Map</h2>
+    <div id="inline-map" style="height: 450px; border-radius: 4px; background: #1a1a2e;"></div>
+    <div id="inline-map-error" style="display: none; text-align: center; padding: 1rem; color: var(--ink-faded); font-style: italic;"></div>
+    <div style="text-align: center; margin-top: 0.5rem;">
+        <a href="/lore/map" style="font-size: 0.85rem; color: var(--gold-dark);">Open full-screen map &rarr;</a>
+    </div>
+</div>
 
-{% macro lore_section(title, items, id) %}
+<!-- World Overview Charts -->
+<div class="parchment" id="world-charts" style="display: none;">
+    <h2>World Overview</h2>
+    <div style="display: flex; flex-wrap: wrap; gap: 2rem; justify-content: center;">
+        <div style="width: 340px; height: 320px;">
+            <h3 style="text-align: center; font-size: 0.95rem;">Figures by Race</h3>
+            <canvas id="race-chart"></canvas>
+        </div>
+        <div style="flex: 1; min-width: 350px; height: 320px;">
+            <h3 style="text-align: center; font-size: 0.95rem;">Events over Time</h3>
+            <canvas id="timeline-chart"></canvas>
+        </div>
+        <div style="flex: 1; min-width: 350px; height: 320px;">
+            <h3 style="text-align: center; font-size: 0.95rem;">Event Types</h3>
+            <canvas id="types-chart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Summary Bar -->
+{% if total_counts is defined %}
+<div class="legends-stats">
+    {% if total_counts.wars %}<div class="legends-stat"><span class="stat-value">{{ total_counts.wars }}</span><span class="stat-label">Wars</span></div>{% endif %}
+    {% if total_counts.battles %}<div class="legends-stat"><span class="stat-value">{{ total_counts.battles }}</span><span class="stat-label">Battles</span></div>{% endif %}
+    {% if total_counts.civilizations %}<div class="legends-stat"><span class="stat-value">{{ total_counts.civilizations }}</span><span class="stat-label">Civilizations</span></div>{% endif %}
+    {% if total_counts.figures %}<div class="legends-stat"><span class="stat-value">{{ total_counts.figures }}</span><span class="stat-label">Figures</span></div>{% endif %}
+    {% if total_counts.artifacts %}<div class="legends-stat"><span class="stat-value">{{ total_counts.artifacts }}</span><span class="stat-label">Artifacts</span></div>{% endif %}
+    {% if total_counts.regions_data %}<div class="legends-stat"><span class="stat-value">{{ total_counts.regions_data }}</span><span class="stat-label">Regions</span></div>{% endif %}
+    {% if total_counts.written_works %}<div class="legends-stat"><span class="stat-value">{{ total_counts.written_works }}</span><span class="stat-label">Written Works</span></div>{% endif %}
+    {% if total_counts.notable_deaths %}<div class="legends-stat"><span class="stat-value">{{ total_counts.notable_deaths }}</span><span class="stat-label">Notable Deaths</span></div>{% endif %}
+</div>
+{% endif %}
+
+<!-- Pin button macro -->
+{% macro pin_btn(entity_type, entity_id, name) %}
+<button class="inline-pin-btn" onclick="event.stopPropagation(); pinFromList('{{ entity_type }}', '{{ entity_id }}', '{{ name | replace("'", "\\'") | replace('"', '') }}')" title="Pin for reference">&#9734;</button>
+{% endmacro %}
+
+<!-- Lore section macro with progressive show-more -->
+{% macro lore_section(title, items, id, true_total=none, limit=20) %}
 {% if items %}
-<div class="parchment lore-section" id="section-{{ id }}">
+{% set true_count = true_total if true_total else items | length %}
+<div class="lore-section" id="section-{{ id }}" data-limit="{{ limit }}">
     <details>
-        <summary class="lore-summary"><h2 style="display: inline;">{{ title }} ({{ items | length }})</h2></summary>
+        <summary class="lore-summary"><h2 style="display: inline;">{{ title }} ({{ true_count }})</h2></summary>
         <div class="lore-content">
             {{ caller() }}
+            {% if items | length > limit %}
+            <div class="show-more-row" style="text-align: center; margin-top: 0.8rem;">
+                <button class="btn btn-secondary show-more-btn" onclick="showMoreItems('section-{{ id }}')" style="padding: 0.4rem 1.2rem; font-size: 0.85rem;">
+                    Show more
+                </button>
+            </div>
+            {% endif %}
         </div>
     </details>
 </div>
 {% endif %}
 {% endmacro %}
 
-{% call lore_section("Civilizations", civilizations, "civs") %}
-    {% for civ in civilizations %}
-    <div class="lore-item" {% if civ.id %}data-entity-type="civilization" data-entity-id="{{ civ.id }}"{% endif %} style="margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(184,160,120,0.3);">
-        <h3 style="margin-bottom: 0.2rem;">{{ civ.name }}{% if civ.race %} <span style="font-weight: normal; color: var(--ink-faded);">({{ civ.race }})</span>{% endif %}</h3>
-        {% if civ.details %}<p style="font-size: 0.9rem; color: var(--ink-light);">{{ civ.details }}</p>{% endif %}
-        {% if civ.sub_entities %}<p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.2rem;">Organizations: {{ civ.sub_entities | join(', ') }}</p>{% endif %}
-    </div>
-    {% endfor %}
-{% endcall %}
+<!-- Tab Navigation -->
+<div id="legends-tab-area">
+<div class="legends-tabs">
+    <button class="legends-tab active" onclick="switchLegendsTab('conflicts', this)">Conflicts</button>
+    <button class="legends-tab" onclick="switchLegendsTab('people', this)">People</button>
+    <button class="legends-tab" onclick="switchLegendsTab('culture', this)">Culture</button>
+    <button class="legends-tab" onclick="switchLegendsTab('geography', this)">Geography</button>
+</div>
 
-{% call lore_section("Wars & Conflicts", wars, "wars") %}
+<!-- Conflicts Tab (default active) -->
+<div class="legends-tab-content active" id="legends-tab-conflicts">
+<div class="parchment">
+
+{% call lore_section("Wars & Conflicts", wars, "wars", total_counts.wars) %}
     {% for war in wars %}
     <div class="lore-item" {% if war.id %}data-entity-type="war" data-entity-id="{{ war.id }}"{% endif %} style="margin-bottom: 0.5rem;">
-        <strong>{{ war.name }}</strong>{% if war.years %} <span style="color: var(--ink-faded);">({{ war.years }})</span>{% endif %}
+        {{ pin_btn("war", war.id, war.name) }}
+        <strong>{{ lore_link("war", war.id, war.name) | safe }}</strong>{% if war.years %} <span style="color: var(--ink-faded);">({{ war.years }})</span>{% endif %}
         {% if war.details %}<br><span style="font-size: 0.9rem; color: var(--ink-light);">{{ war.details }}</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
 
-{% call lore_section("Notable Battles", battles, "battles") %}
+{% call lore_section("Notable Battles", battles, "battles", total_counts.battles) %}
     {% for battle in battles %}
     <div class="lore-item" {% if battle.id %}data-entity-type="battle" data-entity-id="{{ battle.id }}"{% endif %} style="margin-bottom: 0.4rem;">
+        {{ pin_btn("battle", battle.id, battle.name) }}
         <strong>{{ battle.name }}</strong>{% if battle.year %} <span style="color: var(--ink-faded);">(year {{ battle.year }})</span>{% endif %}
         {% if battle.details %}<br><span style="font-size: 0.9rem; color: var(--ink-light);">{{ battle.details }}</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
 
-{% call lore_section("Notable Figures", figures, "figures") %}
-    {% for fig in figures %}
-    <div class="lore-item" {% if fig.id %}data-entity-type="figure" data-entity-id="{{ fig.id }}"{% endif %} style="margin-bottom: 0.3rem;">
-        <strong>{{ fig.name }}</strong>{% if fig.race %} <span style="color: var(--ink-faded);">({{ fig.race }})</span>{% endif %}{% if fig.description %} — {{ fig.description }}{% endif %}
+{% call lore_section("Beast Attacks", beast_attacks, "beasts", total_counts.beast_attacks) %}
+    {% for ba in beast_attacks %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("beast_attack", "", ba.name) }}
+        <strong>{{ ba.name }}</strong>{% if ba.details %} — <span style="color: var(--ink-light);">{{ ba.details }}</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
 
-{% call lore_section("Artifacts", artifacts, "artifacts") %}
-    {% for art in artifacts %}
-    <div class="lore-item" {% if art.id %}data-entity-type="artifact" data-entity-id="{{ art.id }}"{% endif %} style="margin-bottom: 0.3rem;">
-        <strong>{{ art.name }}</strong>{% if art.details %} — <span style="color: var(--ink-light);">{{ art.details }}</span>{% endif %}
+{% call lore_section("Site Conquests", site_conquests, "conquests", total_counts.site_conquests) %}
+    {% for sc in site_conquests %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("site_conquest", "", sc.name) }}
+        <strong>{{ sc.name }}</strong>{% if sc.details %} — <span style="color: var(--ink-light);">{{ sc.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Persecutions", persecutions, "persecutions", total_counts.persecutions) %}
+    {% for persc in persecutions %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("persecution", "", persc.name) }}
+        <strong>{{ persc.name }}</strong>{% if persc.details %} — <span style="color: var(--ink-light);">{{ persc.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Duels", duels, "duels", total_counts.duels) %}
+    {% for duel in duels %}
+    <div class="lore-item" style="margin-bottom: 0.4rem;">
+        {{ pin_btn("duel", "", duel.name) }}
+        <strong>{{ duel.name }}</strong>{% if duel.details %} — <span style="color: var(--ink-light);">{{ duel.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Abductions", abductions, "abductions", total_counts.abductions) %}
+    {% for abd in abductions %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("abduction", "", abd.name) }}
+        <strong>{{ abd.name }}</strong>{% if abd.details %} — <span style="color: var(--ink-light);">{{ abd.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Thefts", thefts, "thefts", total_counts.thefts) %}
+    {% for theft in thefts %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("theft", "", theft.name) }}
+        <strong>{{ theft.name }}</strong>{% if theft.details %} — <span style="color: var(--ink-light);">{{ theft.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Purges", purges, "purges", total_counts.purges) %}
+    {% for purge in purges %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("purge", "", purge.name) }}
+        <strong>{{ purge.name }}</strong>{% if purge.details %} — <span style="color: var(--ink-light);">{{ purge.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Coups & Overthrows", overthrown, "overthrown", total_counts.overthrown) %}
+    {% for ov in overthrown %}
+    <div class="lore-item" style="margin-bottom: 0.3rem;">
+        {{ pin_btn("overthrow", "", ov.name) }}
+        <strong>{{ ov.name }}</strong>{% if ov.details %} — <span style="color: var(--ink-light);">{{ ov.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Notable Deaths", notable_deaths, "deaths", total_counts.notable_deaths) %}
+    {% for death in notable_deaths %}
+    <div class="lore-item" {% if death.id %}data-entity-type="figure" data-entity-id="{{ death.id }}"{% endif %} style="margin-bottom: 0.3rem;">
+        {{ pin_btn("figure", death.id, death.name) }}
+        <strong>{{ lore_link("figure", death.id, death.name) | safe }}</strong>{% if death.details %} — <span style="color: var(--ink-light);">{{ death.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+</div>
+</div>
+
+<!-- People Tab -->
+<div class="legends-tab-content" id="legends-tab-people">
+<div class="parchment">
+
+{% call lore_section("Civilizations", civilizations, "civs", total_counts.civilizations) %}
+    {% for civ in civilizations %}
+    <div class="lore-item" {% if civ.id %}data-entity-type="civilization" data-entity-id="{{ civ.id }}"{% endif %} style="margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(184,160,120,0.3);">
+        {{ pin_btn("civilization", civ.id, civ.name) }}
+        <h3 style="margin-bottom: 0.2rem;">{{ lore_link("civilization", civ.id, civ.name) | safe }}{% if civ.race %} <span style="font-weight: normal; color: var(--ink-faded);">({{ civ.race }})</span>{% endif %}</h3>
+        {% if civ.details %}<p style="font-size: 0.9rem; color: var(--ink-light);">{{ civ.details }}</p>{% endif %}
+        {% if civ.sub_entities %}<p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.2rem;">Organizations: {{ civ.sub_entities | join(', ') }}</p>{% endif %}
+    </div>
+    {% endfor %}
+{% endcall %}
+
+{% call lore_section("Notable Figures", figures, "figures", total_counts.figures) %}
+    <div class="lore-grid">
+    {% for fig in figures %}
+    <div class="lore-item" {% if fig.id %}data-entity-type="figure" data-entity-id="{{ fig.id }}"{% endif %} style="margin-bottom: 0.3rem;">
+        {{ pin_btn("figure", fig.id, fig.name) }}
+        <strong>{{ lore_link("figure", fig.id, fig.name) | safe }}</strong>{% if fig.race %} <span style="color: var(--ink-faded);">({{ fig.race }})</span>{% endif %}{% if fig.description %} — {{ fig.description }}{% endif %}
+    </div>
+    {% endfor %}
+    </div>
+{% endcall %}
+
+{% call lore_section("Notable Relationships", relationships, "rels", total_counts.relationships) %}
+    {% if relationship_counts %}
+    <p style="font-size: 0.85rem; color: var(--ink-faded); margin-bottom: 0.8rem;">
+        {% for rtype, count in relationship_counts.items() %}{{ count }} {{ rtype }}{% if not loop.last %} &middot; {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+    {% for rel in relationships %}
+    <div class="lore-item" style="margin-bottom: 0.3rem; font-size: 0.9rem;">
+        {{ pin_btn("relationship", "", rel.description) }}
+        {{ rel.description }}{% if rel.year %} <span style="color: var(--ink-faded);">(year {{ rel.year }})</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
@@ -171,37 +401,41 @@
     </p>
     {% for ident in identities %}
     <div class="lore-item" {% if ident.id %}data-entity-type="figure" data-entity-id="{{ ident.id }}"{% endif %} style="margin-bottom: 0.3rem;">
-        <strong>{{ ident.real_name }}</strong> &rarr; posing as <em>"{{ ident.assumed_name }}"</em>
+        {{ pin_btn("figure", ident.id, ident.real_name) }}
+        <strong>{{ lore_link("figure", ident.id, ident.real_name) | safe }}</strong> &rarr; posing as <em>"{{ ident.assumed_name }}"</em>
     </div>
     {% endfor %}
 {% endcall %}
 
-{% call lore_section("Written Works", written_works, "works") %}
+</div>
+</div>
+
+<!-- Culture Tab -->
+<div class="legends-tab-content" id="legends-tab-culture">
+<div class="parchment">
+
+{% call lore_section("Artifacts", artifacts, "artifacts", total_counts.artifacts) %}
+    <div class="lore-grid">
+    {% for art in artifacts %}
+    <div class="lore-item" {% if art.id %}data-entity-type="artifact" data-entity-id="{{ art.id }}"{% endif %} style="margin-bottom: 0.3rem;">
+        {{ pin_btn("artifact", art.id, art.name) }}
+        <strong>{{ lore_link("artifact", art.id, art.name) | safe }}</strong>{% if art.details %} — <span style="color: var(--ink-light);">{{ art.details }}</span>{% endif %}
+    </div>
+    {% endfor %}
+    </div>
+{% endcall %}
+
+{% call lore_section("Written Works", written_works, "works", total_counts.written_works) %}
     {% for work in written_works %}
     <div class="lore-item" {% if work.id is defined and work.id is not none %}data-entity-type="written_work" data-entity-id="{{ work.id }}"{% endif %} style="margin-bottom: 0.3rem;">
+        {{ pin_btn("written_work", work.id, work.title) }}
         <strong>{{ work.title }}</strong>{% if work.details %} — <span style="color: var(--ink-light);">{{ work.details }}</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
 
-{% call lore_section("Notable Relationships", relationships, "rels") %}
-    {% for rel in relationships %}
-    <div class="lore-item" {% if rel.id %}data-entity-type="figure" data-entity-id="{{ rel.id }}"{% endif %} style="margin-bottom: 0.3rem; font-size: 0.9rem;">
-        {{ rel.description }}{% if rel.year %} <span style="color: var(--ink-faded);">(year {{ rel.year }})</span>{% endif %}
-    </div>
-    {% endfor %}
-{% endcall %}
-
-{% call lore_section("Geography", geography, "geo") %}
-    {% for geo in geography %}
-    <div class="lore-item" {% if geo.id and geo.entity_type %}data-entity-type="{{ geo.entity_type }}" data-entity-id="{{ geo.id }}"{% endif %} style="margin-bottom: 0.3rem;">
-        <strong>{{ geo.name }}</strong> — <span style="color: var(--ink-light);">{{ geo.details }}</span>
-    </div>
-    {% endfor %}
-{% endcall %}
-
 {% if poetic_forms or musical_forms or dance_forms %}
-<div class="parchment lore-section">
+<div class="lore-section">
     <details>
         <summary class="lore-summary"><h2 style="display: inline;">Cultural Forms</h2></summary>
         <div class="lore-content">
@@ -211,7 +445,7 @@
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -222,7 +456,7 @@
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -233,7 +467,7 @@
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -243,11 +477,234 @@
 </div>
 {% endif %}
 
+</div>
+</div>
+
+<!-- Geography Tab -->
+<div class="legends-tab-content" id="legends-tab-geography">
+<div class="parchment">
+
+{% if regions_data %}
+<div class="lore-section" id="section-regions">
+    <details>
+        <summary class="lore-summary"><h2 style="display: inline;">Regions ({{ regions_data | length }})</h2></summary>
+        <div class="lore-content">
+            <div class="lore-grid-3">
+            {% for region in regions_data %}
+            <div class="lore-item" style="margin-bottom: 0.3rem;">
+                {{ pin_btn("region", "", region.name) }}
+                <strong>{{ region.name }}</strong>{% if region.details %} — <span style="color: var(--ink-light);">{{ region.details }}</span>{% endif %}
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+    </details>
+</div>
+{% endif %}
+
+{% if geography %}
+<div class="lore-section" id="section-landmarks">
+    <details>
+        <summary class="lore-summary"><h2 style="display: inline;">Landmarks ({{ geography | length }})</h2></summary>
+        <div class="lore-content">
+            <div class="lore-grid-3">
+            {% for geo in geography %}
+            <div class="lore-item" {% if geo.id and geo.entity_type %}data-entity-type="{{ geo.entity_type }}" data-entity-id="{{ geo.id }}"{% endif %} style="margin-bottom: 0.3rem;">
+                {{ pin_btn("geography", geo.id, geo.name) }}
+                <strong>{{ geo.name }}</strong> — <span style="color: var(--ink-light);">{{ geo.details }}</span>
+            </div>
+            {% endfor %}
+            </div>
+        </div>
+    </details>
+</div>
+{% endif %}
+
+</div>
+</div>
+
+</div><!-- end #legends-tab-area -->
+
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
+function switchLegendsTab(tabName, btn) {
+    document.querySelectorAll('.legends-tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.legends-tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('legends-tab-' + tabName).classList.add('active');
+    btn.classList.add('active');
+}
+
+// Progressive show-more: hide items past the limit on page load, reveal on click
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.lore-section[data-limit]').forEach(section => {
+        const limit = parseInt(section.dataset.limit) || 20;
+        const items = section.querySelectorAll('.lore-content > .lore-item, .lore-content > .lore-grid > .lore-item, .lore-content > .lore-grid-3 > .lore-item');
+        items.forEach((item, i) => {
+            if (i >= limit) item.style.display = 'none';
+        });
+    });
+});
+
+function showMoreItems(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const hiddenItems = section.querySelectorAll('.lore-item[style*="display: none"]');
+    let shown = 0;
+    hiddenItems.forEach(item => {
+        if (shown < 20) {
+            item.style.display = '';
+            shown++;
+        }
+    });
+    const remaining = section.querySelectorAll('.lore-item[style*="display: none"]').length;
+    const btn = section.querySelector('.show-more-btn');
+    if (btn) {
+        if (remaining === 0) {
+            btn.parentElement.style.display = 'none';
+        } else {
+            btn.textContent = 'Show more (' + remaining + ' remaining)';
+        }
+    }
+}
+</script>
+<script>
+// Inline map
+(function() {
+    const container = document.getElementById('inline-map');
+    if (!container) return;
+
+    const RACE_COLORS = { 'Dwarf': '#8a6d3b', 'Elf': '#2d5a27', 'Human': '#4a6fa5', 'Goblin': '#8b2500', 'Kobold': '#7a6558' };
+    const DEFAULT_COLOR = '#b8a078';
+    const SITE_MARKERS = {
+        'fortress': '\u25A0', 'dark fortress': '\u25A0', 'mountain halls': '\u25B2',
+        'town': '\u25CF', 'dark pits': '\u25BC', 'hillocks': '\u25A0', 'hamlet': '\u25CF',
+        'cave': '\u25C6', 'vault': '\u2605', 'tower': '\u2666', 'shrine': '\u271A',
+        'tomb': '\u2020', 'camp': '\u25B3', 'forest retreat': '\u2663', 'lair': '\u25C6',
+    };
+
+    Promise.all([
+        fetch('/api/lore/map/terrain').then(r => { if (!r.ok) throw new Error('No terrain'); return r.blob(); }),
+        fetch('/api/lore/map/sites').then(r => r.json()),
+    ])
+    .then(([terrainBlob, siteData]) => {
+        const terrainUrl = URL.createObjectURL(terrainBlob);
+        const wW = siteData.world_size[0], wH = siteData.world_size[1];
+        const bounds = [[wH, 0], [0, wW]];
+
+        const map = L.map('inline-map', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4, attributionControl: false });
+        L.imageOverlay(terrainUrl, bounds).addTo(map);
+        map.fitBounds(bounds);
+
+        for (const site of siteData.sites) {
+            const lat = wH - site.y - 0.5, lng = site.x + 0.5;
+            const sym = SITE_MARKERS[site.type] || '\u25CF';
+            const color = site.owner_race ? (RACE_COLORS[site.owner_race] || DEFAULT_COLOR) : DEFAULT_COLOR;
+            const icon = L.divIcon({
+                className: 'map-site-marker',
+                html: '<span style="color:' + color + ';font-size:8px;text-shadow:0 0 2px #000,0 0 2px #000;">' + sym + '</span>',
+                iconSize: [12, 12], iconAnchor: [6, 6],
+            });
+            const marker = L.marker([lat, lng], { icon: icon });
+            let popup = '<div style="font-family:\'Crimson Text\',serif;min-width:100px;">';
+            popup += '<strong><a href="/lore/site/' + site.id + '" style="color:#8a6d3b;">' + site.name + '</a></strong><br>';
+            popup += '<span style="color:#7a6558;font-size:0.9em;">' + (site.type || '') + '</span>';
+            if (site.owner_name) popup += '<br><a href="/lore/civ/' + site.owner_civ_id + '" style="color:#4a3728;font-size:0.85em;">' + site.owner_name + '</a>';
+            popup += '</div>';
+            marker.bindPopup(popup);
+            marker.addTo(map);
+        }
+
+        // Roads/tunnels
+        if (siteData.constructions) {
+            for (const wc of siteData.constructions) {
+                const latlngs = wc.points.map(p => [wH - p[1] - 0.5, p[0] + 0.5]);
+                L.polyline(latlngs, { color: '#b8a078', weight: 1.5, opacity: 0.5, dashArray: wc.type === 'tunnel' ? '3 3' : null }).addTo(map);
+            }
+        }
+    })
+    .catch(() => {
+        container.style.display = 'none';
+        const err = document.getElementById('inline-map-error');
+        if (err) { err.style.display = ''; err.textContent = 'Map not available — export legends_plus from DFHack.'; }
+    });
+})();
+</script>
+<style>
+.map-site-marker { display:flex; align-items:center; justify-content:center; background:none!important; border:none!important; }
+#inline-map .leaflet-popup-content-wrapper { background:rgba(244,232,193,0.95)!important; border:1px solid #b8a078!important; border-radius:4px!important; color:#2c1810!important; }
+#inline-map .leaflet-popup-tip { background:rgba(244,232,193,0.95)!important; }
+</style>
+<script>
+// Chart colors matching the parchment theme
+const CHART_COLORS = ['#8a6d3b', '#8b2500', '#2d5a27', '#4a3728', '#c9a84c', '#7a6558', '#a83a1a', '#b8a078', '#5c3d2e', '#d4bc7c', '#2c1810', '#e8d5a3'];
+const CHART_DEFAULTS = {
+    color: '#4a3728',
+    borderColor: '#b8a078',
+    font: { family: "'Crimson Text', serif" },
+};
+
+// Load world overview charts
+fetch('/api/lore/stats/world')
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) return;
+        document.getElementById('world-charts').style.display = '';
+
+        // Race distribution doughnut
+        if (data.race_distribution && data.race_distribution.labels.length) {
+            new Chart(document.getElementById('race-chart'), {
+                type: 'doughnut',
+                data: {
+                    labels: data.race_distribution.labels,
+                    datasets: [{ data: data.race_distribution.values, backgroundColor: CHART_COLORS }]
+                },
+                options: {
+                    plugins: {
+                        legend: { position: 'right', labels: { ...CHART_DEFAULTS, boxWidth: 12, font: { size: 11, ...CHART_DEFAULTS.font } } }
+                    }
+                }
+            });
+        }
+
+        // Event timeline line chart
+        if (data.event_timeline && data.event_timeline.labels.length) {
+            new Chart(document.getElementById('timeline-chart'), {
+                type: 'line',
+                data: {
+                    labels: data.event_timeline.labels,
+                    datasets: [{ label: 'Events', data: data.event_timeline.values, borderColor: '#8a6d3b', backgroundColor: 'rgba(138,109,59,0.1)', fill: true, tension: 0.3 }]
+                },
+                options: {
+                    scales: { x: { ticks: { ...CHART_DEFAULTS, maxTicksLimit: 10 } }, y: { ticks: CHART_DEFAULTS, beginAtZero: true } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        // Event types bar chart
+        if (data.event_types && data.event_types.labels.length) {
+            new Chart(document.getElementById('types-chart'), {
+                type: 'bar',
+                data: {
+                    labels: data.event_types.labels,
+                    datasets: [{ label: 'Count', data: data.event_types.values, backgroundColor: CHART_COLORS }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    scales: { x: { ticks: CHART_DEFAULTS, beginAtZero: true }, y: { ticks: { ...CHART_DEFAULTS, font: { size: 10, ...CHART_DEFAULTS.font } } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+    })
+    .catch(() => {});
+
 let searchTimeout = null;
 const searchResults = document.createElement('div');
 searchResults.id = 'search-results';
@@ -295,16 +752,20 @@ function filterLore(query) {
     if (!query) {
         // Show default page, hide search results
         searchResults.style.display = 'none';
-        document.querySelectorAll('.lore-section, .parchment:not(#search-results)').forEach(s => s.style.display = '');
+        document.querySelectorAll('.lore-section').forEach(s => s.style.display = '');
         document.querySelectorAll('.lore-section details').forEach(d => d.removeAttribute('open'));
+        // Show the tab area again
+        const tabArea = document.getElementById('legends-tab-area');
+        if (tabArea) tabArea.style.display = '';
         return;
     }
 
     // Debounce — wait 300ms after typing stops
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(async () => {
-        // Hide default sections while searching
-        document.querySelectorAll('.lore-section').forEach(s => s.style.display = 'none');
+        // Hide tab area while searching
+        const tabArea = document.getElementById('legends-tab-area');
+        if (tabArea) tabArea.style.display = 'none';
 
         // Query server
         const resp = await fetch('/api/lore/search?q=' + encodeURIComponent(query));

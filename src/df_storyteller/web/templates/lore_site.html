@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}{{ site.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="lore-detail-layout">
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ site.name }}</div>
+            <div class="char-title">
+                {{ site.site_type | default('Unknown type') }}
+                {% if owner_name %}
+                &middot; Owned by {{ lore_link("civilization", owner_id, owner_name) | safe }}
+                {% endif %}
+                {% if site.coordinates %}
+                &middot; {{ site.coordinates }}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if event_types %}
+        <div class="stat-section">
+            <h3>Event Distribution</h3>
+            <div style="width: 250px; height: 250px; margin: 0 auto 1rem;">
+                <canvas id="site-events-chart"></canvas>
+            </div>
+            <h3>Event Breakdown</h3>
+            <ul class="stat-list">
+                {% for etype, count in event_types | dictsort(by='value', reverse=true) %}
+                <li>{{ etype }} <span style="color: var(--ink-faded);">({{ count }})</span></li>
+                {% endfor %}
+            </ul>
+            <p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.5rem;">{{ total_events }} total events</p>
+        </div>
+        {% endif %}
+
+        {% if structures %}
+        <div class="stat-section">
+            <h3>Structures ({{ structures | length }})</h3>
+            <ul class="stat-list">
+                {% for struct in structures %}
+                <li>
+                    {% if struct.name %}<strong>{{ struct.name }}</strong>{% endif %}
+                    {% if struct.type %} <span style="color: var(--ink-faded);">({{ struct.type }})</span>{% endif %}
+                    {% if struct.deity %}— dedicated to {{ lore_link("figure", struct.deity_id, struct.deity) | safe }}{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if events %}
+        <div class="bio-section">
+            <h3>Event Timeline</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif; width: 80px;">Year</th>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif;">Event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for evt in events %}
+                    <tr class="event-row" {% if loop.index > 50 %}style="display: none;"{% endif %}>
+                        <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); vertical-align: top; font-size: 0.9rem;">{{ evt.year }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if events | length > 50 %}
+            <div style="text-align: center; margin-top: 0.8rem;">
+                <button class="btn btn-secondary" id="load-more-btn" onclick="loadMoreEvents()">
+                    Show more ({{ events | length - 50 }} remaining)
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% include "lore_sidebar.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+const CHART_COLORS = ['#8a6d3b', '#8b2500', '#2d5a27', '#4a3728', '#c9a84c', '#7a6558', '#a83a1a', '#b8a078', '#5c3d2e'];
+fetch('/api/lore/stats/site/{{ site.site_id }}')
+    .then(r => r.json())
+    .then(data => {
+        const canvas = document.getElementById('site-events-chart');
+        if (!canvas || !data.event_types || !data.event_types.labels.length) return;
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: data.event_types.labels,
+                datasets: [{ data: data.event_types.values, backgroundColor: CHART_COLORS }]
+            },
+            options: {
+                plugins: { legend: { position: 'bottom', labels: { color: '#4a3728', boxWidth: 10, font: { size: 10, family: "'Crimson Text', serif" } } } }
+            }
+        });
+    })
+    .catch(() => {});
+
+function loadMoreEvents() {
+    const rows = document.querySelectorAll('.event-row[style*="display: none"]');
+    let shown = 0;
+    rows.forEach(row => {
+        if (shown < 50) {
+            row.style.display = '';
+            shown++;
+        }
+    });
+    const remaining = document.querySelectorAll('.event-row[style*="display: none"]').length;
+    const btn = document.getElementById('load-more-btn');
+    if (remaining === 0) {
+        btn.style.display = 'none';
+    } else {
+        btn.textContent = 'Show more (' + remaining + ' remaining)';
+    }
+}
+</script>
+{% endblock %}

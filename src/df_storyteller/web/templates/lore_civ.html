@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ civ.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="lore-detail-layout">
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ civ.name }}</div>
+            <div class="char-title">{{ civ.race | default('Unknown race') }}</div>
+        </div>
+
+        <!-- Left Column -->
+        <div class="stat-section">
+            {% if sites %}
+            <h3>Sites ({{ sites | length }})</h3>
+            <ul class="stat-list">
+                {% for site in sites %}
+                <li>{{ lore_link("site", site.site_id, site.name) | safe }} <span style="color: var(--ink-faded);">({{ site.site_type }})</span></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if sub_entities %}
+            <h3>Organizations</h3>
+            <ul class="stat-list">
+                {% for org in sub_entities %}
+                <li>{{ org }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        <!-- Right Column -->
+        <div class="stat-section">
+            {% if leaders %}
+            <h3>Leaders</h3>
+            <ul class="stat-list">
+                {% for leader in leaders %}
+                <li>{{ lore_link("figure", leader.hf_id, leader.name) | safe }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <h3>Events</h3>
+            <p style="color: var(--ink-light);">{{ event_count }} recorded events</p>
+
+            {% if populations %}
+            <h3>Population</h3>
+            <ul class="stat-list">
+                {% for pop in populations %}
+                <li>{{ pop.race }} <span style="color: var(--ink-faded);">({{ pop.count }})</span></li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        {% if wars %}
+        <div class="bio-section">
+            <h3>Warfare Relations</h3>
+            <div id="war-graph" style="height: 300px; border: 1px solid var(--border); border-radius: 4px; background: rgba(244,232,193,0.3); margin-bottom: 1rem;"></div>
+        </div>
+        <div class="bio-section">
+            <h3>War Activity</h3>
+            <div style="max-width: 500px; height: 220px;">
+                <canvas id="civ-war-chart"></canvas>
+            </div>
+        </div>
+        <div class="bio-section">
+            <h3>Wars &amp; Conflicts ({{ wars | length }})</h3>
+            {% for war in wars %}
+            <div style="margin-bottom: 0.4rem;">
+                {{ lore_link("war", war.id, war.name) | safe }}
+                {% if war.years %}<span style="color: var(--ink-faded);"> ({{ war.years }})</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if notable_figures %}
+        <div class="bio-section">
+            <h3>Notable Figures</h3>
+            {% for fig in notable_figures[:20] %}
+            <div style="margin-bottom: 0.3rem;">
+                {{ lore_link("figure", fig.hf_id, fig.name) | safe }}
+                {% if fig.race %}<span style="color: var(--ink-faded);"> ({{ fig.race }})</span>{% endif %}
+                {% if fig.description %} &mdash; <span style="color: var(--ink-light);">{{ fig.description }}</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% if notable_figures | length > 20 %}
+            <p style="color: var(--ink-faded); font-style: italic; margin-top: 0.5rem;">
+                ...and {{ notable_figures | length - 20 }} more
+            </p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% include "lore_sidebar.html" %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9/dist/vis-network.min.js"></script>
+<script>
+// Warfare network graph
+fetch('/api/lore/graph/wars/{{ civ.entity_id }}')
+    .then(r => r.json())
+    .then(data => {
+        const container = document.getElementById('war-graph');
+        if (!container || !data.nodes || data.nodes.length <= 1) {
+            if (container) container.style.display = 'none';
+            return;
+        }
+
+        const nodes = new vis.DataSet(data.nodes.map(n => ({
+            id: n.id,
+            label: n.label,
+            color: {
+                background: n.is_target ? '#c9a84c' : '#e8d5a3',
+                border: n.is_target ? '#8a6d3b' : '#b8a078',
+                highlight: { background: '#d4bc7c', border: '#8a6d3b' }
+            },
+            borderWidth: n.is_target ? 3 : 1,
+            font: { color: '#2c1810', size: 12, face: "'Crimson Text', serif" },
+            shape: 'box',
+        })));
+
+        const maxWeight = Math.max(...data.edges.map(e => e.weight), 1);
+        const edges = new vis.DataSet(data.edges.map(e => ({
+            from: e.from,
+            to: e.to,
+            width: 1 + (e.weight / maxWeight) * 4,
+            label: e.weight > 1 ? e.weight + ' wars' : '1 war',
+            color: { color: '#8b2500', highlight: '#a83a1a' },
+            font: { size: 9, color: '#7a6558', face: "'Crimson Text', serif" },
+        })));
+
+        const network = new vis.Network(container, { nodes, edges }, {
+            physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -50, springLength: 150 } },
+            interaction: { hover: true },
+        });
+
+        network.on('click', params => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                if (nodeId !== {{ civ.entity_id }}) {
+                    window.location.href = '/lore/civ/' + nodeId;
+                }
+            }
+        });
+    })
+    .catch(() => {});
+
+fetch('/api/lore/stats/civ/{{ civ.entity_id }}')
+    .then(r => r.json())
+    .then(data => {
+        const canvas = document.getElementById('civ-war-chart');
+        if (!canvas || !data.war_battles || !data.war_battles.labels.length) return;
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: data.war_battles.labels,
+                datasets: [{ label: 'Battles', data: data.war_battles.values, backgroundColor: '#8b2500' }]
+            },
+            options: {
+                indexAxis: 'y',
+                scales: { x: { ticks: { color: '#4a3728' }, beginAtZero: true }, y: { ticks: { color: '#4a3728', font: { size: 10, family: "'Crimson Text', serif" } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    })
+    .catch(() => {});
+</script>
+{% endblock %}

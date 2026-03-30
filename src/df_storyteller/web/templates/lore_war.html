@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ war.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ war.name }}</div>
+            <div class="char-title">
+                {{ war.type | default('Conflict') }}
+                &middot; Year {{ war.start_year }}{% if war.end_year %} &ndash; {{ war.end_year }}{% else %} &ndash; ongoing{% endif %}
+            </div>
+        </div>
+
+        <!-- Two-column factions -->
+        <div class="stat-section">
+            <h3>Aggressors</h3>
+            {% if aggressors %}
+            <ul class="stat-list">
+                {% for faction in aggressors %}
+                <li>{{ lore_link("civilization", faction.entity_id, faction.name) | safe }} <span style="color: var(--ink-faded);">({{ faction.race }})</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color: var(--ink-faded); font-style: italic;">Unknown</p>
+            {% endif %}
+            <p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.5rem;">Total casualties: {{ total_atk_casualties }}</p>
+        </div>
+
+        <div class="stat-section">
+            <h3>Defenders</h3>
+            {% if defenders %}
+            <ul class="stat-list">
+                {% for faction in defenders %}
+                <li>{{ lore_link("civilization", faction.entity_id, faction.name) | safe }} <span style="color: var(--ink-faded);">({{ faction.race }})</span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p style="color: var(--ink-faded); font-style: italic;">Unknown</p>
+            {% endif %}
+            <p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.5rem;">Total casualties: {{ total_def_casualties }}</p>
+        </div>
+
+        {% if battles %}
+        <div class="bio-section">
+            <h3>Battles ({{ battles | length }})</h3>
+            {% for battle in battles %}
+            <div style="margin-bottom: 0.8rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <strong>{{ battle.name }}</strong>
+                    <span style="font-size: 0.8rem; color: var(--ink-faded);">Year {{ battle.year }}</span>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--ink-light); margin-top: 0.2rem;">
+                    {% if battle.outcome %}Outcome: {{ battle.outcome }} &middot; {% endif %}
+                    Attacker losses: {{ battle.atk_casualties | default(0) }} &middot;
+                    Defender losses: {{ battle.def_casualties | default(0) }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if notable_attackers or notable_defenders %}
+        <div class="bio-section">
+            <h3>Notable Combatants</h3>
+            {% if notable_attackers %}
+            <h4 style="color: var(--ink-faded); font-size: 0.9rem; margin-bottom: 0.3rem;">Aggressors</h4>
+            <ul class="stat-list">
+                {% for fig in notable_attackers %}
+                <li>{{ lore_link("figure", fig.hf_id, fig.name) | safe }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% if notable_defenders %}
+            <h4 style="color: var(--ink-faded); font-size: 0.9rem; margin-bottom: 0.3rem; margin-top: 0.5rem;">Defenders</h4>
+            <ul class="stat-list">
+                {% for fig in notable_defenders %}
+                <li>{{ lore_link("figure", fig.hf_id, fig.name) | safe }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

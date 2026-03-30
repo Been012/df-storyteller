@@ -465,37 +465,73 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                         if hasattr(plus_civ, '_entity_type'):
                             legends.civilizations[eid]._entity_type = plus_civ._entity_type
 
-                # Merge HF race from plus into basic (basic has names, plus has race)
+                # Merge HF data from plus into basic (basic has names, plus has race/type/etc.)
                 for hfid, plus_hf in legends_plus.historical_figures.items():
                     if hfid in legends.historical_figures:
+                        basic_hf = legends.historical_figures[hfid]
                         if plus_hf.race:
-                            legends.historical_figures[hfid].race = plus_hf.race
+                            basic_hf.race = plus_hf.race
+                        if plus_hf.caste:
+                            basic_hf.caste = plus_hf.caste
+                        if plus_hf.hf_type:
+                            basic_hf.hf_type = plus_hf.hf_type
+                        if plus_hf.entity_links:
+                            basic_hf.entity_links = plus_hf.entity_links
+                        if plus_hf.active_interactions:
+                            basic_hf.active_interactions = plus_hf.active_interactions
+                        if plus_hf.skills:
+                            basic_hf.skills = plus_hf.skills
+                        if plus_hf.journey_pets:
+                            basic_hf.journey_pets = plus_hf.journey_pets
+                        if plus_hf.notable_deeds and not basic_hf.notable_deeds:
+                            basic_hf.notable_deeds = plus_hf.notable_deeds
                     else:
                         legends.historical_figures[hfid] = plus_hf
 
-                # Merge site type from plus
+                # Merge site data from plus
                 for sid, plus_site in legends_plus.sites.items():
                     if sid in legends.sites:
+                        basic_site = legends.sites[sid]
                         if plus_site.site_type:
-                            legends.sites[sid].site_type = plus_site.site_type
+                            basic_site.site_type = plus_site.site_type
+                        if plus_site.owner_civ_id is not None and basic_site.owner_civ_id is None:
+                            basic_site.owner_civ_id = plus_site.owner_civ_id
+                        if plus_site.structures and not basic_site.structures:
+                            basic_site.structures = plus_site.structures
+                        if plus_site.coordinates and not basic_site.coordinates:
+                            basic_site.coordinates = plus_site.coordinates
+                    else:
+                        legends.sites[sid] = plus_site
 
                 # Merge artifact details from plus (plus has type/material, basic has names)
                 for aid, plus_art in legends_plus.artifacts.items():
                     if aid in legends.artifacts:
+                        basic_art = legends.artifacts[aid]
                         if plus_art.item_type:
-                            legends.artifacts[aid].item_type = plus_art.item_type
+                            basic_art.item_type = plus_art.item_type
                         if plus_art.material:
-                            legends.artifacts[aid].material = plus_art.material
+                            basic_art.material = plus_art.material
+                        if plus_art.site_id is not None and basic_art.site_id is None:
+                            basic_art.site_id = plus_art.site_id
+                        if plus_art.description and not basic_art.description:
+                            basic_art.description = plus_art.description
                     else:
                         legends.artifacts[aid] = plus_art
 
                 # Copy entity metadata from plus to basic
                 for eid, plus_civ in legends_plus.civilizations.items():
                     if eid in legends.civilizations:
-                        for attr in ('_entity_type', '_child_ids', '_worship_id', '_profession'):
+                        basic_civ = legends.civilizations[eid]
+                        for attr in ('_entity_type', '_child_ids', '_worship_id', '_profession', '_entity_positions'):
                             val = getattr(plus_civ, attr, None)
                             if val:
-                                setattr(legends.civilizations[eid], attr, val)
+                                setattr(basic_civ, attr, val)
+                        if plus_civ.sites and not basic_civ.sites:
+                            basic_civ.sites = plus_civ.sites
+                        if plus_civ.leader_hf_ids and not basic_civ.leader_hf_ids:
+                            basic_civ.leader_hf_ids = plus_civ.leader_hf_ids
+                    else:
+                        legends.civilizations[eid] = plus_civ
 
                 # Copy extended data lists from plus (these don't exist in basic)
                 if legends_plus.relationships:
@@ -530,6 +566,9 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                     legends.musical_forms = _merge_forms(legends.musical_forms, legends_plus.musical_forms)
                 if legends_plus.dance_forms:
                     legends.dance_forms = _merge_forms(legends.dance_forms, legends_plus.dance_forms)
+                # Merge regions: basic has name/type, plus has coords/evilness
+                if legends_plus.regions:
+                    legends.regions = _merge_forms(legends.regions, legends_plus.regions)
                 if legends_plus.entity_populations:
                     legends.entity_populations = legends_plus.entity_populations
 

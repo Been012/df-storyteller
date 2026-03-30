@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}df-storyteller{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=3">
 </head>
 <body>
     <nav class="nav-bar">
@@ -14,7 +14,7 @@
             <li><a href="/dwarves" class="{% if active_tab == 'dwarves' %}active{% endif %}">Dwarves</a></li>
             <li><a href="/events" class="{% if active_tab == 'events' %}active{% endif %}">Events{% if event_count %} ({{ event_count }}){% endif %}</a></li>
             <li><a href="/dashboard" class="{% if active_tab == 'dashboard' %}active{% endif %}">Dashboard</a></li>
-            <li><a href="/lore" class="{% if active_tab == 'lore' %}active{% endif %}">Lore</a></li>
+            <li><a href="/lore" class="{% if active_tab == 'lore' %}active{% endif %}">Legends</a></li>
             <li><a href="/quests" class="{% if active_tab == 'quests' %}active{% endif %}">Quests</a></li>
             <li><a href="/gazette" class="{% if active_tab == 'gazette' %}active{% endif %}">Gazette</a></li>
             <li><a href="/settings" class="{% if active_tab == 'settings' %}active{% endif %}">Settings</a></li>
@@ -68,11 +68,28 @@
     </div>
     {% endif %}
 
-    <main class="content">
+    <main class="content {{ content_class | default('') }}">
         {% block content %}{% endblock %}
     </main>
 
-    <script src="/static/js/app.js"></script>
+    <!-- Global Pinned Lore Sidebar -->
+    <div id="pins-toggle" class="pins-toggle" onclick="togglePinsSidebar()" title="Pinned Lore (P)">
+        <span id="pins-toggle-icon">&#9734;</span>
+        <span id="pins-toggle-count"></span>
+    </div>
+    <aside id="pins-sidebar" class="pins-sidebar">
+        <div class="pins-sidebar-header">
+            <h3>Pinned Lore</h3>
+            <button onclick="togglePinsSidebar()" style="background:none;border:none;color:var(--parchment-dark);cursor:pointer;font-size:1.2rem;">&times;</button>
+        </div>
+        <div id="pins-sidebar-list" class="pins-sidebar-list"></div>
+        <div id="pins-sidebar-empty" class="pins-sidebar-empty" style="display:none;">
+            <p>No pinned lore yet.</p>
+            <p style="font-size:0.8rem;">Browse <a href="/lore" style="color:var(--gold-dark);">Legends</a> and click the pin button on any figure, civilization, site, or war to save it here for reference.</p>
+        </div>
+    </aside>
+
+    <script src="/static/js/app.js?v=3"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

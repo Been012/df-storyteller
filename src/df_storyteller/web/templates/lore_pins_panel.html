@@ -1,0 +1,40 @@
+<!-- Pinned Lore Reference Panel — shown on writing pages -->
+<div id="pinned-lore-panel" style="display: none;">
+    <details open>
+        <summary style="cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.9rem; color: var(--gold-dark); margin-bottom: 0.5rem;">
+            Pinned Lore (<span id="pin-count">0</span>)
+        </summary>
+        <div id="pinned-lore-list" style="font-size: 0.85rem;"></div>
+    </details>
+</div>
+
+<script>
+// Load and display pinned lore references
+fetch('/api/lore/pins')
+    .then(r => r.json())
+    .then(pins => {
+        if (!pins.length) return;
+        const panel = document.getElementById('pinned-lore-panel');
+        const list = document.getElementById('pinned-lore-list');
+        document.getElementById('pin-count').textContent = pins.length;
+        panel.style.display = '';
+
+        const TYPE_URLS = { figure: '/lore/figure/', civilization: '/lore/civ/', site: '/lore/site/', artifact: '/lore/artifact/', war: '/lore/war/' };
+        const TYPE_ICONS = { figure: '\u2694', civilization: '\u2655', site: '\u2302', artifact: '\u2736', war: '\u2620' };
+
+        for (const pin of pins) {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding: 0.3rem 0.4rem; border-bottom: 1px solid rgba(184,160,120,0.2); display: flex; gap: 0.5rem; align-items: baseline;';
+            const icon = TYPE_ICONS[pin.entity_type] || '\u25CF';
+            const url = (TYPE_URLS[pin.entity_type] || '/lore/figure/') + pin.entity_id;
+            let html = '<span style="color: var(--gold-dark);">' + icon + '</span> ';
+            html += '<a href="' + url + '" class="lore-link" style="font-size: 0.85rem;">' + pin.name + '</a>';
+            if (pin.note) {
+                html += '<span style="color: var(--ink-faded); font-style: italic; font-size: 0.8rem; margin-left: 0.3rem;">— ' + pin.note + '</span>';
+            }
+            div.innerHTML = html;
+            list.appendChild(div);
+        }
+    })
+    .catch(() => {});
+</script>

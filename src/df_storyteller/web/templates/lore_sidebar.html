@@ -1,0 +1,130 @@
+<!-- Lore Detail Sidebar — related entity navigation + pin button -->
+<aside class="lore-sidebar">
+
+    <!-- Pin Button -->
+    {% if pin_entity %}
+    <div class="sidebar-section" style="margin-bottom: 1.2rem;">
+        <button class="btn btn-secondary pin-btn" id="pin-btn"
+                onclick="togglePin('{{ pin_entity.type }}', '{{ pin_entity.id }}', '{{ pin_entity.name | replace("'", "\\'") }}')"
+                style="width: 100%; padding: 0.4rem; font-size: 0.8rem;">
+            <span id="pin-icon">&#9734;</span> Pin for Reference
+        </button>
+        <div id="pin-note-area" style="display: none; margin-top: 0.5rem;">
+            <input type="text" id="pin-note-input" placeholder="Why is this interesting?"
+                style="width: 100%; font-family: 'Crimson Text', serif; padding: 0.3rem; font-size: 0.85rem; border: 1px solid var(--border); border-radius: 3px; background: var(--parchment-light); color: var(--ink);">
+        </div>
+    </div>
+    {% endif %}
+
+    <h3 class="sidebar-title">Related</h3>
+
+    {% if sidebar_figures %}
+    <div class="sidebar-section">
+        <h4>Figures</h4>
+        {% for fig in sidebar_figures[:20] %}
+        <div style="margin-bottom: 0.2rem;">
+            <a href="/lore/figure/{{ fig.hf_id }}" class="sidebar-link" title="{{ fig.name }}">{{ fig.name }}</a>
+            {% if fig.reason %}<span style="font-size: 0.7rem; color: var(--ink-faded); display: block; padding-left: 0.4rem;">{{ fig.reason }}</span>{% endif %}
+        </div>
+        {% endfor %}
+        {% if sidebar_figures | length > 20 %}
+        <span class="sidebar-more">+{{ sidebar_figures | length - 20 }} more</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if sidebar_civs %}
+    <div class="sidebar-section">
+        <h4>Civilizations</h4>
+        {% for civ in sidebar_civs[:10] %}
+        <a href="/lore/civ/{{ civ.entity_id }}" class="sidebar-link" title="{{ civ.name }}">{{ civ.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sidebar_sites %}
+    <div class="sidebar-section">
+        <h4>Sites</h4>
+        {% for site in sidebar_sites[:10] %}
+        <a href="/lore/site/{{ site.site_id }}" class="sidebar-link" title="{{ site.name }}">{{ site.name }}</a>
+        {% endfor %}
+        {% if sidebar_sites | length > 10 %}
+        <span class="sidebar-more">+{{ sidebar_sites | length - 10 }} more</span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if sidebar_wars %}
+    <div class="sidebar-section">
+        <h4>Wars</h4>
+        {% for war in sidebar_wars[:8] %}
+        <a href="/lore/war/{{ war.id }}" class="sidebar-link" title="{{ war.name }}">{{ war.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</aside>
+
+<script>
+(function() {
+    // Check if this entity is already pinned
+    const pinEntity = {{ pin_entity | tojson | safe if pin_entity else '{}' }};
+    if (!pinEntity.type) return;
+
+    fetch('/api/lore/pins')
+        .then(r => r.json())
+        .then(pins => {
+            const existing = pins.find(p => p.entity_type === pinEntity.type && String(p.entity_id) === String(pinEntity.id));
+            if (existing) {
+                const btn = document.getElementById('pin-btn');
+                btn.innerHTML = '<span id="pin-icon">&#9733;</span> Pinned';
+                btn.dataset.pinId = existing.id;
+                btn.classList.add('pinned');
+                if (existing.note) {
+                    const noteArea = document.getElementById('pin-note-area');
+                    noteArea.style.display = '';
+                    document.getElementById('pin-note-input').value = existing.note;
+                }
+            }
+        })
+        .catch(() => {});
+})();
+
+async function togglePin(entityType, entityId, name) {
+    const btn = document.getElementById('pin-btn');
+    const noteArea = document.getElementById('pin-note-area');
+
+    if (btn.dataset.pinId) {
+        // Unpin
+        await fetch('/api/lore/pins/' + btn.dataset.pinId, { method: 'DELETE' });
+        btn.innerHTML = '<span id="pin-icon">&#9734;</span> Pin for Reference';
+        btn.classList.remove('pinned');
+        delete btn.dataset.pinId;
+        noteArea.style.display = 'none';
+    } else {
+        // Pin
+        const note = document.getElementById('pin-note-input').value.trim();
+        const resp = await fetch('/api/lore/pins', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_type: entityType, entity_id: entityId, name: name, note: note }),
+        });
+        const pin = await resp.json();
+        btn.innerHTML = '<span id="pin-icon">&#9733;</span> Pinned';
+        btn.dataset.pinId = pin.id;
+        btn.classList.add('pinned');
+        noteArea.style.display = '';
+    }
+}
+
+// Save note on blur
+document.getElementById('pin-note-input')?.addEventListener('blur', function() {
+    const btn = document.getElementById('pin-btn');
+    if (btn.dataset.pinId && this.value.trim()) {
+        fetch('/api/lore/pins/' + btn.dataset.pinId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: this.value.trim() }),
+        });
+    }
+});
+</script>
