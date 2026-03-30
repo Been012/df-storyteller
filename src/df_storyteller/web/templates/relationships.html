@@ -9,16 +9,21 @@
         <p id="graph-stats" class="page-subtitle"></p>
     </div>
     <div style="display: flex; gap: 1rem; align-items: center;">
-        <label style="font-size: 0.85rem; color: var(--ink-faded);">
+        <div class="dwarf-tabs" style="border-bottom: none; margin: 0;">
+            <button class="dwarf-tab active" id="tab-social" onclick="switchGraphView('social')">Social Web</button>
+            <button class="dwarf-tab" id="tab-family" onclick="switchGraphView('family')">Family Tree</button>
+        </div>
+        <label style="font-size: 0.85rem; color: var(--ink-faded);" id="label-names">
             <input type="checkbox" id="show-labels" checked onchange="toggleLabels()"> Names
         </label>
-        <label style="font-size: 0.85rem; color: var(--ink-faded);">
+        <label style="font-size: 0.85rem; color: var(--ink-faded);" id="label-isolated">
             <input type="checkbox" id="hide-isolated" onchange="toggleIsolated()"> Hide unconnected
         </label>
     </div>
 </div>
 
-<div class="parchment" style="padding: 0.5rem; position: relative; min-height: 500px;">
+<!-- Social Web View -->
+<div id="view-social" class="parchment" style="padding: 0.5rem; position: relative; min-height: 500px;">
     <canvas id="graph-canvas" style="width: 100%; height: 600px; cursor: grab;"></canvas>
     <div id="tooltip" class="graph-tooltip" style="display: none;"></div>
     <div id="legend" class="graph-legend">
@@ -32,9 +37,119 @@
         Loading relationships...
     </div>
 </div>
+
+<!-- Family Tree View -->
+<div id="view-family" class="parchment" style="padding: 0.5rem; min-height: 500px; display: none;">
+    <div id="family-tree-graph" style="width: 100%; height: 600px;"></div>
+    <div id="family-loading" style="text-align: center; padding: 2rem; color: var(--ink-faded);">
+        Loading family tree from legends data...
+    </div>
+    <div id="family-legend" class="graph-legend">
+        <div><span class="legend-line" style="background: #6aaa6a;"></span> Parent &rarr; Child</div>
+        <div><span class="legend-line" style="background: #d86a6a;"></span> Spouse</div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9/dist/vis-network.min.js"></script>
+<script>
+let familyTreeLoaded = false;
+
+function switchGraphView(view) {
+    document.getElementById('view-social').style.display = view === 'social' ? '' : 'none';
+    document.getElementById('view-family').style.display = view === 'family' ? '' : 'none';
+    document.getElementById('tab-social').classList.toggle('active', view === 'social');
+    document.getElementById('tab-family').classList.toggle('active', view === 'family');
+    // Hide social-only controls in family view
+    document.getElementById('label-names').style.display = view === 'social' ? '' : 'none';
+    document.getElementById('label-isolated').style.display = view === 'social' ? '' : 'none';
+
+    if (view === 'family' && !familyTreeLoaded) {
+        familyTreeLoaded = true;
+        loadFamilyTree();
+    }
+}
+
+function loadFamilyTree() {
+    fetch('/api/relationships/family')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('family-loading').style.display = 'none';
+
+            if (data.error || !data.edges.length) {
+                document.getElementById('family-loading').style.display = '';
+                document.getElementById('family-loading').textContent = data.error || 'No family connections found among fortress dwarves. Make sure legends data is loaded.';
+                return;
+            }
+
+            // Filter to only dwarves with family connections
+            const connectedIds = new Set();
+            for (const e of data.edges) {
+                connectedIds.add(e.source);
+                connectedIds.add(e.target);
+            }
+
+            const nodes = new vis.DataSet(
+                data.nodes
+                    .filter(n => connectedIds.has(n.id))
+                    .map(n => ({
+                        id: n.id,
+                        label: n.name.split(',')[0].trim(),
+                        color: {
+                            background: n.is_alive ? '#e8d5a3' : '#7a6558',
+                            border: '#b8a078',
+                            highlight: { background: '#d4bc7c', border: '#8a6d3b' }
+                        },
+                        font: { color: n.is_alive ? '#2c1810' : '#7a6558', size: 12, face: "'Crimson Text', serif" },
+                        shape: 'box',
+                        opacity: n.is_alive ? 1.0 : 0.6,
+                        title: n.name + ' (' + n.profession + ')',
+                    }))
+            );
+
+            const edges = new vis.DataSet(
+                data.edges.map(e => ({
+                    from: e.source,
+                    to: e.target,
+                    color: { color: e.type === 'spouse' ? '#d86a6a' : '#6aaa6a' },
+                    dashes: e.type === 'spouse',
+                    arrows: e.type === 'parent' ? { to: { enabled: true, scaleFactor: 0.5 } } : {},
+                    width: e.type === 'spouse' ? 2 : 1.5,
+                    label: e.type === 'spouse' ? String.fromCharCode(9829) : '',
+                    font: { size: 10, color: '#d86a6a' },
+                }))
+            );
+
+            const container = document.getElementById('family-tree-graph');
+            const network = new vis.Network(container, { nodes, edges }, {
+                layout: {
+                    hierarchical: {
+                        direction: 'UD',
+                        sortMethod: 'directed',
+                        levelSeparation: 100,
+                        nodeSpacing: 150,
+                        parentCentralization: true,
+                    }
+                },
+                physics: false,
+                interaction: { hover: true },
+            });
+
+            network.on('click', params => {
+                if (params.nodes.length > 0) {
+                    window.location.href = '/dwarves/' + params.nodes[0];
+                }
+            });
+
+            document.getElementById('graph-stats').textContent =
+                connectedIds.size + ' dwarves in ' + data.edges.length + ' family bonds';
+        })
+        .catch(err => {
+            document.getElementById('family-loading').textContent = 'Failed to load family tree: ' + err.message;
+        });
+}
+</script>
 <style>
 .graph-tooltip {
     position: absolute;

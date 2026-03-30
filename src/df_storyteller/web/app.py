@@ -731,6 +731,66 @@ async def api_relationships():
     return {"nodes": nodes, "edges": unique_edges}
 
 
+@app.get("/api/relationships/family")
+async def api_relationships_family():
+    """Return family tree data for fortress dwarves using legends hf_link data."""
+    config = _get_config()
+    event_store, character_tracker, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ranked = character_tracker.ranked_characters()
+
+    if not world_lore.is_loaded or not world_lore._legends:
+        return {"nodes": [], "edges": [], "error": "Legends data required for family trees"}
+
+    legends = world_lore._legends
+    nodes = []
+    edges = []
+    seen_edges: set[tuple[int, int, str]] = set()
+
+    # Map unit_id -> hist_figure_id for fortress dwarves
+    unit_to_hf: dict[int, int] = {}
+    hf_to_unit: dict[int, int] = {}
+    for dwarf, score in ranked:
+        if dwarf.hist_figure_id and dwarf.hist_figure_id > 0:
+            unit_to_hf[dwarf.unit_id] = dwarf.hist_figure_id
+            hf_to_unit[dwarf.hist_figure_id] = dwarf.unit_id
+
+    # Build nodes from fortress dwarves
+    for dwarf, score in ranked:
+        hfid = unit_to_hf.get(dwarf.unit_id)
+        family = legends.get_hf_family(hfid) if hfid else {"parents": [], "children": [], "spouse": []}
+        # Count family connections within the fortress
+        fortress_family = sum(1 for p in family["parents"] if p in hf_to_unit) + \
+                          sum(1 for c in family["children"] if c in hf_to_unit) + \
+                          sum(1 for s in family["spouse"] if s in hf_to_unit)
+        nodes.append({
+            "id": dwarf.unit_id,
+            "name": dwarf.name,
+            "profession": dwarf.profession,
+            "is_alive": dwarf.is_alive,
+            "has_family": fortress_family > 0,
+        })
+
+        if not hfid:
+            continue
+
+        # Add family edges (only between fortress dwarves)
+        for parent_hf in family["parents"]:
+            if parent_hf in hf_to_unit:
+                key = (min(dwarf.unit_id, hf_to_unit[parent_hf]), max(dwarf.unit_id, hf_to_unit[parent_hf]), "parent")
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    edges.append({"source": hf_to_unit[parent_hf], "target": dwarf.unit_id, "type": "parent"})
+
+        for spouse_hf in family["spouse"]:
+            if spouse_hf in hf_to_unit:
+                key = (min(dwarf.unit_id, hf_to_unit[spouse_hf]), max(dwarf.unit_id, hf_to_unit[spouse_hf]), "spouse")
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    edges.append({"source": dwarf.unit_id, "target": hf_to_unit[spouse_hf], "type": "spouse"})
+
+    return {"nodes": nodes, "edges": edges}
+
+
 @app.get("/dwarves/{unit_id}", response_class=HTMLResponse)
 async def dwarf_detail_page(request: Request, unit_id: int):
     config = _get_config()
