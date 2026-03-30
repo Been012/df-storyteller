@@ -1,6 +1,6 @@
 # df-storyteller
 
-A fortress journal and storytelling companion for [Dwarf Fortress](https://store.steampowered.com/app/975370/Dwarf_Fortress/). Captures game events, dwarf personalities, and world history through [DFHack](https://dfhack.org/). Use AI to generate narratives, or write your own — the choice is yours.
+A companion journal and legends browser for [Dwarf Fortress](https://store.steampowered.com/app/975370/Dwarf_Fortress/). Track your fortress, explore world history, chart relationships, map your world, and document the stories that emerge from your gameplay. Optionally use AI to help write narratives — or write everything yourself.
 
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -9,83 +9,82 @@ A fortress journal and storytelling companion for [Dwarf Fortress](https://store
 
 ## Features
 
-### Two Modes: AI or Manual
-- **No-LLM Mode** — Use as a structured fortress journal. Write your own chronicles, biographies, gazette editions, sagas, and quests. No AI required.
-- **LLM Mode** — AI generates narratives grounded in your gameplay. Manual writing is still available alongside AI output.
-- Setup asks upfront — choose your preference during `init`, change anytime in Settings.
+### Legends Browser
+Explore your world's complete history through an interactive legends viewer — every figure, civilization, site, artifact, war, and event, all cross-linked and searchable.
 
-### Narrative Generation (AI or Player-Written)
-- **Fortress Chronicles** — Seasonal narratives tracking what's changing in your fortress. Edit entries inline.
-- **Dwarf Diaries** — First-person journal entries shaped by personality, beliefs, and stress
-- **Character Biographies** — Dated entries that evolve as dwarves change over time
-- **Death Eulogies** — Memorial narratives for fallen dwarves
-- **Battle Reports** — Dramatic combat accounts written by survivors or the fortress chronicler
-- **Epic Sagas** — World history narratives from legends data
-- **Fortress Gazette** — A dwarven newspaper with five sections. Write your own or generate with AI. Edit published editions.
+- **Detail Pages** — Dedicated pages for historical figures (with family trees, intrigue plots, emotional bonds, skills, kill lists), civilizations (festivals, honors, wars, population), sites (structures, properties, events), artifacts (contents, creator), and wars/battles (factions, casualties, combatants)
+- **World Map** — Terrain map generated from region data with Leaflet.js. Site markers by type and owner race. Roads and tunnels as toggleable polylines
+- **Festival Calendar** — Named festivals with full schedules (processions, ceremonies, competitions, dances, poetry, wrestling). Dwarven calendar grid (Granite–Obsidian). Competition winners with event types
+- **Intrigue & Schemes** — 7,900+ figures with active plots: assassinations, corruption networks, undead world conquest, infiltration. Actor roles, strategies, promised immortality
+- **Emotional Bonds** — Love, respect, trust, loyalty, and fear scores between figures, visualized as centered bar charts
+- **Family Trees** — Interactive hierarchical graphs showing parents, children, spouses, and siblings across generations
+- **Charts & Statistics** — Race distribution, event timeline, per-entity activity charts, warfare networks
+- **97 Event Types** — Every DF historical event rendered with human-readable descriptions and clickable entity names
+- **Cultural Forms** — Full descriptions of poetic, musical, and dance forms with meter, rhythm, instruments, and scales
+
+### Fortress Journal
+Track what's happening in your fortress with character sheets, event feeds, and seasonal chronicles.
+
+- **Character Sheets** — Every dwarf with personality traits, beliefs, skills (with level badges), relationships, combat record, equipment, wounds, and pets
+- **Fortress Chronicles** — Seasonal entries tracking migrations, conflicts, deaths, and changes. Write your own or generate with AI
+- **Dwarf Biographies & Diaries** — Dated entries that build over time. Write in your own voice or let AI draft from personality data
+- **Relationship Web** — Interactive force-directed graph of fortress connections, plus a family tree view from legends data
+- **Live Event Feed** — Real-time game events with color-coded cards by type (combat, death, mood, migration)
+- **Fortress Dashboard** — Population over time, migration waves, milestone timeline
+- **Fortress Gazette** — A dwarven newspaper with five sections. Newspaper-style two-column layout
+
+### Cross-Referencing
+Connect your fortress stories to the wider world history.
+
+- **Lore Pins** — Bookmark any legends entity (figures, wars, artifacts, festivals, cultural forms) and access them from a global sidebar on every page. Press `P` to toggle
+- **`[[Hotlinks]]`** — Type `[[name]]` in any chronicle, biography, or diary entry to create a clickable link to the corresponding legends page. Works for figures, sites, civilizations, artifacts, wars, written works, festivals, and cultural forms
+- **View in Legends** — Jump from any fortress dwarf to their historical figure page with full legends data
 
 ### Player Agency
-- **Dwarf Highlights** — Mark dwarves as Protagonist, Antagonist, or Watchlist. Highlighted dwarves get more focus in AI narratives and show role badges across the UI.
-- **Player Notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If) that influence how AI writes.
-- **Manual Writing Everywhere** — Write your own entries on every page, even with AI enabled.
-- **Inline Editing** — Edit chronicles, quests, and gazette editions after creation.
+Shape the narrative yourself — AI is optional, not required.
 
-### Quest System
-- **AI-Generated or Player-Created** — Generate quests from fortress state, or create your own with category and difficulty
-- **Resolve with Comments** — Complete quests with a player-written resolution (no AI needed)
-- **Edit on the Go** — Update quest titles and descriptions inline
-- **Difficulty Tiers** — Easy, Medium, Hard, Legendary
-- **Completion Narratives** — AI writes how the quest was fulfilled (LLM mode), or resolve manually
+- **Manual Writing Everywhere** — Write chronicles, biographies, diary entries, sagas, gazette editions, and quest resolutions without any AI
+- **Dwarf Highlights** — Mark dwarves as Protagonist, Antagonist, or Watchlist
+- **Player Notes** — 8 tag types (Suspicion, Fact, Theory, Rumor, Secret, Foreshadow, Mood, What If)
+- **Quest System** — Create quests with category and difficulty, resolve with comments
+- **Inline Editing** — Edit chronicles, quests, and gazette editions after creation
 
-### Legends Mode
-- **Detail Pages** — Dedicated pages for historical figures, civilizations, sites, artifacts, and wars with full event timelines, cross-linked entity names, and per-entity charts
-- **World Map** — Terrain map generated from region data, displayed with Leaflet.js. Site markers colored by owner race, shaped by site type. Roads and tunnels as toggleable polylines
-- **Charts & Statistics** — Race distribution, event timeline, event type breakdown (Chart.js). Per-entity activity charts on detail pages
-- **Family Trees** — Interactive hierarchical graphs on figure pages (vis-network)
-- **Warfare Graphs** — Force-directed civilization conflict networks on civ pages
-- **97 Event Types** — Every DF historical event type rendered with human-readable descriptions
-- **Lore Pins** — Bookmark any legends entity for cross-referencing. Global sidebar (P key) visible on every page
-- **Tabbed Layout** — Conflicts, People, Culture, Geography tabs with true total counts and progressive show-more
+### AI Narrative Generation (Optional)
+If you want AI assistance, connect an LLM provider. All generation is grounded in actual game data.
 
-### Visualization & Data
-- **Relationship Web** — Interactive force-directed graph of fortress connections
-- **Pantheon** — Deity worship chart with sphere descriptions from legends
-- **Combat Log** — Blow-by-blow fight details with siege grouping
-- **Chat Log** — Dwarf conversations with AI social summaries
-- **Live Event Feed** — Real-time game events via WebSocket
-- **Fortress Dashboard** — Population charts, migration waves, milestone timeline
+- Fortress chronicles, dwarf biographies, diary entries, death eulogies, battle reports, epic sagas, gazette editions, quest narratives
+- Supports Ollama (free, local), Anthropic Claude, and OpenAI
+- AI narratives reference real dwarf personalities, events, relationships, and world history
+- No AI required — every feature works in manual mode
 
 ## Screenshots
 
-### Chronicle
-AI-generated seasonal narratives that track migrations, conflicts, role changes, and the evolving story of your fortress. Includes fortress-wide player notes with 8 tag types that influence how the AI writes.
-![Chronicle](docs/screenshots/Chronicle.png)
-
-### Dwarves
-Character sheets with tabbed Notes, Biography, and Diary sections. Personality traits, skills, relationships, combat record, and equipment. First-person diary entries written in the dwarf's voice based on their personality.
-![Dwarves](docs/screenshots/dwarves.png)
-
-### Relationship Web
-Interactive force-directed graph showing family, friend, rival, and deity connections across the entire fortress. Drag, zoom, hover for details, double-click to focus on a dwarf's connections.
-![Relationship Web](docs/screenshots/relationship_web.png)
-
-### Pantheon
-Bar chart of deity worship across the fortress, sorted by worshipper count. Click any deity to see who worships them. Sphere descriptions (death, minerals, sacrifice, etc.) pulled from legends data.
-![Pantheon](docs/screenshots/Pantheon.png)
-
-### Events
-Live event feed via WebSocket, collapsible combat log with blow-by-blow fight details and siege grouping, battle reports written by survivors, and a chat log of dwarf conversations with AI social summaries.
-![Events](docs/screenshots/events.png)
-
 ### Legends Mode
-Tabbed world history browser with dedicated detail pages for figures, civilizations, sites, artifacts, and wars. Interactive world map generated from region data. Charts, family trees, warfare graphs. Pin interesting finds for reference across the app.
+Tabbed world history browser with dedicated detail pages for figures, civilizations, sites, artifacts, and wars. Interactive world map, festival calendar, intrigue plots, emotional bonds, family trees, warfare graphs.
 ![Legends](docs/screenshots/legends.png)
 
-### Quests
-AI-generated quests based on your actual fortress state — citizens, buildings, events, religion, military. Filtered by category and difficulty. Grounded in real DF mechanics. Completion narratives feed into future chronicles.
-![Quests](docs/screenshots/quests.png)
+### Dwarves
+Character sheets with personality, skills with level badges, relationships, combat record, equipment. Tabbed Notes, Biography, and Diary sections. Link to full legends data via "View in Legends".
+![Dwarves](docs/screenshots/dwarves.png)
+
+### Chronicle
+Seasonal fortress narratives — write your own or generate with AI. Use `[[name]]` to hotlink any legends entity. Player notes influence AI generation.
+![Chronicle](docs/screenshots/Chronicle.png)
+
+### World Map
+Terrain generated from region data. Site markers by type (fortresses, towns, caves, towers) and owner race. Roads and tunnels as toggleable polylines.
+![Map](docs/screenshots/legends.png)
+
+### Relationship Web
+Interactive force-directed graph of fortress connections with a family tree view from legends data. Click nodes to navigate to dwarf pages.
+![Relationship Web](docs/screenshots/relationship_web.png)
+
+### Events
+Live event feed, collapsible combat log with blow-by-blow details, battle reports, and dwarf chat log.
+![Events](docs/screenshots/events.png)
 
 ### Gazette
-A dwarven newspaper with five sections: The Fortress Herald, Military Dispatches, Quarry Gossip, Quest Board, and Obituaries. Written by the fortress's best writer in their personality voice. Newspaper-style two-column layout.
+A dwarven newspaper with five sections. Newspaper-style two-column layout with personality-driven writing.
 ![Gazette](docs/screenshots/gazette.png)
 
 ## Quick Start
@@ -118,21 +117,20 @@ python -m df_storyteller serve
 - **Dwarf Fortress** v50.x (Steam / DF Premium) — tested with v50.14
 - **DFHack** v50.14-r1+ (Steam Workshop or [dfhack.org](https://dfhack.org/))
 - **Python 3.11+**
-- **An LLM provider** (optional — not needed for No-LLM mode):
-  - [Ollama](https://ollama.com/) — free, runs locally, no API key needed (supports thinking models)
+- **An LLM provider** (optional — not needed for journal/legends features):
+  - [Ollama](https://ollama.com/) — free, runs locally, no API key needed
   - [Anthropic Claude](https://console.anthropic.com/) — API key required
   - [OpenAI](https://platform.openai.com/) — API key required
 
-> **Note:** This tool uses DF Premium (Steam) APIs. Classic DF (pre-Steam) is not supported — some DFHack fields like `unit.relations` don't exist in the Steam version. We use `histfig_links` on historical figures instead.
+> **Note:** This tool uses DF Premium (Steam) APIs. Classic DF (pre-Steam) is not supported.
 
 ## Tech Stack
 
 - **Backend**: Python 3.11+, FastAPI, Pydantic v2
 - **Frontend**: Jinja2 templates, vanilla CSS/JS (no build step), Chart.js, Leaflet.js, vis-network (CDN)
-- **Map generation**: Pillow (terrain PNG from legends region data)
-- **Game integration**: DFHack Lua scripts
-- **LLM**: Anthropic SDK, OpenAI SDK, Ollama REST API (with thinking model support)
-- **All narratives grounded in DF mechanics** — the AI knows squad sizes, siege thresholds, temple values, what players can and cannot control
+- **Legends**: Pillow (terrain map generation), dwarven calendar mapping, 97 event type renderer
+- **Game integration**: DFHack Lua scripts (event monitoring, snapshots, legends export)
+- **LLM** (optional): Anthropic SDK, OpenAI SDK, Ollama REST API
 
 ## Documentation
 
@@ -145,9 +143,9 @@ See the **[Wiki](https://github.com/Been012/df-storyteller/wiki)** for:
 
 ## Notes
 
-- This tool is designed to run **locally on your machine** (localhost). It is not intended to be exposed to the internet or run on a public server.
-- **Developed and tested on Windows** with DF Premium (Steam). Should work on Mac and Linux — all code uses cross-platform libraries (`pathlib`, FastAPI) and DFHack APIs are platform-independent — but these platforms are untested. If you run into issues, please [open a bug report](https://github.com/Been012/df-storyteller/issues/new?template=bug_report.md).
-- Config and stories are stored at `~/.df-storyteller/`. API keys are in `config.toml`.
+- Designed to run **locally on your machine** (localhost). Not intended for public servers.
+- **Developed and tested on Windows** with DF Premium (Steam). Should work on Mac and Linux — all code uses cross-platform libraries — but these platforms are untested. [Report issues here](https://github.com/Been012/df-storyteller/issues/new?template=bug_report.md).
+- Config and stories stored at `~/.df-storyteller/`.
 
 ## License
 
