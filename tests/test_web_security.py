@@ -33,19 +33,22 @@ for _mod_name in _STUB_MODULES:
 from fastapi.testclient import TestClient
 
 from df_storyteller.config import AppConfig, PathsConfig
-from df_storyteller.web.app import app, _safe_watch_dir
+from df_storyteller.web.app import app
+from df_storyteller.web.state import safe_watch_dir as _safe_watch_dir
 
 
 @pytest.fixture(autouse=True)
 def _reset_app_state():
     """Reset global app state between tests."""
-    import df_storyteller.web.app as mod
-    old = mod._active_world
-    mod._active_world = None
-    mod._cached_state = None
-    mod._cache_time = 0
+    import df_storyteller.web.state as state_mod
+    old = state_mod._active_world
+    state_mod._active_world = None
+    state_mod._cached_no_legends = None
+    state_mod._cached_with_legends = None
+    state_mod._cache_time_no_legends = 0
+    state_mod._cache_time_with_legends = 0
     yield
-    mod._active_world = old
+    state_mod._active_world = old
 
 
 @pytest.fixture
@@ -146,7 +149,7 @@ class TestExceptionExposure:
         mock_tracker.get_dwarf.return_value = mock_dwarf
 
         with patch(
-            "df_storyteller.web.app._load_game_state_safe",
+            "df_storyteller.web.routers.stories._load_game_state_safe",
             return_value=(MagicMock(), mock_tracker, MagicMock(), {}),
         ), patch(
             "df_storyteller.stories.biography.generate_biography",
@@ -163,7 +166,7 @@ class TestExceptionExposure:
         mock_tracker.get_dwarf.return_value = None
 
         with patch(
-            "df_storyteller.web.app._load_game_state_safe",
+            "df_storyteller.web.routers.stories._load_game_state_safe",
             return_value=(MagicMock(), mock_tracker, MagicMock(), {}),
         ):
             resp = client.post("/api/bio/99999")
