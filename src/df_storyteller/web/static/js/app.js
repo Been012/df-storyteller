@@ -69,8 +69,8 @@ document.addEventListener('keydown', (e) => {
 
 /* ========== Global Pins Sidebar ========== */
 
-const PIN_TYPE_URLS = { figure: '/lore/figure/', civilization: '/lore/civ/', site: '/lore/site/', artifact: '/lore/artifact/', war: '/lore/war/' };
-const PIN_TYPE_ICONS = { figure: '\u2694', civilization: '\u2655', site: '\u2302', artifact: '\u2736', war: '\u2620' };
+const PIN_TYPE_URLS = { figure: '/lore/figure/', civilization: '/lore/civ/', site: '/lore/site/', artifact: '/lore/artifact/', war: '/lore/war/', battle: '/lore/war/', duel: '/lore/event/', purge: '/lore/event/', beast_attack: '/lore/event/', abduction: '/lore/event/', theft: '/lore/event/', persecution: '/lore/event/', site_conquest: '/lore/event/', overthrow: '/lore/event/', written_work: '/lore/work/', festival: '/lore/festival/', form_poetic: '/lore/form/', form_musical: '/lore/form/', form_dance: '/lore/form/' };
+const PIN_TYPE_ICONS = { figure: '\u2694', civilization: '\u2655', site: '\u2302', artifact: '\u2736', war: '\u2620', battle: '\u2694', duel: '\u2694', beast_attack: '\u2620', theft: '\u2620', abduction: '\u2620', persecution: '\u2620', purge: '\u2620', overthrow: '\u2620', site_conquest: '\u2620', relationship: '\u2665', region: '\u2302', geography: '\u2302', cultural_form: '\u266B', written_work: '\u270E' };
 
 function togglePinsSidebar() {
     const sidebar = document.getElementById('pins-sidebar');
@@ -91,22 +91,30 @@ function loadPinsSidebar() {
             if (!pins.length) {
                 empty.style.display = '';
                 if (countEl) countEl.textContent = '';
+                const actions = document.getElementById('pins-sidebar-actions');
+                if (actions) actions.style.display = 'none';
                 return;
             }
 
             empty.style.display = 'none';
             if (countEl) countEl.textContent = pins.length;
+            const actions = document.getElementById('pins-sidebar-actions');
+            if (actions) actions.style.display = '';
 
             for (const pin of pins) {
                 const div = document.createElement('div');
                 div.className = 'pin-item';
 
                 const icon = PIN_TYPE_ICONS[pin.entity_type] || '\u25CF';
-                const url = (PIN_TYPE_URLS[pin.entity_type] || '/lore/figure/') + pin.entity_id;
+                const url = PIN_TYPE_URLS[pin.entity_type] ? PIN_TYPE_URLS[pin.entity_type] + pin.entity_id : null;
 
                 let html = '<div class="pin-item-header">';
                 html += '<span class="pin-item-icon">' + icon + '</span>';
-                html += '<a href="' + url + '" class="pin-item-link">' + pin.name + '</a>';
+                if (url) {
+                    html += '<a href="' + url + '" class="pin-item-link">' + pin.name + '</a>';
+                } else {
+                    html += '<span class="pin-item-link">' + pin.name + '</span>';
+                }
                 html += '<span class="pin-item-type">' + (pin.entity_type || '') + '</span>';
                 html += '<button class="pin-item-remove" onclick="removeGlobalPin(\'' + pin.id + '\')" title="Unpin">&times;</button>';
                 html += '</div>';
@@ -123,6 +131,12 @@ function loadPinsSidebar() {
 
 async function removeGlobalPin(pinId) {
     await fetch('/api/lore/pins/' + pinId, { method: 'DELETE' });
+    loadPinsSidebar();
+}
+
+async function clearAllPins() {
+    if (!confirm('Remove all pinned lore?')) return;
+    await fetch('/api/lore/pins/all', { method: 'DELETE' });
     loadPinsSidebar();
 }
 

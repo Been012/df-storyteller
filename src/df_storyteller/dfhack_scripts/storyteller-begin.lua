@@ -208,6 +208,7 @@ local function serialize_unit(unit)
         skills = {},
         personality = { facets = {}, beliefs = {}, goals = {} },
         relationships = {},
+        pets = {},
         noble_positions = {},
         military = {},
         physical_attributes = {},
@@ -404,6 +405,27 @@ local function serialize_unit(unit)
                     local spouse = df.unit.find(spouse_id)
                     if spouse then
                         table.insert(data.relationships, { type = 'spouse', target_name = safe_unit_name(spouse), target_id = spouse.id })
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- Pets: find animals owned by this dwarf
+    pcall(function()
+        for _, animal in ipairs(df.global.world.units.active) do
+            pcall(function()
+                if animal.relationship_ids and animal.relationship_ids.PetOwner == unit.id then
+                    local pet_name = ''
+                    pcall(function() pet_name = dfhack.df2utf(dfhack.units.getReadableName(animal)) end)
+                    local pet_race = ''
+                    pcall(function() pet_race = df.creature_raw.find(animal.race).creature_id end)
+                    if pet_race ~= '' then
+                        table.insert(data.pets, {
+                            name = pet_name ~= '' and pet_name or nil,
+                            race = pet_race:lower():gsub('_', ' '),
+                            is_alive = dfhack.units.isAlive(animal),
+                        })
                     end
                 end
             end)

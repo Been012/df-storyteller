@@ -88,6 +88,7 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
         current_job=citizen.get("current_job", ""),
         equipment=equipment,
         wounds=citizen.get("wounds", []),
+        pets=citizen.get("pets", []),
         physical_attributes=citizen.get("physical_attributes", {}),
         mental_attributes=citizen.get("mental_attributes", {}),
     )
@@ -486,6 +487,14 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                             basic_hf.skills = plus_hf.skills
                         if plus_hf.journey_pets:
                             basic_hf.journey_pets = plus_hf.journey_pets
+                        if plus_hf.intrigue_plots and not basic_hf.intrigue_plots:
+                            basic_hf.intrigue_plots = plus_hf.intrigue_plots
+                        if plus_hf.emotional_bonds and not basic_hf.emotional_bonds:
+                            basic_hf.emotional_bonds = plus_hf.emotional_bonds
+                        if plus_hf.vague_relationships and not basic_hf.vague_relationships:
+                            basic_hf.vague_relationships = plus_hf.vague_relationships
+                        if plus_hf.former_positions and not basic_hf.former_positions:
+                            basic_hf.former_positions = plus_hf.former_positions
                         if plus_hf.notable_deeds and not basic_hf.notable_deeds:
                             basic_hf.notable_deeds = plus_hf.notable_deeds
                     else:
@@ -503,6 +512,8 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                             basic_site.structures = plus_site.structures
                         if plus_site.coordinates and not basic_site.coordinates:
                             basic_site.coordinates = plus_site.coordinates
+                        if plus_site.properties and not basic_site.properties:
+                            basic_site.properties = plus_site.properties
                     else:
                         legends.sites[sid] = plus_site
 
@@ -518,6 +529,8 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                             basic_art.site_id = plus_art.site_id
                         if plus_art.description and not basic_art.description:
                             basic_art.description = plus_art.description
+                        if plus_art.pages and not basic_art.pages:
+                            basic_art.pages = plus_art.pages
                     else:
                         legends.artifacts[aid] = plus_art
 
@@ -525,7 +538,7 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 for eid, plus_civ in legends_plus.civilizations.items():
                     if eid in legends.civilizations:
                         basic_civ = legends.civilizations[eid]
-                        for attr in ('_entity_type', '_child_ids', '_worship_id', '_profession', '_entity_positions'):
+                        for attr in ('_entity_type', '_child_ids', '_worship_id', '_profession', '_entity_positions', '_occasions', '_honors'):
                             val = getattr(plus_civ, attr, None)
                             if val:
                                 setattr(basic_civ, attr, val)

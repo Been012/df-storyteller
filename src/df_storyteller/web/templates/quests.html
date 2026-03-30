@@ -96,7 +96,7 @@
             {% if quest.priority %}&#9733;{% else %}&#9734;{% endif %}
         </button>
     </div>
-    <p class="quest-description">{{ quest.description }}</p>
+    <p class="quest-description">{{ quest.description | hotlink }}</p>
     {% if quest.hints %}
     <details class="quest-hints">
         <summary>Hints</summary>
@@ -151,9 +151,9 @@
             <span class="quest-category cat-{{ quest.category.value }}">{{ quest.category.value }}</span>
             <h3 class="quest-title">{{ quest.title }} <span class="quest-check">&#10003;</span></h3>
         </div>
-        <p class="quest-description">{{ quest.description }}</p>
+        <p class="quest-description">{{ quest.description | hotlink }}</p>
         {% if quest.completion_narrative %}
-        <div class="quest-narrative">{{ quest.completion_narrative }}</div>
+        <div class="quest-narrative">{{ quest.completion_narrative | hotlink }}</div>
         {% endif %}
         <div class="quest-meta">
             Completed: {{ quest.completed_at.strftime('%Y-%m-%d') if quest.completed_at else 'Unknown' }}

@@ -101,10 +101,31 @@
             {% endif %}
 
             {% if dwarf.skills %}
-            <h3>Skills</h3>
+            <h3>Skills ({{ dwarf.skills | length }})</h3>
             <ul class="stat-list">
                 {% for skill in dwarf.skills %}
-                <li>{{ skill }}</li>
+                <li style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ skill.name }}</span>
+                    <span class="skill-level skill-level-{{ skill.level_num }}" style="font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
+                        {% if skill.level_num >= 15 %}background: rgba(201,168,76,0.25); color: #c9a84c; font-weight: 700;
+                        {% elif skill.level_num >= 12 %}background: rgba(139,37,0,0.15); color: #c98b8b;
+                        {% elif skill.level_num >= 8 %}background: rgba(45,90,39,0.15); color: #8bc98b;
+                        {% elif skill.level_num >= 4 %}background: rgba(74,111,165,0.15); color: #8b9cc9;
+                        {% else %}background: rgba(122,101,88,0.1); color: var(--ink-faded);
+                        {% endif %}">{{ skill.level }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if dwarf.pets %}
+            <h3>Pets</h3>
+            <ul class="stat-list">
+                {% for pet in dwarf.pets %}
+                <li>
+                    {% if pet.name %}{{ pet.name }} — {% endif %}{{ pet.race }}
+                    {% if not pet.is_alive %}<span class="deceased-badge" style="font-size: 0.75rem;">Deceased</span>{% endif %}
+                </li>
                 {% endfor %}
             </ul>
             {% endif %}
@@ -246,7 +267,7 @@
                         {% if no_llm_mode %}Write a biography entry{% else %}Write your own entry{% endif %}
                     </summary>
                     <div style="margin-top: 0.5rem;">
-                        <textarea id="manual-bio-text" rows="6" placeholder="Write about this dwarf..."
+                        <textarea id="manual-bio-text" rows="6" placeholder="Write about this dwarf... Use [[name]] to link to legends figures, sites, or civilizations."
                             class="manual-textarea"></textarea>
                         <div class="btn-row" style="margin-top: 0.5rem;">
                             <button class="btn btn-primary" onclick="saveManualBio({{ dwarf.unit_id }})">Save Entry</button>
@@ -260,7 +281,7 @@
                         <div class="season-header" style="font-size: 1rem;">
                             {% if entry.get('is_eulogy') %}Memorial — {% endif %}{% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
-                        <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                        <div class="story-text">{{ entry.text | hotlink | replace('\n', '<br>') | safe }}</div>
                     </div>
                     {% if not loop.last %}
                     <div class="divider" style="margin: 1rem 0;">&loz;</div>
@@ -307,7 +328,7 @@
                         <div class="season-header" style="font-size: 1rem;">
                             {% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
-                        <div class="story-text">{{ entry.text | replace('\n', '<br>') | safe }}</div>
+                        <div class="story-text">{{ entry.text | hotlink | replace('\n', '<br>') | safe }}</div>
                     </div>
                     {% if not loop.last %}
                     <div class="divider" style="margin: 1rem 0;">&loz;</div>

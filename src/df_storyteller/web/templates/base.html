@@ -83,13 +83,16 @@
             <button onclick="togglePinsSidebar()" style="background:none;border:none;color:var(--parchment-dark);cursor:pointer;font-size:1.2rem;">&times;</button>
         </div>
         <div id="pins-sidebar-list" class="pins-sidebar-list"></div>
+        <div id="pins-sidebar-actions" style="display:none; padding: 0.5rem 1.2rem; border-top: 1px solid rgba(201,168,76,0.2);">
+            <button onclick="clearAllPins()" style="background:none; border:1px solid var(--ink-faded); color:var(--ink-faded); cursor:pointer; font-family:'Crimson Text',serif; font-size:0.8rem; padding:0.3rem 0.8rem; border-radius:3px; width:100%; transition: all 0.15s;">Clear All</button>
+        </div>
         <div id="pins-sidebar-empty" class="pins-sidebar-empty" style="display:none;">
             <p>No pinned lore yet.</p>
             <p style="font-size:0.8rem;">Browse <a href="/lore" style="color:var(--gold-dark);">Legends</a> and click the pin button on any figure, civilization, site, or war to save it here for reference.</p>
         </div>
     </aside>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=5"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ form.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ form.name }}</div>
+            <div class="char-title">{{ form.form_type }}</div>
+        </div>
+
+        {% if form.description %}
+        <div class="bio-section">
+            <div class="story-text" style="line-height: 1.8; text-align: justify;">
+                {{ form.description | replace('[B]', '<br><br>') | safe }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

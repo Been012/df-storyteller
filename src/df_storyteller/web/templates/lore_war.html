@@ -13,6 +13,9 @@
             <div class="char-title">
                 {{ war.type | default('Conflict') }}
                 &middot; Year {{ war.start_year }}{% if war.end_year %} &ndash; {{ war.end_year }}{% else %} &ndash; ongoing{% endif %}
+                {% if war.parent_war_name %}
+                &middot; Part of {{ lore_link("war", war.parent_war_id, war.parent_war_name) | safe }}
+                {% endif %}
             </div>
         </div>
 

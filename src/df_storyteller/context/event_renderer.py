@@ -8,13 +8,23 @@ if TYPE_CHECKING:
     from df_storyteller.ingestion.legends_parser import LegendsData
 
 
+_linked_mode = False  # Module-level flag for [[name]] wrapping
+
+
+def _wrap(name: str) -> str:
+    """Wrap a name in [[]] if linked mode is active."""
+    if _linked_mode and name and name != "someone":
+        return f"[[{name}]]"
+    return name
+
+
 def _resolve_hf(legends: LegendsData, hfid: str | None) -> str:
     """Resolve a historical figure ID to a name, or return 'someone'."""
     if not hfid or hfid == "-1":
         return "someone"
     try:
         hf = legends.get_figure(int(hfid))
-        return hf.name if hf and hf.name else f"figure #{hfid}"
+        return _wrap(hf.name) if hf and hf.name else f"figure #{hfid}"
     except (ValueError, TypeError):
         return f"figure #{hfid}"
 
@@ -25,7 +35,7 @@ def _resolve_site(legends: LegendsData, site_id: str | None) -> str:
         return ""
     try:
         site = legends.get_site(int(site_id))
-        return site.name if site else ""
+        return _wrap(site.name) if site else ""
     except (ValueError, TypeError):
         return ""
 
@@ -36,7 +46,7 @@ def _resolve_civ(legends: LegendsData, ent_id: str | None) -> str:
         return ""
     try:
         civ = legends.get_civilization(int(ent_id))
-        return civ.name if civ else ""
+        return _wrap(civ.name) if civ else ""
     except (ValueError, TypeError):
         return ""
 
@@ -47,7 +57,7 @@ def _resolve_artifact(legends: LegendsData, art_id: str | None) -> str:
         return ""
     try:
         art = legends.get_artifact(int(art_id))
-        return art.name if art else ""
+        return _wrap(art.name) if art else ""
     except (ValueError, TypeError):
         return ""
 
@@ -120,7 +130,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} destroyed {site}" if site else f"{hf} destroyed a site"
 
         case "artifact created":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_figure_id") or event.get("hfid"))
             art = _resolve_artifact(legends, event.get("artifact_id"))
             name = art if art else "an artifact"
             return f"{hf} created {name}{site_str}"
@@ -146,7 +156,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{name} {verb}{site_str}"
 
         case "artifact stored":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_figure_id") or event.get("hfid"))
             art = _resolve_artifact(legends, event.get("artifact_id"))
             name = art if art else "an artifact"
             return f"{hf} stored {name}{site_str}"
@@ -242,8 +252,17 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
 
         case "assume identity" | "assume_identity":
             hf = _resolve_hf(legends, event.get("trickster_hfid"))
-            target = _resolve_hf(legends, event.get("identity_hfid"))
-            return f"{hf} assumed the identity of {target}{site_str}"
+            # identity_id references an identity, not an HF — look up the assumed name
+            identity_id = event.get("identity_id", "")
+            identity_name = ""
+            if identity_id:
+                for ident in legends.identities:
+                    if str(ident.get("id", "")) == str(identity_id):
+                        identity_name = ident.get("name", "")
+                        break
+            if identity_name:
+                return f"{hf} assumed the identity of {_wrap(identity_name)}{site_str}"
+            return f"{hf} assumed a false identity{site_str}"
 
         case "creature devoured":
             eater = _resolve_hf(legends, event.get("eater_hfid"))
@@ -349,7 +368,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{doer} performed an interaction on {target}{site_str}"
 
         case "written content composed":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_figure_id") or event.get("hfid"))
             return f"{hf} composed a written work{site_str}"
 
         case "knowledge discovered":
@@ -374,8 +393,8 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"A field battle occurred{site_str}"
 
         case "body abused":
-            hf = _resolve_hf(legends, event.get("hfid"))
-            abuser = _resolve_hf(legends, event.get("abuser_hfid"))
+            hf = _resolve_hf(legends, event.get("bodies") or event.get("hfid"))
+            abuser = _resolve_hf(legends, event.get("abuser_hfid") or event.get("histfig"))
             abuse_type = event.get("abuse_type", "").replace("_", " ")
             if abuse_type:
                 return f"The body of {hf} was {abuse_type}{site_str}"
@@ -472,12 +491,24 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} preached{site_str}"
 
         case "hf prayed inside structure":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_fig_id") or event.get("hfid"))
             return f"{hf} prayed inside a structure{site_str}"
 
         case "competition":
             civ = _resolve_civ(legends, event.get("civ_id"))
-            return f"A competition was held{site_str}" + (f" by {civ}" if civ else "")
+            winner = _resolve_hf(legends, event.get("winner_hfid"))
+            competitors = event.get("competitor_hfid", [])
+            if isinstance(competitors, str):
+                competitors = [competitors]
+            comp_names = [_resolve_hf(legends, c) for c in competitors[:3] if c]
+            parts = [f"A competition was held{site_str}"]
+            if civ:
+                parts[0] += f" by {civ}"
+            if winner != "someone":
+                parts.append(f"won by {winner}")
+            if comp_names:
+                parts.append(f"against {', '.join(n for n in comp_names if n != 'someone')}")
+            return " — ".join(parts)
 
         case "ceremony":
             civ = _resolve_civ(legends, event.get("civ_id"))
@@ -505,7 +536,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{name} was copied{site_str}"
 
         case "artifact claim formed":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_figure_id") or event.get("hfid"))
             art = _resolve_artifact(legends, event.get("artifact_id"))
             claim = event.get("claim", "").replace("_", " ")
             name = art if art else "an artifact"
@@ -545,7 +576,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} purchased equipment{site_str}"
 
         case "add hf site link" | "add_hf_site_link":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_fig_id") or event.get("hfid"))
             site = _resolve_site(legends, event.get("site_id"))
             link_type = event.get("link_type", "").replace("_", " ")
             if link_type and site:
@@ -553,7 +584,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} linked to a site{site_str}"
 
         case "remove hf site link" | "remove_hf_site_link":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hist_fig_id") or event.get("hfid"))
             site = _resolve_site(legends, event.get("site_id"))
             link_type = event.get("link_type", "").replace("_", " ")
             if link_type and site:
@@ -575,7 +606,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} disturbed a structure{site_str}"
 
         case "hf performed horrible experiments":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("group_hfid") or event.get("hfid"))
             return f"{hf} performed horrible experiments{site_str}"
 
         case "hf reunion":
@@ -653,8 +684,11 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} was enslaved{site_str}"
 
         case "hf interrogated":
-            hf = _resolve_hf(legends, event.get("hfid"))
-            return f"{hf} was interrogated{site_str}"
+            target = _resolve_hf(legends, event.get("target_hfid") or event.get("hfid"))
+            interrogator = _resolve_hf(legends, event.get("interrogator_hfid"))
+            if interrogator != "someone":
+                return f"{target} was interrogated by {interrogator}{site_str}"
+            return f"{target} was interrogated{site_str}"
 
         case "change hf body state" | "change_hf_body_state":
             hf = _resolve_hf(legends, event.get("hfid"))
@@ -703,7 +737,7 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
             return f"{hf} created a new dance form{site_str}"
 
         case "building profile acquired":
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("acquirer_hfid") or event.get("hfid"))
             return f"{hf} acquired a building profile{site_str}"
 
         case "entity breach feature layer":
@@ -714,13 +748,17 @@ def describe_event(event: dict[str, Any], legends: LegendsData) -> str:
         case _:
             # Fallback: format the type nicely and include any resolvable names
             readable = etype.replace("_", " ").replace("hf ", "").title()
-            hf = _resolve_hf(legends, event.get("hfid"))
+            hf = _resolve_hf(legends, event.get("hfid") or event.get("hist_figure_id") or event.get("hist_fig_id") or event.get("group_hfid"))
             if hf != "someone":
                 return f"{readable}: {hf}{site_str}"
             return f"{readable}{site_str}"
 
 
-def describe_event_html(event: dict[str, Any], legends: LegendsData) -> str:
-    """Like describe_event but wraps entity names in lore-link anchors."""
-    # For now, return plain text — HTML linking will be added in Phase 1c
-    return describe_event(event, legends)
+def describe_event_linked(event: dict[str, Any], legends: LegendsData) -> str:
+    """Like describe_event but wraps entity names in [[name]] for hotlink processing."""
+    global _linked_mode
+    _linked_mode = True
+    try:
+        return describe_event(event, legends)
+    finally:
+        _linked_mode = False

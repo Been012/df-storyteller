@@ -57,8 +57,26 @@
     {% if sidebar_wars %}
     <div class="sidebar-section">
         <h4>Wars</h4>
-        {% for war in sidebar_wars[:8] %}
+        {% for war in sidebar_wars[:5] %}
         <a href="/lore/war/{{ war.id }}" class="sidebar-link" title="{{ war.name }}">{{ war.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sidebar_artifacts %}
+    <div class="sidebar-section">
+        <h4>Artifacts</h4>
+        {% for art in sidebar_artifacts[:5] %}
+        <a href="/lore/artifact/{{ art.artifact_id }}" class="sidebar-link" title="{{ art.name }}">{{ art.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if sidebar_events %}
+    <div class="sidebar-section">
+        <h4>Events</h4>
+        {% for evt in sidebar_events[:5] %}
+        <a href="/lore/event/{{ evt.id }}" class="sidebar-link" title="{{ evt.name }}">{{ evt.name }}</a>
         {% endfor %}
     </div>
     {% endif %}

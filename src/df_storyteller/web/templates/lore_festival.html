@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ festival.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+    {% if festival.civ_name %} &middot; <a href="/lore/civ/{{ festival.civ_id }}" style="color: var(--parchment-dark); text-decoration: none;">{{ festival.civ_name }}</a>{% endif %}
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ festival.name }}</div>
+            <div class="char-title">
+                {% if festival.date %}{{ festival.date }}{% endif %}
+                {% if festival.held_count %} &middot; Held {{ festival.held_count }} time{{ 's' if festival.held_count != 1 else '' }}{% endif %}
+                {% if festival.civ_name %} &middot; {{ lore_link("civilization", festival.civ_id, festival.civ_name) | safe }}{% endif %}
+            </div>
+        </div>
+
+        <div class="stat-section">
+            {% if festival.site_name %}
+            <h3>Location</h3>
+            <p>{{ lore_link("site", festival.site_id, festival.site_name) | safe }}</p>
+            {% endif %}
+
+            {% if festival.first_year %}
+            <h3>Active</h3>
+            <p>Years {{ festival.first_year }}–{{ festival.last_year }}</p>
+            {% endif %}
+        </div>
+
+        <div class="stat-section">
+            {% if festival.schedules %}
+            <h3>Schedule</h3>
+            <ul class="stat-list">
+                {% for sched in festival.schedules %}
+                <li>
+                    {{ sched.type }}{% if sched.item %} <span style="color: var(--ink-faded);">({{ sched.item }})</span>{% endif %}
+                    {% if sched.features %}<br><span style="color: var(--ink-faded); font-size: 0.85rem;">{{ sched.features | join(', ') }}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+        {% if festival.recent_winners %}
+        <div class="bio-section">
+            <h3>Competition Winners</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif; width: 80px;">Year</th>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif;">Winner</th>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif;">Event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for winner in festival.recent_winners %}
+                    <tr>
+                        <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); font-size: 0.9rem;">{{ winner.year }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ lore_link("figure", winner.hf_id, winner.name) | safe }}</td>
+                        <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); font-size: 0.9rem;">{{ winner.comp_type }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

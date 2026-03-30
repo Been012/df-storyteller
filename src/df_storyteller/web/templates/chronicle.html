@@ -79,7 +79,7 @@
         {% if no_llm_mode %}Write your chronicle entry{% else %}Write your own entry{% endif %}
     </summary>
     <div style="margin-top: 0.5rem;">
-        <textarea id="manual-chronicle-text" rows="8" placeholder="Write your chronicle entry for this season..."
+        <textarea id="manual-chronicle-text" rows="8" placeholder="Write your chronicle entry... Use [[name]] to link to legends figures, sites, or civilizations."
             class="manual-textarea"></textarea>
         <div class="btn-row" style="justify-content: center; margin-top: 0.5rem;">
             <button class="btn btn-primary" onclick="saveManualChronicle()">Save Entry</button>
@@ -97,7 +97,7 @@
             {% if entry.is_manual %}<span class="manual-badge">Player</span>{% endif %}
         </h2>
         {% endif %}
-        <div class="story-text" id="chronicle-text-{{ loop.index0 }}">{{ entry.text | safe }}</div>
+        <div class="story-text" id="chronicle-text-{{ loop.index0 }}">{{ entry.text | hotlink | safe }}</div>
         <div style="text-align: right; margin-top: 0.5rem;">
             <button class="btn btn-secondary" style="font-size: 0.8rem;" onclick="editChronicle({{ loop.index0 }}, '{{ entry.season }}', {{ entry.year }})">Edit</button>
         </div>

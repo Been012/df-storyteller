@@ -41,6 +41,7 @@ class Dwarf(BaseModel):
     current_job: str = ""
     equipment: list[str] = Field(default_factory=list)
     wounds: list[str] = Field(default_factory=list)
+    pets: list[dict] = Field(default_factory=list)  # [{name, race, is_alive}]
     physical_attributes: dict[str, int] = Field(default_factory=dict)
     mental_attributes: dict[str, int] = Field(default_factory=dict)
 
@@ -64,6 +65,10 @@ class HistoricalFigure(BaseModel):
     active_interactions: list[str] = Field(default_factory=list)  # curses: vampirism, lycanthropy
     skills: list[dict] = Field(default_factory=list)  # [{skill, total_ip}]
     journey_pets: list[str] = Field(default_factory=list)
+    intrigue_plots: list[dict] = Field(default_factory=list)  # [{type, on_hold, actors}]
+    emotional_bonds: list[dict] = Field(default_factory=list)  # [{hf_id, love, respect, trust, loyalty, fear}]
+    vague_relationships: list[dict] = Field(default_factory=list)  # [{type, hfid}]
+    former_positions: list[dict] = Field(default_factory=list)  # [{position_profile_id, entity_id, start_year, end_year}]
 
 
 class Artifact(BaseModel):
@@ -74,6 +79,7 @@ class Artifact(BaseModel):
     creator_hf_id: int | None = None
     site_id: int | None = None
     description: str = ""
+    pages: list[dict] = Field(default_factory=list)  # [{page_number, written_content_id}]
 
 
 class Site(BaseModel):
@@ -84,6 +90,7 @@ class Site(BaseModel):
     coordinates: tuple[int, int] | None = None
     events: list[int] = Field(default_factory=list)
     structures: list[dict] = Field(default_factory=list)  # [{id, name, type, deity_hf_id, entity_id}]
+    properties: list[dict] = Field(default_factory=list)  # [{id, type, owner_hfid}]
 
 
 class Civilization(BaseModel):

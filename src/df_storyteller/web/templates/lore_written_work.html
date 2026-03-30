@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ work.title }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ work.title }}</div>
+            <div class="char-title">
+                {% if work.form %}{{ work.form }}{% endif %}
+                {% if work.style %} &middot; {{ work.style }}{% endif %}
+            </div>
+        </div>
+
+        <div class="stat-section">
+            {% if work.author_name %}
+            <h3>Author</h3>
+            <p>{{ lore_link("figure", work.author_id, work.author_name) | safe }}
+                {% if work.author_civ %} of {{ lore_link("civilization", work.author_civ_id, work.author_civ) | safe }}{% endif %}
+            </p>
+            {% endif %}
+
+            {% if work.page_count and work.page_count != "1" %}
+            <h3>Pages</h3>
+            <p>{{ work.page_count }}</p>
+            {% endif %}
+        </div>
+
+        <div class="stat-section">
+            {% if work.form %}
+            <h3>Form</h3>
+            <p>{{ work.form }}</p>
+            {% endif %}
+
+            {% if work.style %}
+            <h3>Style</h3>
+            <p>{{ work.style }}</p>
+            {% endif %}
+
+            {% if work.reference %}
+            <h3>Subject</h3>
+            <p style="color: var(--ink-light);">{{ work.reference }}</p>
+            {% endif %}
+        </div>
+
+        {% if work.artifacts %}
+        <div class="bio-section">
+            <h3>Contained In</h3>
+            <ul class="stat-list">
+                {% for art in work.artifacts %}
+                <li>{{ lore_link("artifact", art.artifact_id, art.name) | safe }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

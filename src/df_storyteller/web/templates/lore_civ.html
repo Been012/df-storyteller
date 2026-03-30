@@ -57,6 +57,25 @@
                 {% endfor %}
             </ul>
             {% endif %}
+
+            {% if honors %}
+            <h3>Honors &amp; Ranks</h3>
+            <ul class="stat-list">
+                {% for honor in honors %}
+                <li>
+                    <strong>{{ honor.name }}</strong>
+                    {% if honor.required_skill %}
+                    <span style="color: var(--ink-faded); font-size: 0.85rem;">
+                        &mdash; {{ honor.required_skill }}{% if honor.required_level %} ({{ honor.required_level }}){% endif %}
+                    </span>
+                    {% endif %}
+                    {% if honor.required_battles %}
+                    <span style="color: var(--ink-faded); font-size: 0.85rem;"> &mdash; {{ honor.required_battles }} battle{{ 's' if honor.required_battles != 1 else '' }} required</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
         </div>
 
         {% if wars %}
@@ -76,6 +95,101 @@
             <div style="margin-bottom: 0.4rem;">
                 {{ lore_link("war", war.id, war.name) | safe }}
                 {% if war.years %}<span style="color: var(--ink-faded);"> ({{ war.years }})</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if festivals %}
+        {% set fest_colors = ['#c9a84c', '#8b2500', '#2d5a27', '#4a6fa5', '#c9467a', '#7a6558', '#a83a1a', '#5a4d8b'] %}
+        {% set fest_symbols = ['&#9830;', '&#9827;', '&#9829;', '&#9824;', '&#9733;', '&#9670;', '&#10038;', '&#9672;'] %}
+        <div class="bio-section">
+            <h3>Festivals &amp; Calendar</h3>
+            <!-- Calendar grid with festival markers -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; margin-bottom: 1rem; font-size: 0.8rem; text-align: center;">
+                {% for season in ['Spring', 'Summer', 'Autumn', 'Winter'] %}
+                <div style="font-family: 'Cinzel', serif; color: var(--gold-dark); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px;">{{ season }}</div>
+                {% endfor %}
+                {% for month in ['Granite', 'Slate', 'Felsite', 'Hematite', 'Malachite', 'Galena', 'Limestone', 'Sandstone', 'Timber', 'Moonstone', 'Opal', 'Obsidian'] %}
+                {% set month_fests = [] %}
+                {% for fest in festivals %}
+                    {% if fest.month == month %}
+                        {% if month_fests.append(loop.index0) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+                <div style="padding: 0.3rem; border-radius: 3px; {% if month_fests %}background: rgba(201,168,76,0.12); font-weight: 700;{% else %}color: var(--ink-faded);{% endif %}">
+                    {{ month }}
+                    {% for fi in month_fests %}
+                    <span style="color: {{ fest_colors[fi % 8] }}; font-size: 0.9rem;" title="{{ festivals[fi].name }}">{{ fest_symbols[fi % 8] | safe }}</span>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            <!-- Legend -->
+            <div style="display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.5rem; font-size: 0.8rem;">
+                {% for fest in festivals %}
+                <a href="/lore/festival/{{ civ.entity_id }}/{{ fest.occasion_id }}" class="lore-link" style="color: {{ fest_colors[loop.index0 % 8] }};">{{ fest_symbols[loop.index0 % 8] | safe }} {{ fest.name }}</a>
+                {% endfor %}
+            </div>
+
+            {% for fest in festivals %}
+            <div style="border: 1px solid var(--border); border-left: 4px solid {{ fest_colors[loop.index0 % 8] }}; border-radius: 4px; padding: 1rem; margin-bottom: 1rem; background: rgba(244,232,193,0.03);">
+                <div style="font-family: 'Cinzel', serif; font-size: 1.1rem; color: {{ fest_colors[loop.index0 % 8] }}; margin-bottom: 0.3rem;">
+                    <span style="font-size: 1.2rem;">{{ fest_symbols[loop.index0 % 8] | safe }}</span> <a href="/lore/festival/{{ civ.entity_id }}/{{ fest.occasion_id }}" class="lore-link" style="color: {{ fest_colors[loop.index0 % 8] }};">{{ fest.name }}</a>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--ink-faded); margin-bottom: 0.8rem;">
+                    {% if fest.date %}{{ fest.date }}{% endif %}
+                    {% if fest.held_count %} &middot; Held {{ fest.held_count }} time{{ 's' if fest.held_count != 1 else '' }}{% endif %}
+                    {% if fest.site_name %} &middot; at {{ lore_link("site", fest.site_id, fest.site_name) | safe }}{% endif %}
+                    {% if fest.first_year and fest.last_year %} &middot; Years {{ fest.first_year }}–{{ fest.last_year }}{% endif %}
+                </div>
+
+                {% if fest.schedules %}
+                <div style="margin-bottom: 0.5rem;">
+                    <strong style="font-size: 0.85rem; color: var(--ink-light);">Schedule:</strong>
+                    <ul style="list-style: none; padding: 0; margin: 0.3rem 0 0;">
+                        {% for sched in fest.schedules %}
+                        <li style="padding: 0.15rem 0; font-size: 0.9rem;">
+                            &middot; {{ sched.type }}{% if sched.item %} <span style="color: var(--ink-faded);">({{ sched.item }})</span>{% endif %}{% if sched.features %} <span style="color: var(--ink-faded); font-size: 0.8rem;">— {{ sched.features | join(', ') }}</span>{% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                {% if fest.recent_winners %}
+                <details style="font-size: 0.85rem;">
+                    <summary style="cursor: pointer; color: var(--ink-faded);">Recent Competition Winners</summary>
+                    <ul style="list-style: none; padding: 0; margin: 0.3rem 0 0;">
+                        {% for winner in fest.recent_winners %}
+                        <li style="padding: 0.1rem 0;">Year {{ winner.year }}: {{ lore_link("figure", winner.hf_id, winner.name) | safe }} <span style="color: var(--ink-faded);">— {{ winner.comp_type }}</span></li>
+                        {% endfor %}
+                    </ul>
+                </details>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if civ_event_collections or cultural_summary %}
+        <div class="bio-section">
+            <h3>Notable Events</h3>
+            {% if ec_summary %}
+            <p style="font-size: 0.9rem; color: var(--ink-light); margin-bottom: 0.5rem;">{{ ec_summary }}</p>
+            {% endif %}
+            {% if cultural_summary %}
+            <p style="font-size: 0.85rem; color: var(--ink-faded); margin-bottom: 0.5rem;">Cultural: {{ cultural_summary }} (see Festivals above)</p>
+            {% endif %}
+            {% for ec in civ_event_collections %}
+            <div class="lore-item" style="margin-bottom: 0.3rem;">
+                {% set ec_type_map = {"theft": "theft", "abduction": "abduction", "beast attack": "beast_attack", "site conquered": "site_conquest", "persecution": "persecution", "duel": "duel", "battle": "battle", "war": "war", "purge": "purge", "entity overthrown": "overthrow"} %}
+                {% set link_type = ec_type_map.get(ec.type.lower(), "") %}
+                {% if link_type and ec.id %}
+                {{ lore_link(link_type, ec.id, ec.name) | safe }}
+                {% else %}
+                {{ ec.name }}
+                {% endif %}
             </div>
             {% endfor %}
         </div>

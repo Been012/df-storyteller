@@ -40,6 +40,21 @@
             <p style="color: var(--ink-light); line-height: 1.7;">{{ artifact.description }}</p>
         </div>
         {% endif %}
+
+        {% if pages %}
+        <div class="bio-section">
+            <h3>Contents</h3>
+            <p style="color: var(--ink-faded); font-size: 0.9rem; margin-bottom: 0.5rem;">This work contains {{ pages | length }} page{{ 's' if pages | length != 1 else '' }}:</p>
+            <ul class="stat-list">
+                {% for page in pages %}
+                <li>
+                    Page {{ page.page_number }}: <strong>{{ page.title }}</strong>
+                    {% if page.wc_type %}<span style="color: var(--ink-faded);"> ({{ page.wc_type }})</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

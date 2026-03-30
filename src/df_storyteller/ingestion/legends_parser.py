@@ -325,6 +325,99 @@ def _parse_historical_figure(elem: Any) -> HistoricalFigure:
     # Journey pets
     journey_pets = [jp.text for jp in elem.findall("journey_pet") if jp.text]
 
+    # Intrigue plots
+    intrigue_plots = []
+    for plot in elem.findall("intrigue_plot"):
+        plot_data: dict[str, Any] = {"type": _text(plot, "type")}
+        if plot.find("on_hold") is not None:
+            plot_data["on_hold"] = True
+        actors = []
+        for actor in plot.findall("intrigue_actor"):
+            actor_data: dict[str, Any] = {}
+            a_hfid = actor.find("hfid")
+            if a_hfid is not None and a_hfid.text:
+                actor_data["hfid"] = int(a_hfid.text)
+            a_eid = actor.find("entity_id")
+            if a_eid is not None and a_eid.text:
+                actor_data["entity_id"] = int(a_eid.text)
+            a_role = actor.find("role")
+            if a_role is not None and a_role.text:
+                actor_data["role"] = a_role.text
+            a_strat = actor.find("strategy")
+            if a_strat is not None and a_strat.text:
+                actor_data["strategy"] = a_strat.text
+            if actor.find("promised_actor_immortality") is not None:
+                actor_data["promised_immortality"] = True
+            if actor_data:
+                actors.append(actor_data)
+        if actors:
+            plot_data["actors"] = actors
+        if plot_data.get("type"):
+            intrigue_plots.append(plot_data)
+
+    # Emotional bonds (love, respect, trust, loyalty, fear toward other HFs)
+    emotional_bonds = []
+    for bond_hfid in elem.findall("hf_id"):
+        if bond_hfid.text:
+            # The love/respect/trust/loyalty/fear tags follow the hf_id
+            bond: dict[str, Any] = {"hf_id": int(bond_hfid.text)}
+            # These sibling elements follow hf_id in sequence
+            nxt = bond_hfid
+            for field in ("love", "respect", "trust", "loyalty", "fear"):
+                nxt = nxt.getnext() if hasattr(nxt, 'getnext') else None
+                # Fallback: search in parent
+            for field in ("love", "respect", "trust", "loyalty", "fear"):
+                val = elem.find(field)
+                # Can't reliably get positional siblings with ElementTree — skip for now
+            emotional_bonds.append(bond)
+    # Parse from <relationship_profile_hf_visual> containers
+    emotional_bonds = []
+    for rp in elem.findall("relationship_profile_hf_visual"):
+        rp_hfid = rp.find("hf_id")
+        if rp_hfid is not None and rp_hfid.text:
+            emotional_bonds.append({
+                "hf_id": int(rp_hfid.text),
+                "love": _int(rp, "love"),
+                "respect": _int(rp, "respect"),
+                "trust": _int(rp, "trust"),
+                "loyalty": _int(rp, "loyalty"),
+                "fear": _int(rp, "fear"),
+                "meet_count": _int(rp, "meet_count"),
+                "last_meet_year": _int(rp, "last_meet_year"),
+            })
+
+    # Vague relationships
+    vague_relationships = []
+    for vr in elem.findall("vague_relationship"):
+        vr_hfid = vr.find("hfid")
+        if vr_hfid is not None and vr_hfid.text:
+            # The relationship type is the first child element (before hfid)
+            vr_type = ""
+            for child in vr:
+                if child.tag != "hfid" and child.tag not in ("local_id",):
+                    vr_type = child.tag
+                    break
+            vague_relationships.append({"type": vr_type.replace("_", " "), "hfid": int(vr_hfid.text)})
+
+    # Former positions
+    former_positions = []
+    for fp in elem.findall("entity_former_position_link"):
+        fp_data: dict[str, Any] = {}
+        fp_ppid = fp.find("position_profile_id")
+        if fp_ppid is not None and fp_ppid.text:
+            fp_data["position_profile_id"] = fp_ppid.text
+        fp_eid = fp.find("entity_id")
+        if fp_eid is not None and fp_eid.text:
+            fp_data["entity_id"] = int(fp_eid.text)
+        fp_sy = fp.find("start_year")
+        if fp_sy is not None and fp_sy.text:
+            fp_data["start_year"] = fp_sy.text
+        fp_ey = fp.find("end_year")
+        if fp_ey is not None and fp_ey.text:
+            fp_data["end_year"] = fp_ey.text
+        if fp_data:
+            former_positions.append(fp_data)
+
     return HistoricalFigure(
         hf_id=_int(elem, "id"),
         name=_text(elem, "name"),
@@ -342,6 +435,10 @@ def _parse_historical_figure(elem: Any) -> HistoricalFigure:
         active_interactions=active_interactions,
         skills=skills,
         journey_pets=journey_pets,
+        intrigue_plots=intrigue_plots,
+        emotional_bonds=emotional_bonds,
+        vague_relationships=vague_relationships,
+        former_positions=former_positions,
     )
 
 
@@ -378,6 +475,24 @@ def _parse_site(elem: Any) -> Site:
             except ValueError:
                 pass
 
+    # Site properties (houses, workshops, etc.) — inside <site_properties> container
+    properties = []
+    props_container = elem.find("site_properties")
+    prop_source = props_container if props_container is not None else elem
+    for sp in prop_source.findall("site_property"):
+        prop: dict[str, Any] = {}
+        sp_id = sp.find("id")
+        if sp_id is not None and sp_id.text:
+            prop["id"] = sp_id.text
+        sp_type = sp.find("type")
+        if sp_type is not None and sp_type.text:
+            prop["type"] = sp_type.text
+        sp_owner = sp.find("owner_hfid")
+        if sp_owner is not None and sp_owner.text and sp_owner.text != "-1":
+            prop["owner_hfid"] = int(sp_owner.text)
+        if prop:
+            properties.append(prop)
+
     # Owner civilization
     owner_civ_id = _int_or_none(elem, "cur_owner_id")
     if owner_civ_id is None:
@@ -390,6 +505,7 @@ def _parse_site(elem: Any) -> Site:
         owner_civ_id=owner_civ_id,
         structures=structures,
         coordinates=coords,
+        properties=properties,
     )
 
 
@@ -435,6 +551,48 @@ def _parse_entity(elem: Any) -> Civilization:
         if pos_data:
             entity_positions.append(pos_data)
 
+    # Extract occasion definitions (festivals with schedules)
+    occasions: list[dict[str, Any]] = []
+    for occ in elem.findall("occasion"):
+        occ_data: dict[str, Any] = {}
+        oid = occ.find("id")
+        if oid is not None and oid.text:
+            occ_data["id"] = oid.text
+        oname = occ.find("name")
+        if oname is not None and oname.text:
+            occ_data["name"] = oname.text
+        # Parse schedules (activities within the festival)
+        schedules: list[dict[str, Any]] = []
+        for sched in occ.findall("schedule"):
+            sched_data: dict[str, Any] = {}
+            sid = sched.find("id")
+            if sid is not None and sid.text:
+                sched_data["id"] = sid.text
+            stype = sched.find("type")
+            if stype is not None and stype.text:
+                sched_data["type"] = stype.text
+            # Item type for competitions
+            itype = sched.find("item_type")
+            if itype is not None and itype.text:
+                sched_data["item_type"] = itype.text
+            isub = sched.find("item_subtype")
+            if isub is not None and isub.text:
+                sched_data["item_subtype"] = isub.text
+            # Features (costumes, incense, banners, etc.)
+            features: list[str] = []
+            for feat in sched.findall("feature"):
+                ftype = feat.find("type")
+                if ftype is not None and ftype.text:
+                    features.append(ftype.text)
+            if features:
+                sched_data["features"] = features
+            if sched_data:
+                schedules.append(sched_data)
+        if schedules:
+            occ_data["schedules"] = schedules
+        if occ_data:
+            occasions.append(occ_data)
+
     civ = Civilization(
         entity_id=_int(elem, "id"),
         name=_text(elem, "name"),
@@ -448,6 +606,32 @@ def _parse_entity(elem: Any) -> Civilization:
     civ._worship_id = _int_or_none(elem, "worship_id")  # type: ignore[attr-defined] — deity HF for religions
     civ._profession = _text(elem, "profession")  # type: ignore[attr-defined] — craft focus for guilds
     civ._entity_positions = entity_positions  # type: ignore[attr-defined] — position titles (monarch, general, etc.)
+    civ._occasions = occasions  # type: ignore[attr-defined] — festival definitions with schedules
+    # Honors / rank system
+    honors: list[dict[str, Any]] = []
+    for hon in elem.findall("honor"):
+        hon_data: dict[str, Any] = {}
+        h_id = hon.find("id")
+        if h_id is not None and h_id.text:
+            hon_data["id"] = h_id.text
+        h_name = hon.find("name")
+        if h_name is not None and h_name.text:
+            hon_data["name"] = h_name.text
+        h_prec = hon.find("gives_precedence")
+        if h_prec is not None and h_prec.text:
+            hon_data["gives_precedence"] = int(h_prec.text)
+        h_skill = hon.find("required_skill")
+        if h_skill is not None and h_skill.text:
+            hon_data["required_skill"] = h_skill.text
+        h_ip = hon.find("required_skill_ip_total")
+        if h_ip is not None and h_ip.text:
+            hon_data["required_skill_ip_total"] = int(h_ip.text)
+        h_bat = hon.find("required_battles")
+        if h_bat is not None and h_bat.text:
+            hon_data["required_battles"] = int(h_bat.text)
+        if hon_data:
+            honors.append(hon_data)
+    civ._honors = honors  # type: ignore[attr-defined]
     return civ
 
 
@@ -465,6 +649,17 @@ def _parse_artifact(elem: Any) -> Artifact:
         item_elem = elem.find("item")
         if item_elem is not None:
             description = _text(item_elem, "description")
+    # Pages (for books — page_number + page_written_content_id inside <item>)
+    pages = []
+    item_elem = elem.find("item")
+    if item_elem is not None:
+        page_nums = [e.text for e in item_elem.findall("page_number") if e.text]
+        page_wc_ids = [e.text for e in item_elem.findall("page_written_content_id") if e.text]
+        for i, pn in enumerate(page_nums):
+            wc_id = page_wc_ids[i] if i < len(page_wc_ids) else ""
+            if pn and wc_id:
+                pages.append({"page_number": int(pn), "written_content_id": wc_id})
+
     return Artifact(
         artifact_id=_int(elem, "id"),
         name=name,
@@ -473,6 +668,7 @@ def _parse_artifact(elem: Any) -> Artifact:
         creator_hf_id=holder,
         site_id=_int_or_none(elem, "site_id"),
         description=description,
+        pages=pages,
     )
 
 

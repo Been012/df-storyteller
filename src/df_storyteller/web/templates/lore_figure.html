@@ -15,7 +15,10 @@
                 {{ figure.race | default('Unknown race') }}{% if figure.caste %} ({{ figure.caste }}){% endif %}
                 {% if figure.hf_type %} &middot; {{ figure.hf_type }}{% endif %}
                 {% if figure.birth_year %} &middot; Born year {{ figure.birth_year }}{% endif %}
-                {% if figure.death_year %} &middot; Died year {{ figure.death_year }}{% endif %}
+                {% if figure.death_year %} &middot; Died year {{ figure.death_year }}{% if figure.death_cause %} ({{ figure.death_cause }}){% endif %}{% endif %}
+                {% if figure.death_slayer %}
+                &middot; {% if figure.death_slayer_id %}Killed by {{ lore_link("figure", figure.death_slayer_id, figure.death_slayer) | safe }}{% else %}Killed by {{ figure.death_slayer }}{% endif %}
+                {% endif %}
                 {% if figure.is_deity %}
                 <span style="display: inline-block; background: var(--gold-dark); color: #1a1a2e; padding: 0.1rem 0.5rem; border-radius: 3px; font-size: 0.8rem; margin-left: 0.5rem;">Deity</span>
                 {% endif %}
@@ -87,7 +90,18 @@
             <h3>Skills</h3>
             <ul class="stat-list">
                 {% for skill in skills %}
-                <li>{{ skill }}</li>
+                <li style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>{{ skill.name if skill is mapping else skill }}</span>
+                    {% if skill is mapping and skill.level %}
+                    <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
+                        {% if skill.level_num >= 15 %}background: rgba(201,168,76,0.25); color: #c9a84c; font-weight: 700;
+                        {% elif skill.level_num >= 12 %}background: rgba(139,37,0,0.15); color: #c98b8b;
+                        {% elif skill.level_num >= 8 %}background: rgba(45,90,39,0.15); color: #8bc98b;
+                        {% elif skill.level_num >= 4 %}background: rgba(74,111,165,0.15); color: #8b9cc9;
+                        {% else %}background: rgba(122,101,88,0.1); color: var(--ink-faded);
+                        {% endif %}">{{ skill.level }}</span>
+                    {% endif %}
+                </li>
                 {% endfor %}
             </ul>
             {% endif %}
@@ -97,6 +111,22 @@
             <ul class="stat-list">
                 {% for pet in journey_pets %}
                 <li>{{ pet }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if former_positions %}
+            <h3>Former Positions</h3>
+            <ul class="stat-list">
+                {% for fp in former_positions %}
+                <li>
+                    {{ fp.position }}
+                    {% if fp.civ_name %} of {{ lore_link("civilization", fp.civ_id, fp.civ_name) | safe }}{% endif %}
+                    <span style="color: var(--ink-faded); font-size: 0.85rem;">
+                        ({{ fp.start_year }}–{{ fp.end_year }})
+                    </span>
+                    <span style="display: inline-block; background: rgba(122,101,88,0.15); color: var(--ink-faded); padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.7rem; margin-left: 0.3rem;">(former)</span>
+                </li>
                 {% endfor %}
             </ul>
             {% endif %}
@@ -145,6 +175,68 @@
         </div>
         {% endif %}
 
+        {% if intrigue_plots %}
+        <div class="bio-section">
+            <h3>Intrigue &amp; Schemes</h3>
+            {% for plot in intrigue_plots %}
+            <div style="border: 1px solid var(--border); border-radius: 4px; padding: 0.8rem; margin-bottom: 0.8rem; background: rgba(139,37,0,0.03);">
+                <div style="font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark); margin-bottom: 0.3rem;">
+                    {{ plot.type }}
+                    {% if plot.on_hold %}
+                    <span style="display: inline-block; background: rgba(201,168,76,0.25); color: #c9a84c; padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.7rem; margin-left: 0.4rem; font-family: 'Crimson Text', serif;">ON HOLD</span>
+                    {% endif %}
+                </div>
+                {% if plot.actors %}
+                <ul style="list-style: none; padding: 0; margin: 0.3rem 0 0;">
+                    {% for actor in plot.actors %}
+                    <li style="padding: 0.15rem 0; font-size: 0.9rem;">
+                        {% if actor.hf_id %}{{ lore_link("figure", actor.hf_id, actor.name) | safe }}{% else %}{{ actor.name or "Unknown" }}{% endif %}
+                        {% if actor.role %}<span style="color: var(--ink-faded);"> &mdash; {{ actor.role }}</span>{% endif %}
+                        {% if actor.strategy %}<span style="color: var(--ink-faded); font-size: 0.85rem;"> ({{ actor.strategy }})</span>{% endif %}
+                        {% if actor.promised_immortality %}
+                        <span style="display: inline-block; background: rgba(139,37,0,0.15); color: #c98b8b; padding: 0.05rem 0.35rem; border-radius: 3px; font-size: 0.7rem; margin-left: 0.3rem;">Promised Immortality</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if emotional_bonds %}
+        <div class="bio-section">
+            <h3>Emotional Bonds</h3>
+            <div class="lore-grid">
+                {% for bond in emotional_bonds %}
+                <div style="border: 1px solid var(--border); border-radius: 4px; padding: 0.6rem 0.8rem; background: rgba(244,232,193,0.03); margin-bottom: 0.3rem;">
+                    <div style="margin-bottom: 0.5rem; font-size: 0.95rem;">
+                        {% if bond.hf_id %}{{ lore_link("figure", bond.hf_id, bond.name) | safe }}{% else %}{{ bond.name or "Unknown" }}{% endif %}
+                    </div>
+                    {% for attr in [("Love", bond.love, "#c9467a"), ("Respect", bond.respect, "#4a6fa5"), ("Trust", bond.trust, "#2d8a27"), ("Loyalty", bond.loyalty, "#c9a84c"), ("Fear", bond.fear, "#c94646")] %}
+                    {% set label = attr[0] %}
+                    {% set val = attr[1] %}
+                    {% set color = attr[2] %}
+                    <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.15rem; font-size: 0.8rem;">
+                        <span style="width: 50px; color: var(--ink-faded); text-align: right;">{{ label }}</span>
+                        <div style="flex: 1; height: 10px; background: rgba(122,101,88,0.1); border-radius: 5px; position: relative; overflow: hidden;">
+                            <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(122,101,88,0.3);"></div>
+                            {% if val > 0 %}
+                            <div style="position: absolute; top: 0; bottom: 0; left: 50%; width: {{ [val, 50] | min }}%; background: {{ color }}; opacity: 0.6; border-radius: 0 5px 5px 0;"></div>
+                            {% elif val < 0 %}
+                            <div style="position: absolute; top: 0; bottom: 0; right: 50%; width: {{ [-val, 50] | min }}%; background: #8b2500; opacity: 0.6; border-radius: 5px 0 0 5px;"></div>
+                            {% endif %}
+                        </div>
+                        <span style="width: 28px; text-align: right; font-size: 0.75rem; color: {% if val > 0 %}{{ color }}{% elif val < 0 %}#c94646{% else %}var(--ink-faded){% endif %};">{{ val }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if events %}
         <div class="bio-section">
             <h3>Event Timeline</h3>
@@ -159,7 +251,7 @@
                     {% for evt in events %}
                     <tr class="event-row" {% if loop.index > 50 %}style="display: none;"{% endif %}>
                         <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); vertical-align: top; font-size: 0.9rem;">{{ evt.year }}</td>
-                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description | hotlink | safe }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -190,14 +282,18 @@ fetch('/api/lore/stats/figure/{{ figure.hf_id }}')
         const canvas = document.getElementById('figure-timeline-chart');
         if (!canvas || !data.event_timeline || !data.event_timeline.labels.length) return;
         new Chart(canvas, {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: data.event_timeline.labels,
-                datasets: [{ label: 'Events', data: data.event_timeline.values, borderColor: '#8a6d3b', backgroundColor: 'rgba(138,109,59,0.1)', fill: true, tension: 0.3 }]
+                datasets: [{ label: 'Events', data: data.event_timeline.values, backgroundColor: 'rgba(138,109,59,0.6)', borderColor: '#8a6d3b', borderWidth: 1 }]
             },
             options: {
-                scales: { x: { ticks: { color: '#4a3728', maxTicksLimit: 10 } }, y: { ticks: { color: '#4a3728' }, beginAtZero: true } },
-                plugins: { legend: { display: false } }
+                scales: {
+                    x: { ticks: { color: '#4a3728', maxRotation: 45, font: { size: 10 } } },
+                    y: { ticks: { color: '#4a3728', stepSize: 1 }, beginAtZero: true }
+                },
+                plugins: { legend: { display: false } },
+                barPercentage: 0.8,
             }
         });
     })

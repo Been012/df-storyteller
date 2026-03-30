@@ -122,7 +122,7 @@
         <div style="font-size: 0.8rem; color: var(--ink-faded); margin-bottom: 0.5rem;">
             {{ saga.season | default('') | title }} of Year {{ saga.year | default('?') }}
         </div>
-        <div class="story-text" style="line-height: 1.7;">{{ saga.text | replace('\n', '<br>') | safe }}</div>
+        <div class="story-text" style="line-height: 1.7;">{{ saga.text | hotlink | replace('\n', '<br>') | safe }}</div>
     </div>
     {% endfor %}
 </details>
@@ -146,14 +146,50 @@
     {% if player_civ.details %}
     <p>{{ player_civ.details }}</p>
     {% endif %}
-    {% if player_civ.sub_entities %}
-    <p style="font-size: 0.9rem; color: var(--ink-light);">Organizations: {{ player_civ.sub_entities | join(', ') }}</p>
+
+    {% if player_civ.org_data %}
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 0.8rem;">
+        {% if player_civ.org_data.deities %}
+        <div>
+            <h3>Worshipped Deities</h3>
+            <ul class="stat-list">
+                {% for deity in player_civ.org_data.deities %}
+                <li>
+                    {{ lore_link("figure", deity.deity_id, deity.name) | safe }}
+                    {% if deity.spheres %}<span style="color: var(--ink-faded); font-size: 0.85rem;"> — {{ deity.spheres }}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div>
+            {% if player_civ.org_data.guilds %}
+            <h3>Guilds</h3>
+            <ul class="stat-list">
+                {% for guild in player_civ.org_data.guilds %}
+                <li>{{ guild.name }}{% if guild.profession %} <span style="color: var(--ink-faded);">— {{ guild.profession }}</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if player_civ.org_data.group_counts %}
+            <h3>Groups</h3>
+            <ul class="stat-list">
+                {% for gtype, count in player_civ.org_data.group_counts.items() %}
+                <li>{{ count }} {{ gtype }}{{ 's' if count > 1 else '' }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
     {% endif %}
+
     {% if player_civ.figures %}
     <h3>Notable Figures</h3>
     {% for fig in player_civ.figures %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        <strong>{{ fig.name }}</strong>{% if fig.race %} <span style="color: var(--ink-faded);">({{ fig.race }})</span>{% endif %}{% if fig.description %} — {{ fig.description }}{% endif %}
+        <strong>{{ lore_link("figure", fig.hf_id, fig.name) | safe }}</strong>{% if fig.race %} <span style="color: var(--ink-faded);">({{ fig.race }})</span>{% endif %}{% if fig.description %} — {{ fig.description }}{% endif %}
     </div>
     {% endfor %}
     {% endif %}
@@ -161,7 +197,7 @@
     <h3>Artifacts</h3>
     {% for art in player_civ.artifacts %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        <strong>{{ art.name }}</strong>{% if art.details %} — <span style="color: var(--ink-light);">{{ art.details }}</span>{% endif %}
+        <strong>{{ lore_link("artifact", art.artifact_id, art.name) | safe }}</strong>{% if art.details %} — <span style="color: var(--ink-light);">{{ art.details }}</span>{% endif %}
     </div>
     {% endfor %}
     {% endif %}
@@ -274,8 +310,14 @@
 {% call lore_section("Beast Attacks", beast_attacks, "beasts", total_counts.beast_attacks) %}
     {% for ba in beast_attacks %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("beast_attack", "", ba.name) }}
-        <strong>{{ ba.name }}</strong>{% if ba.details %} — <span style="color: var(--ink-light);">{{ ba.details }}</span>{% endif %}
+        {{ pin_btn("beast_attack", ba.id, ba.name) }}
+        <strong>{{ lore_link("beast_attack", ba.id, ba.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if ba.year %} — Year {{ ba.year }}{% endif %}
+            {% if ba.site_name %} — at {{ lore_link("site", ba.site_id, ba.site_name) | safe }}{% endif %}
+            {% if ba.defender_name %} — against {{ lore_link("civilization", ba.defender_id, ba.defender_name) | safe }}{% endif %}
+            {% if ba.n_events %} — {{ ba.n_events }} incidents{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -283,8 +325,13 @@
 {% call lore_section("Site Conquests", site_conquests, "conquests", total_counts.site_conquests) %}
     {% for sc in site_conquests %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("site_conquest", "", sc.name) }}
-        <strong>{{ sc.name }}</strong>{% if sc.details %} — <span style="color: var(--ink-light);">{{ sc.details }}</span>{% endif %}
+        {{ pin_btn("site_conquest", sc.id, sc.name) }}
+        <strong>{{ lore_link("site_conquest", sc.id, sc.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if sc.year %} — Year {{ sc.year }}{% endif %}
+            {% if sc.site_name %} — at {{ lore_link("site", sc.site_id, sc.site_name) | safe }}{% endif %}
+            {% if sc.attacker_name and sc.defender_name %} — {{ lore_link("civilization", sc.attacker_id, sc.attacker_name) | safe }} conquered from {{ lore_link("civilization", sc.defender_id, sc.defender_name) | safe }}{% elif sc.attacker_name %} — by {{ lore_link("civilization", sc.attacker_id, sc.attacker_name) | safe }}{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -292,8 +339,14 @@
 {% call lore_section("Persecutions", persecutions, "persecutions", total_counts.persecutions) %}
     {% for persc in persecutions %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("persecution", "", persc.name) }}
-        <strong>{{ persc.name }}</strong>{% if persc.details %} — <span style="color: var(--ink-light);">{{ persc.details }}</span>{% endif %}
+        {{ pin_btn("persecution", persc.id, persc.name) }}
+        <strong>{{ lore_link("persecution", persc.id, persc.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if persc.year %} — Year {{ persc.year }}{% endif %}
+            {% if persc.target_name %} — targeting {{ lore_link("civilization", persc.target_id, persc.target_name) | safe }}{% endif %}
+            {% if persc.site_name %} — at {{ lore_link("site", persc.site_id, persc.site_name) | safe }}{% endif %}
+            {% if persc.n_events %} — {{ persc.n_events }} incidents{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -301,8 +354,13 @@
 {% call lore_section("Duels", duels, "duels", total_counts.duels) %}
     {% for duel in duels %}
     <div class="lore-item" style="margin-bottom: 0.4rem;">
-        {{ pin_btn("duel", "", duel.name) }}
-        <strong>{{ duel.name }}</strong>{% if duel.details %} — <span style="color: var(--ink-light);">{{ duel.details }}</span>{% endif %}
+        {{ pin_btn("duel", duel.id, duel.name) }}
+        <strong>{{ lore_link("duel", duel.id, duel.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if duel.year %} — Year {{ duel.year }}{% endif %}
+            {% if duel.atk_name and duel.def_name %} — {{ lore_link("figure", duel.atk_id, duel.atk_name) | safe }} vs {{ lore_link("figure", duel.def_id, duel.def_name) | safe }}{% endif %}
+            {% if duel.site_name %} — at {{ lore_link("site", duel.site_id, duel.site_name) | safe }}{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -310,8 +368,15 @@
 {% call lore_section("Abductions", abductions, "abductions", total_counts.abductions) %}
     {% for abd in abductions %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("abduction", "", abd.name) }}
-        <strong>{{ abd.name }}</strong>{% if abd.details %} — <span style="color: var(--ink-light);">{{ abd.details }}</span>{% endif %}
+        {{ pin_btn("abduction", abd.id, abd.name) }}
+        <strong>{{ lore_link("abduction", abd.id, abd.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if abd.year %} — Year {{ abd.year }}{% endif %}
+            {% if abd.attacker_name %} — by {{ lore_link("civilization", abd.attacker_id, abd.attacker_name) | safe }}{% endif %}
+            {% if abd.defender_name %} — from {{ lore_link("civilization", abd.defender_id, abd.defender_name) | safe }}{% endif %}
+            {% if abd.site_name %} — at {{ lore_link("site", abd.site_id, abd.site_name) | safe }}{% endif %}
+            {% if abd.n_events %} — {{ abd.n_events }} incidents{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -319,8 +384,13 @@
 {% call lore_section("Thefts", thefts, "thefts", total_counts.thefts) %}
     {% for theft in thefts %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("theft", "", theft.name) }}
-        <strong>{{ theft.name }}</strong>{% if theft.details %} — <span style="color: var(--ink-light);">{{ theft.details }}</span>{% endif %}
+        {{ pin_btn("theft", theft.id, theft.name) }}
+        <strong>{{ lore_link("theft", theft.id, theft.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if theft.year %} — Year {{ theft.year }}{% endif %}
+            {% if theft.attacker_name %} — by {{ lore_link("civilization", theft.attacker_id, theft.attacker_name) | safe }}{% endif %}
+            {% if theft.site_name %} — at {{ lore_link("site", theft.site_id, theft.site_name) | safe }}{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -328,8 +398,13 @@
 {% call lore_section("Purges", purges, "purges", total_counts.purges) %}
     {% for purge in purges %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("purge", "", purge.name) }}
-        <strong>{{ purge.name }}</strong>{% if purge.details %} — <span style="color: var(--ink-light);">{{ purge.details }}</span>{% endif %}
+        {{ pin_btn("purge", purge.id, purge.name) }}
+        <strong>{{ lore_link("purge", purge.id, purge.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if purge.adjective %} — {{ purge.adjective }} purge{% endif %}
+            {% if purge.year %} — Year {{ purge.year }}{% endif %}
+            {% if purge.site_name %} — at {{ lore_link("site", purge.site_id, purge.site_name) | safe }}{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -337,8 +412,12 @@
 {% call lore_section("Coups & Overthrows", overthrown, "overthrown", total_counts.overthrown) %}
     {% for ov in overthrown %}
     <div class="lore-item" style="margin-bottom: 0.3rem;">
-        {{ pin_btn("overthrow", "", ov.name) }}
-        <strong>{{ ov.name }}</strong>{% if ov.details %} — <span style="color: var(--ink-light);">{{ ov.details }}</span>{% endif %}
+        {{ pin_btn("overthrow", ov.id, ov.name) }}
+        <strong>{{ lore_link("overthrow", ov.id, ov.name) | safe }}</strong>
+        <span style="color: var(--ink-light); font-size: 0.9rem;">
+            {% if ov.year %} — Year {{ ov.year }}{% endif %}
+            {% if ov.site_name %} — at {{ lore_link("site", ov.site_id, ov.site_name) | safe }}{% endif %}
+        </span>
     </div>
     {% endfor %}
 {% endcall %}
@@ -365,7 +444,18 @@
         {{ pin_btn("civilization", civ.id, civ.name) }}
         <h3 style="margin-bottom: 0.2rem;">{{ lore_link("civilization", civ.id, civ.name) | safe }}{% if civ.race %} <span style="font-weight: normal; color: var(--ink-faded);">({{ civ.race }})</span>{% endif %}</h3>
         {% if civ.details %}<p style="font-size: 0.9rem; color: var(--ink-light);">{{ civ.details }}</p>{% endif %}
-        {% if civ.sub_entities %}<p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.2rem;">Organizations: {{ civ.sub_entities | join(', ') }}</p>{% endif %}
+        {% if civ.org_data and civ.org_data.deities %}
+        <p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.2rem;">
+            Deities: {% for d in civ.org_data.deities %}{{ lore_link("figure", d.deity_id, d.name) | safe }}{% if d.spheres %} <span style="font-size: 0.8rem;">({{ d.spheres }})</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+        </p>
+        {% endif %}
+        {% if civ.org_data and (civ.org_data.guilds or civ.org_data.group_counts) %}
+        <p style="font-size: 0.85rem; color: var(--ink-faded); margin-top: 0.1rem;">
+            {% for g in civ.org_data.guilds %}{{ g.name }}{% if g.profession %} ({{ g.profession }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+            {% if civ.org_data.guilds and civ.org_data.group_counts %}, {% endif %}
+            {% for gtype, count in civ.org_data.group_counts.items() %}{{ count }} {{ gtype }}{{ 's' if count > 1 else '' }}{% if not loop.last %}, {% endif %}{% endfor %}
+        </p>
+        {% endif %}
     </div>
     {% endfor %}
 {% endcall %}

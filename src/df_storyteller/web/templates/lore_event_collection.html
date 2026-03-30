@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ ec.name or ec.type }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ ec.name or ec.type }}</div>
+            <div class="char-title">
+                {{ ec.type }}
+                {% if ec.adjective %} &middot; {{ ec.adjective }}{% endif %}
+                &middot; Year {{ ec.start_year }}{% if ec.end_year and ec.end_year != ec.start_year %} &ndash; {{ ec.end_year }}{% endif %}
+            </div>
+        </div>
+
+        <!-- Key participants -->
+        <div class="stat-section">
+            {% if ec.site_name %}
+            <h3>Location</h3>
+            <p>{{ lore_link("site", ec.site_id, ec.site_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.attacker_name %}
+            <h3>Aggressor</h3>
+            <p>{{ lore_link("civilization", ec.attacker_id, ec.attacker_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.target_name %}
+            <h3>Target</h3>
+            <p>{{ lore_link("civilization", ec.target_id, ec.target_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.attacking_hf_name %}
+            <h3>Attacker</h3>
+            <p>{{ lore_link("figure", ec.attacking_hf_id, ec.attacking_hf_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.defending_hf_name %}
+            <h3>Defender</h3>
+            <p>{{ lore_link("figure", ec.defending_hf_id, ec.defending_hf_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.defender_name %}
+            <h3>Defender</h3>
+            <p>{{ lore_link("civilization", ec.defender_id, ec.defender_name) | safe }}</p>
+            {% endif %}
+
+            {% if ec.parent_war %}
+            <h3>Part of</h3>
+            <p>{{ lore_link("war", ec.parent_war_id, ec.parent_war) | safe }}</p>
+            {% endif %}
+        </div>
+
+        <div class="stat-section">
+            <h3>Summary</h3>
+            <p style="color: var(--ink-light);">{{ events | length }} recorded event{{ 's' if events | length != 1 else '' }}</p>
+        </div>
+
+        {% if events %}
+        <div class="bio-section">
+            <h3>Events</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif; width: 80px;">Year</th>
+                        <th style="text-align: left; padding: 0.4rem; border-bottom: 1px solid var(--border); color: var(--gold-dark); font-family: 'Cinzel', serif;">Event</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for evt in events %}
+                    <tr>
+                        <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); vertical-align: top; font-size: 0.9rem;">{{ evt.year }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description | hotlink | safe }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

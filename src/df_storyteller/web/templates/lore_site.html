@@ -53,6 +53,22 @@
         </div>
         {% endif %}
 
+        {% if site_properties %}
+        <div class="stat-section">
+            <h3>Properties</h3>
+            {% if property_summary %}
+            <p style="color: var(--ink-light); font-size: 0.9rem; margin-bottom: 0.5rem;">{{ property_summary }}</p>
+            {% endif %}
+            <ul class="stat-list">
+                {% for prop in site_properties %}
+                {% if prop.owner_hf_id %}
+                <li>{{ prop.type | title }} &mdash; owned by {{ lore_link("figure", prop.owner_hf_id, prop.owner_name) | safe }}</li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         {% if events %}
         <div class="bio-section">
             <h3>Event Timeline</h3>
@@ -67,7 +83,7 @@
                     {% for evt in events %}
                     <tr class="event-row" {% if loop.index > 50 %}style="display: none;"{% endif %}>
                         <td style="padding: 0.3rem 0.4rem; color: var(--ink-faded); vertical-align: top; font-size: 0.9rem;">{{ evt.year }}</td>
-                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description }}</td>
+                        <td style="padding: 0.3rem 0.4rem; font-size: 0.9rem;">{{ evt.description | hotlink | safe }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

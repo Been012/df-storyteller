@@ -76,35 +76,35 @@
         {% if gazette.sections.herald %}
         <div class="newspaper-section">
             <h2 class="newspaper-section-head">The Fortress Herald</h2>
-            <div class="newspaper-body">{{ gazette.sections.herald }}</div>
+            <div class="newspaper-body">{{ gazette.sections.herald | hotlink }}</div>
         </div>
         {% endif %}
 
         {% if gazette.sections.military %}
         <div class="newspaper-section">
             <h2 class="newspaper-section-head">Military Dispatches</h2>
-            <div class="newspaper-body">{{ gazette.sections.military }}</div>
+            <div class="newspaper-body">{{ gazette.sections.military | hotlink }}</div>
         </div>
         {% endif %}
 
         {% if gazette.sections.gossip %}
         <div class="newspaper-section">
             <h2 class="newspaper-section-head">Quarry Gossip</h2>
-            <div class="newspaper-body">{{ gazette.sections.gossip }}</div>
+            <div class="newspaper-body">{{ gazette.sections.gossip | hotlink }}</div>
         </div>
         {% endif %}
 
         {% if gazette.sections.quests %}
         <div class="newspaper-section">
             <h2 class="newspaper-section-head">Quest Board</h2>
-            <div class="newspaper-body">{{ gazette.sections.quests }}</div>
+            <div class="newspaper-body">{{ gazette.sections.quests | hotlink }}</div>
         </div>
         {% endif %}
 
         {% if gazette.sections.obituaries %}
         <div class="newspaper-section">
             <h2 class="newspaper-section-head">Obituaries</h2>
-            <div class="newspaper-body">{{ gazette.sections.obituaries }}</div>
+            <div class="newspaper-body">{{ gazette.sections.obituaries | hotlink }}</div>
         </div>
         {% endif %}
     </div>
