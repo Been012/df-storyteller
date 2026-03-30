@@ -36,13 +36,23 @@ A fortress journal and storytelling companion for [Dwarf Fortress](https://store
 - **Difficulty Tiers** — Easy, Medium, Hard, Legendary
 - **Completion Narratives** — AI writes how the quest was fulfilled (LLM mode), or resolve manually
 
+### Legends Mode
+- **Detail Pages** — Dedicated pages for historical figures, civilizations, sites, artifacts, and wars with full event timelines, cross-linked entity names, and per-entity charts
+- **World Map** — Terrain map generated from region data, displayed with Leaflet.js. Site markers colored by owner race, shaped by site type. Roads and tunnels as toggleable polylines
+- **Charts & Statistics** — Race distribution, event timeline, event type breakdown (Chart.js). Per-entity activity charts on detail pages
+- **Family Trees** — Interactive hierarchical graphs on figure pages (vis-network)
+- **Warfare Graphs** — Force-directed civilization conflict networks on civ pages
+- **97 Event Types** — Every DF historical event type rendered with human-readable descriptions
+- **Lore Pins** — Bookmark any legends entity for cross-referencing. Global sidebar (P key) visible on every page
+- **Tabbed Layout** — Conflicts, People, Culture, Geography tabs with true total counts and progressive show-more
+
 ### Visualization & Data
 - **Relationship Web** — Interactive force-directed graph of fortress connections
 - **Pantheon** — Deity worship chart with sphere descriptions from legends
 - **Combat Log** — Blow-by-blow fight details with siege grouping
 - **Chat Log** — Dwarf conversations with AI social summaries
-- **Lore Browser** — Searchable world history with hover tooltips (kill counts, battle forces, relationships)
 - **Live Event Feed** — Real-time game events via WebSocket
+- **Fortress Dashboard** — Population charts, migration waves, milestone timeline
 
 ## Screenshots
 
@@ -66,9 +76,9 @@ Bar chart of deity worship across the fortress, sorted by worshipper count. Clic
 Live event feed via WebSocket, collapsible combat log with blow-by-blow fight details and siege grouping, battle reports written by survivors, and a chat log of dwarf conversations with AI social summaries.
 ![Events](docs/screenshots/events.png)
 
-### Lore
-Searchable world history browser covering civilizations, wars, battles, historical figures, artifacts, and more. Hover tooltips show rich detail — kill counts, battle forces, relationships, deity spheres, artifact descriptions.
-![Lore](docs/screenshots/legends.png)
+### Legends Mode
+Tabbed world history browser with dedicated detail pages for figures, civilizations, sites, artifacts, and wars. Interactive world map generated from region data. Charts, family trees, warfare graphs. Pin interesting finds for reference across the app.
+![Legends](docs/screenshots/legends.png)
 
 ### Quests
 AI-generated quests based on your actual fortress state — citizens, buildings, events, religion, military. Filtered by category and difficulty. Grounded in real DF mechanics. Completion narratives feed into future chronicles.
@@ -118,7 +128,8 @@ python -m df_storyteller serve
 ## Tech Stack
 
 - **Backend**: Python 3.11+, FastAPI, Pydantic v2
-- **Frontend**: Jinja2 templates, vanilla CSS/JS (no build step)
+- **Frontend**: Jinja2 templates, vanilla CSS/JS (no build step), Chart.js, Leaflet.js, vis-network (CDN)
+- **Map generation**: Pillow (terrain PNG from legends region data)
 - **Game integration**: DFHack Lua scripts
 - **LLM**: Anthropic SDK, OpenAI SDK, Ollama REST API (with thinking model support)
 - **All narratives grounded in DF mechanics** — the AI knows squad sizes, siege thresholds, temple values, what players can and cannot control
