@@ -58,24 +58,71 @@ def get_config() -> AppConfig:
 # ---------------------------------------------------------------------------
 
 
-def get_worlds(config: AppConfig) -> list[str]:
-    """List available world subfolders, most recently active first."""
+def _get_fortress_display_name(folder: Path) -> str:
+    """Get a display name for a world folder (fortress name from .session_info or snapshot)."""
+    import json as _json
+    info_file = folder / ".session_info"
+    if info_file.exists():
+        try:
+            info = _json.loads(info_file.read_text(encoding="utf-8"))
+            name = info.get("fortress_name", "")
+            if name:
+                return name
+        except (ValueError, OSError):
+            pass
+    # Fallback: check most recent snapshot
+    snaps = sorted(folder.glob("snapshot_*.json"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    if snaps:
+        try:
+            with open(snaps[0], encoding="utf-8", errors="replace") as f:
+                snap = _json.load(f)
+            name = snap.get("data", {}).get("fortress_info", {}).get("fortress_name", "")
+            if name:
+                return name
+        except (ValueError, OSError):
+            pass
+    return folder.name
+
+
+def get_worlds(config: AppConfig) -> list[dict[str, str]]:
+    """List unique fortresses, one entry per fortress identity.
+
+    Returns list of {folder, display_name} dicts. Groups folders that share
+    the same fortress identity and returns only the most recently active
+    folder for each group.
+    """
+    from df_storyteller.context.loader import _get_folder_identity
+
     base = Path(config.paths.event_dir) if config.paths.event_dir else None
     if not base or not base.exists():
         return []
 
-    def _newest_file_time(folder_name: str) -> float:
-        folder = base / folder_name
+    def _newest_file_time(folder: Path) -> float:
         files = list(folder.glob("*.json"))
         if files:
             return max(f.stat().st_mtime for f in files)
         return folder.stat().st_mtime
 
-    return sorted(
-        [d.name for d in base.iterdir() if d.is_dir() and d.name != "processed"],
-        key=_newest_file_time,
-        reverse=True,
-    )
+    all_dirs = [d for d in base.iterdir() if d.is_dir() and d.name != "processed"]
+
+    # Group folders by identity, keeping the most recent per group
+    seen_identities: dict[str, Path] = {}
+    # Sort by mtime so the first folder we see per identity is the most recent
+    all_dirs.sort(key=_newest_file_time, reverse=True)
+    result: list[dict[str, str]] = []
+    for d in all_dirs:
+        identity = _get_folder_identity(d)
+        if identity and identity in seen_identities:
+            continue  # Skip — already have a more recent folder for this fortress
+        if identity:
+            seen_identities[identity] = d
+        result.append({
+            "folder": d.name,
+            "display_name": _get_fortress_display_name(d),
+        })
+
+    return result
 
 
 def safe_watch_dir(config: AppConfig, world: str) -> Path | None:
@@ -90,11 +137,12 @@ def safe_watch_dir(config: AppConfig, world: str) -> Path | None:
 
 
 def get_active_world(config: AppConfig) -> str:
+    """Get the active world folder name."""
     global _active_world
     if _active_world:
         return _active_world
     worlds = get_worlds(config)
-    return worlds[0] if worlds else ""
+    return worlds[0]["folder"] if worlds else ""
 
 
 def set_active_world(world: str) -> None:
@@ -138,14 +186,20 @@ def _empty_state():
 
 
 def _get_newest_snapshot_time(config: AppConfig) -> float:
-    """Get modification time of the newest data file (snapshot or event)."""
+    """Get modification time of the newest data file for the active world."""
     base = Path(config.paths.event_dir) if config.paths.event_dir else None
     if not base or not base.exists():
         return 0
-    world_dirs = [d for d in base.iterdir() if d.is_dir() and d.name != "processed"]
-    if not world_dirs:
-        return 0
-    world_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
+    active = get_active_world(config)
+    if active:
+        world_dir = base / active
+        if not world_dir.exists():
+            return 0
+    else:
+        world_dirs = [d for d in base.iterdir() if d.is_dir() and d.name != "processed"]
+        if not world_dirs:
+            return 0
+        world_dir = max(world_dirs, key=lambda d: d.stat().st_mtime)
     all_json = list(world_dir.glob("*.json"))
     if not all_json:
         return 0
@@ -286,13 +340,16 @@ def base_context(config: AppConfig, active_tab: str, metadata: dict | None = Non
     if metadata is None:
         _, _, _, metadata = load_game_state_safe(config)
 
-    # Count events across all world folders for the status bar
+    # Count events for the active world folder only
     event_dir_base = Path(config.paths.event_dir) if config.paths.event_dir else None
     event_count = 0
-    if event_dir_base and event_dir_base.exists():
-        for wd in event_dir_base.iterdir():
-            if wd.is_dir() and wd.name != "processed":
-                event_count += len([f for f in wd.glob("*.json") if not f.name.startswith("snapshot_")])
+    if event_dir_base and event_dir_base.exists() and active_world:
+        active_dir = event_dir_base / active_world
+        if active_dir.exists():
+            event_count = len([
+                f for f in active_dir.glob("*.json")
+                if not f.name.startswith("snapshot_") and not f.name.startswith("delta_")
+            ])
 
     # Last updated timestamp
     last_updated = ""

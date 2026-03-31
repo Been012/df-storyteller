@@ -172,6 +172,8 @@ SESSION_MARKERS = (
     "*** STARTING NEW GAME ***",
     "** Starting New Outpost **",
     "** Loading Fortress **",
+    "** Unretiring Outpost **",
+    "** Reclaiming Outpost **",
 )
 
 
@@ -200,16 +202,19 @@ def _read_current_session_gamelog(path: Path) -> list[str]:
                 chunk = f.read(read_size)
                 tail_bytes = chunk + tail_bytes
 
-                # Check if any session marker is in what we've read so far
+                # Check if any session marker is in what we've read so far.
+                # Find the LAST marker across all types (closest to end of file).
                 tail_text = tail_bytes.decode("cp437", errors="replace")
+                best_idx = -1
                 for marker in SESSION_MARKERS:
                     idx = tail_text.rfind(marker)
-                    if idx >= 0:
-                        # Found the last session marker — return lines from there
-                        session_text = tail_text[idx:]
-                        lines = session_text.split("\n")
-                        # Skip the marker line itself
-                        return [l.rstrip("\r") for l in lines[1:] if l.strip()]
+                    if idx > best_idx:
+                        best_idx = idx
+                if best_idx >= 0:
+                    session_text = tail_text[best_idx:]
+                    lines = session_text.split("\n")
+                    # Skip the marker line itself
+                    return [l.rstrip("\r") for l in lines[1:] if l.strip()]
 
             # No marker found — fall back to last 5000 lines
             tail_text = tail_bytes.decode("cp437", errors="replace")
@@ -274,8 +279,13 @@ def _get_folder_identity(folder: Path) -> str | None:
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Fallback: read from most recent snapshot
-    snapshots = sorted(folder.glob("snapshot_*.json"), reverse=True)
+    # Fallback: read from most recent snapshot by mtime (not filename).
+    # Without .session_info the folder may contain mixed data from multiple
+    # fortresses that reused the same save slot. Use mtime to get the
+    # currently-active fortress, and prefix with "legacy:" so these
+    # identities never merge with validated .session_info folders.
+    snapshots = sorted(folder.glob("snapshot_*.json"),
+                       key=lambda p: p.stat().st_mtime, reverse=True)
     if not snapshots:
         return None
     try:
@@ -287,8 +297,14 @@ def _get_folder_identity(folder: Path) -> str | None:
         name = fi.get("fortress_name", "")
         if site_id is not None and site_id >= 0:
             return f"{site_id}:{civ_id}:{name}"
-        if civ_id is not None and civ_id >= 0:
-            return f"{civ_id}:{name}"
+        # Legacy folder — use a unique prefix so it only merges with other
+        # legacy folders that have matching session_id (stronger signal).
+        sid = fi.get("session_id", "")
+        if sid:
+            return f"legacy:{civ_id}:{name}:{sid}"
+        # No session_id at all — make identity folder-unique to prevent
+        # merging mixed data across folders.
+        return f"legacy:{folder.name}:{civ_id}:{name}"
     except (json.JSONDecodeError, OSError):
         pass
     return None

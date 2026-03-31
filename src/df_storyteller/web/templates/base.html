@@ -22,7 +22,7 @@
         <div class="nav-world">
             <select id="world-select" onchange="switchWorld(this.value)">
                 {% for world in worlds %}
-                <option value="{{ world }}" {% if world == active_world %}selected{% endif %}>{{ world }}</option>
+                <option value="{{ world.folder }}" {% if world.folder == active_world %}selected{% endif %}>{{ world.display_name }}</option>
                 {% endfor %}
             </select>
         </div>

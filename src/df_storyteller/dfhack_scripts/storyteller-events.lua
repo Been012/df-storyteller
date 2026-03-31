@@ -195,6 +195,32 @@ if not dfhack.storyteller_state then
 end
 local state = dfhack.storyteller_state
 
+-- Detect map change: if the output directory changed (different world/save slot),
+-- force a stop so start() will re-initialize with the correct output_dir.
+-- Without this, the old tick callback keeps writing to the previous folder.
+if state.enabled and state.output_dir and state.output_dir ~= output_dir then
+    print('[storyteller] Map changed (' .. state.output_dir .. ' -> ' .. output_dir .. '), restarting...')
+    eventful.onUnitDeath.storyteller = nil
+    eventful.onBuildingCreatedDestroyed.storyteller = nil
+    eventful.onJobCompleted.storyteller = nil
+    state.enabled = false
+    state.known_unit_ids = {}
+    state.prev_professions = {}
+    state.prev_nobles = {}
+    state.prev_squads = {}
+    state.prev_stress = {}
+    state.prev_population = 0
+    state.prev_mandates = {}
+    state.prev_crimes = {}
+    state.peak_population = 0
+    state.death_count = 0
+    state.known_caravans = {}
+    state.siege_active = false
+    state.sequence = 0
+    state.poll_count = 0
+end
+state.output_dir = output_dir
+
 local function get_season(tick)
     local season_tick = tick % 403200
     if season_tick < 100800 then
@@ -696,6 +722,25 @@ local function poll_mandates()
     end)
 end
 
+--- Incident types that are actual crimes/justice events (not combat or animal kills).
+--- DF uses the incident system for all kinds of events; we only want real crimes.
+local CRIME_INCIDENT_TYPES = {
+    THEFT = true,
+    THEFT_FOOD = true,
+    THEFT_ITEM = true,
+    VANDALISM = true,
+    ASSAULT = true,
+    MURDER = true,
+    KIDNAPPING = true,
+    SABOTAGE = true,
+    TREASON = true,
+    CONSPIRACY = true,
+    BRAWL = true,
+    HARASSMENT = true,
+    ROBBERY = true,
+    BREAKING_AND_ENTERING = true,
+}
+
 --- Poll for new crime/incident reports.
 local function poll_crimes()
     if not event_flags.crime then return end
@@ -707,16 +752,23 @@ local function poll_crimes()
                 local key = tostring(incident.id)
                 if state.prev_crimes[key] then return end
                 state.prev_crimes[key] = true
+
+                -- Get the incident type name
+                local type_name = 'unknown'
+                pcall(function()
+                    if incident.type then
+                        type_name = df.incident_type[incident.type] or tostring(incident.type)
+                    end
+                end)
+
+                -- Skip non-crime incidents (animal kills, combat, etc.)
+                if not CRIME_INCIDENT_TYPES[type_name] then return end
+
                 local data = {
-                    crime_type = 'unknown',
+                    crime_type = type_name,
                     victim = nil,
                     suspect = nil,
                 }
-                pcall(function()
-                    if incident.type then
-                        data.crime_type = df.incident_type[incident.type] or tostring(incident.type)
-                    end
-                end)
                 pcall(function()
                     if incident.victim and incident.victim >= 0 then
                         local victim = df.unit.find(incident.victim)

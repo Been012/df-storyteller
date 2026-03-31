@@ -114,8 +114,9 @@ class TestStateWorlds:
         from df_storyteller.web.state import get_worlds
         worlds = get_worlds(config)
         assert len(worlds) == 2
-        assert "region1" in worlds
-        assert "region2" in worlds
+        folders = [w["folder"] for w in worlds]
+        assert "region1" in folders
+        assert "region2" in folders
 
     def test_get_worlds_excludes_processed(self, tmp_path):
         (tmp_path / "region1").mkdir()
@@ -123,7 +124,8 @@ class TestStateWorlds:
         config = AppConfig(paths=PathsConfig(event_dir=str(tmp_path)))
         from df_storyteller.web.state import get_worlds
         worlds = get_worlds(config)
-        assert "processed" not in worlds
+        folders = [w["folder"] for w in worlds]
+        assert "processed" not in folders
 
     def test_safe_watch_dir_rejects_traversal(self, tmp_path):
         (tmp_path / "region1").mkdir()
