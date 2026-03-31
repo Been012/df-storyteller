@@ -937,8 +937,42 @@ end
 -- Artifacts (fortress-created and held)
 local artifacts = {}
 pcall(function()
+    -- Only capture artifacts at the current site (not the entire world's artifacts).
+    -- An artifact is "at our site" if its item exists and is on-site, or if it was
+    -- created by one of our fortress dwarves.
+    local site = dfhack.world.getCurrentSite()
+    local site_id = site and site.id or -1
+    local player_race = df.global.plotinfo.race_id
+
     for _, artifact in ipairs(df.global.world.artifacts.all) do
         pcall(function()
+            local dominated = false
+
+            -- Check if the artifact's item is at our site
+            pcall(function()
+                if artifact.item then
+                    local item_pos = artifact.item.pos
+                    -- If the item is on the map, it's at our site
+                    if item_pos and item_pos.x >= 0 then
+                        dominated = true
+                    end
+                end
+            end)
+
+            -- Also include if created by one of our dwarves
+            if not dominated then
+                pcall(function()
+                    if artifact.item and artifact.item.maker and artifact.item.maker.unit_id >= 0 then
+                        local creator = df.unit.find(artifact.item.maker.unit_id)
+                        if creator and creator.race == player_race and dfhack.units.isFortControlled(creator) then
+                            dominated = true
+                        end
+                    end
+                end)
+            end
+
+            if not dominated then return end
+
             local adata = {
                 artifact_id = artifact.id,
                 name = '',
@@ -964,7 +998,6 @@ pcall(function()
                     end)
                 end
             end)
-            -- Also try the artifact name field directly
             pcall(function()
                 if artifact.name and artifact.name.has_name then
                     local art_name = dfhack.df2utf(dfhack.translation.translateName(artifact.name, true))
