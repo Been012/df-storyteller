@@ -112,6 +112,8 @@ async def events_page(request: Request):
             continue
         if event.event_type.value == "chat":
             continue  # Shown in dedicated Chat Log section
+        if event.event_type.value == "equipment_change":
+            continue  # Too noisy, data available on military dashboard
         # Build date label: "12 Granite" or fall back to season
         date_label = event.season.value.title()
         if event.month_name and event.day:

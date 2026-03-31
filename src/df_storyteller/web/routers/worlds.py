@@ -92,7 +92,7 @@ async def websocket_events(websocket: WebSocket):
                     from df_storyteller.context.context_builder import _format_event
                     event = parse_dfhack_event(data)
                     # Skip chat and combat from live feed (shown in dedicated sections)
-                    if event.event_type.value in ("chat", "combat", "announcement"):
+                    if event.event_type.value in ("chat", "combat", "announcement", "equipment_change"):
                         continue
                     desc = _format_event(event)
                     desc = re.sub(r"^\[.*?\]\s*", "", desc)

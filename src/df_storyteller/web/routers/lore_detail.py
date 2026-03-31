@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -1440,7 +1441,7 @@ async def lore_written_work_page(request: Request, wc_id: str):
 
     work = {
         "title": wc.get("title", "Untitled"),
-        "form": wc.get("type", "").replace("_", " ").title() if wc.get("type") else "",
+        "form": re.sub(r'([a-z])([A-Z])', r'\1 \2', wc.get("type", "")).replace("_", " ").title() if wc.get("type") else "",
         "style": wc.get("style", "").split(":")[0].strip().title() if wc.get("style") else "",
         "page_count": wc.get("page_end", ""),
         "reference": wc.get("reference", "").strip() if wc.get("reference") else "",

@@ -902,9 +902,10 @@ local function on_inventory_change(unit_id, item_id, old_inv, new_inv)
         local new_mode = new_inv and new_inv.mode or -1
         local old_mode = old_inv and old_inv.mode or -1
 
-        -- Only care about weapon/armor changes (mode 1=Weapon, 2=Worn, 5=Strapped)
-        local dominated = (new_mode == 1 or new_mode == 2 or new_mode == 5 or
-                         old_mode == 1 or old_mode == 2 or old_mode == 5)
+        -- Only care about weapon/armor changes (mode 1=Weapon, 5=Strapped)
+        -- Skip mode 2 (Worn/clothing) — too noisy
+        local dominated = (new_mode == 1 or new_mode == 5 or
+                         old_mode == 1 or old_mode == 5)
         if not dominated then return end
 
         local item = df.item.find(item_id)
@@ -914,9 +915,9 @@ local function on_inventory_change(unit_id, item_id, old_inv, new_inv)
         pcall(function() item_desc = dfhack.items.getDescription(item, 0, false) or '' end)
 
         local action = 'changed'
-        if new_mode == 1 or new_mode == 2 or new_mode == 5 then
+        if new_mode == 1 or new_mode == 5 then
             action = 'equipped'
-        elseif old_mode == 1 or old_mode == 2 or old_mode == 5 then
+        elseif old_mode == 1 or old_mode == 5 then
             action = 'unequipped'
         end
 

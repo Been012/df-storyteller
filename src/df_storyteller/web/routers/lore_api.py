@@ -734,7 +734,8 @@ async def api_lore_search(q: str = ""):
         wc_style = wc.get("style", "")
         searchable = f"{title} {wc_style}".lower()
         if query in searchable:
-            wc_type = wc.get("type", "").replace("_", " ").title()
+            import re as _re
+            wc_type = _re.sub(r'([a-z])([A-Z])', r'\1 \2', wc.get("type", "")).replace("_", " ").title()
             author_id = wc.get("author")
             author_name = ""
             if author_id:

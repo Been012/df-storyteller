@@ -489,8 +489,10 @@
     {% endif %}
     {% for rel in relationships %}
     <div class="lore-item" style="margin-bottom: 0.3rem; font-size: 0.9rem;">
-        {{ pin_btn("relationship", "", rel.description) }}
-        {{ rel.description }}{% if rel.year %} <span style="color: var(--ink-faded);">(year {{ rel.year }})</span>{% endif %}
+        {{ lore_link("figure", rel.source_id, rel.source_name) | safe }}
+        <span style="color: var(--ink-faded);"> &mdash; {{ rel.label }} &mdash; </span>
+        {{ lore_link("figure", rel.target_id, rel.target_name) | safe }}
+        {% if rel.year %}<span style="color: var(--ink-faded);"> (year {{ rel.year }})</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}

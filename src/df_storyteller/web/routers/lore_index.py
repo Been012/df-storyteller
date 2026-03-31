@@ -554,7 +554,8 @@ async def lore_page(request: Request):
         # Written works (books, poems, etc.)
         for wc in legends.written_contents:
             title = wc.get("title", "Untitled")
-            wc_type = wc.get("type", "").replace("_", " ").title() if wc.get("type") else ""
+            import re as _re
+            wc_type = _re.sub(r'([a-z])([A-Z])', r'\1 \2', wc.get("type", "")).replace("_", " ").title() if wc.get("type") else ""
             # Style may have ":N" suffix (e.g. "meandering:1") — strip it
             raw_style = wc.get("style", "")
             style = raw_style.split(":")[0].strip().title() if raw_style else ""
@@ -599,52 +600,53 @@ async def lore_page(request: Request):
         }
 
         rel_counts: dict[str, int] = {}
+        rels_by_type: dict[str, list] = {}
         for rel in legends.relationships:
             rtype = rel.get("relationship", "unknown")
             label = _rel_type_labels.get(rtype, rtype.replace("_", " ").title())
             rel_counts[label] = rel_counts.get(label, 0) + 1
+            if rtype not in rels_by_type:
+                rels_by_type[rtype] = []
+            rels_by_type[rtype].append(rel)
 
-        # Show a diverse sample — pick up to 5 per type, prioritize interesting types
+        # Prioritize rare/interesting types — sort by count ascending (rarest first)
         RELATIONSHIP_DISPLAY_LIMIT = 30
-        _interesting_types = {"grudge", "war_buddy", "lieutenant", "jealous_obsession",
-                              "religious_persecution_grudge", "supernatural_grudge",
-                              "business_rival", "athletic_rival", "persecution_grudge",
-                              "jealous_relationship_grudge", "scholar_buddy", "artistic_buddy",
-                              "athlete_buddy", "childhood_friend", "former_lover", "lover"}
-        type_shown: dict[str, int] = {}
-        # First pass: interesting types
-        for rel in legends.relationships:
+        MAX_PER_TYPE = 3
+        type_order = sorted(rels_by_type.keys(), key=lambda t: len(rels_by_type[t]))
+
+        for rtype in type_order:
             if len(relationships) >= RELATIONSHIP_DISPLAY_LIMIT:
                 break
-            rtype = rel.get("relationship", "")
-            if rtype not in _interesting_types:
-                continue
-            if type_shown.get(rtype, 0) >= 5:
-                continue
-            source_id = rel.get("source_hf")
-            target_id = rel.get("target_hf")
-            year = rel.get("year", "")
-            source_name = target_name = ""
-            try:
-                if source_id:
-                    s = legends.get_figure(int(source_id))
-                    if s: source_name = s.name
-                if target_id:
-                    t = legends.get_figure(int(target_id))
-                    if t: target_name = t.name
-            except (ValueError, TypeError):
-                pass
-            if source_name and target_name:
-                label = _rel_type_labels.get(rtype, rtype.replace("_", " ").title())
-                relationships.append({
-                    "id": source_id,
-                    "source_id": source_id,
-                    "target_id": target_id,
-                    "entity_type": "figure",
-                    "description": f"{source_name} \u2014 {label} \u2014 {target_name}",
-                    "year": year,
-                })
-                type_shown[rtype] = type_shown.get(rtype, 0) + 1
+            shown = 0
+            for rel in rels_by_type[rtype]:
+                if shown >= MAX_PER_TYPE:
+                    break
+                source_id = rel.get("source_hf")
+                target_id = rel.get("target_hf")
+                year = rel.get("year", "")
+                source_name = target_name = ""
+                try:
+                    if source_id:
+                        s = legends.get_figure(int(source_id))
+                        if s: source_name = s.name
+                    if target_id:
+                        t = legends.get_figure(int(target_id))
+                        if t: target_name = t.name
+                except (ValueError, TypeError):
+                    pass
+                if source_name and target_name:
+                    label = _rel_type_labels.get(rtype, rtype.replace("_", " ").title())
+                    relationships.append({
+                        "id": source_id,
+                        "source_id": source_id,
+                        "target_id": target_id,
+                        "entity_type": "figure",
+                        "label": label,
+                        "source_name": source_name,
+                        "target_name": target_name,
+                        "year": year,
+                    })
+                    shown += 1
 
         # Identities (vampires, spies, assumed identities)
         for ident in legends.identities:
