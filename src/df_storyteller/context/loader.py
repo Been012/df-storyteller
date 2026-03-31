@@ -145,6 +145,7 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
         name=citizen.get("name", "Unknown"),
         profession=citizen.get("profession", ""),
         race=citizen.get("race", "DWARF"),
+        sex=citizen.get("sex", "unknown"),
         age=citizen.get("age", 0),
         skills=skills,
         stress_category=citizen.get("stress_category", 3),

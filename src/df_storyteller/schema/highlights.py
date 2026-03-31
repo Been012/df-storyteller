@@ -16,6 +16,7 @@ class DwarfRole(str, Enum):
     PROTAGONIST = "protagonist"
     ANTAGONIST = "antagonist"
     WATCHLIST = "watchlist"
+    SUSPICIOUS = "suspicious"
 
 
 class DwarfHighlight(BaseModel):

@@ -27,6 +27,7 @@ class Dwarf(BaseModel):
     name: str
     profession: str = ""
     race: str = "DWARF"
+    sex: str = "unknown"
     age: float = 0.0
     skills: list[Skill] = Field(default_factory=list)
     stress_category: int = 3  # 0=ecstatic, 6=on the edge

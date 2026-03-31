@@ -11,6 +11,7 @@
         <div class="char-header">
             <div class="char-name">{{ dwarf.name }}</div>
             <div class="char-title">
+                {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                 {{ dwarf.profession }}
                 {% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
                 {% if dwarf.military_squad %} &mdash; {{ dwarf.military_squad }}{% endif %}
@@ -19,7 +20,12 @@
                 <span class="deceased-badge">Deceased</span>
                 {% endif %}
             </div>
-            {% if dwarf.stress_desc %}
+            {% if dwarf.happiness_desc %}
+            <div style="margin-top: 0.3rem; font-style: italic; color: var(--ink-faded);">
+                Mood: {{ dwarf.happiness_desc }}
+                <span class="mood-indicator mood-{{ dwarf.happiness_desc }}">&#9679;</span>
+            </div>
+            {% elif dwarf.stress_desc %}
             <div style="margin-top: 0.3rem; font-style: italic; color: var(--ink-faded);">
                 Mood: {{ dwarf.stress_desc }}
             </div>
@@ -36,6 +42,7 @@
                     <option value="protagonist" {% if dwarf.highlight_role == 'protagonist' %}selected{% endif %}>Protagonist</option>
                     <option value="antagonist" {% if dwarf.highlight_role == 'antagonist' %}selected{% endif %}>Antagonist</option>
                     <option value="watchlist" {% if dwarf.highlight_role == 'watchlist' %}selected{% endif %}>Watchlist</option>
+                    <option value="suspicious" {% if dwarf.highlight_role == 'suspicious' %}selected{% endif %}>Suspicious</option>
                 </select>
             </div>
         </div>
@@ -143,7 +150,13 @@
             <h3>Wounds</h3>
             <ul class="stat-list">
                 {% for wound in dwarf.wounds %}
+                {% if wound is mapping %}
+                <li style="color: {% if wound.is_permanent %}#c98b8b{% else %}var(--ink-faded){% endif %};">
+                    {{ wound.body_part }}{% if wound.is_permanent %} <span style="font-size: 0.8rem; font-weight: bold;">({{ wound.wound_type }})</span>{% endif %}
+                </li>
+                {% else %}
                 <li style="color: var(--danger);">{{ wound }}</li>
+                {% endif %}
                 {% endfor %}
             </ul>
             {% endif %}

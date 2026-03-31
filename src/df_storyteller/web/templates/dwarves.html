@@ -17,12 +17,20 @@
 <div class="dwarf-grid">
     {% for dwarf in dwarves %}
     <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;">
-        <div class="dwarf-name">{{ dwarf.name }}{% if dwarf.highlight_role %} <span class="role-badge role-{{ dwarf.highlight_role }}">{{ dwarf.highlight_role }}</span>{% endif %}</div>
+        <div class="dwarf-name">
+            {{ dwarf.name }}
+            {% if dwarf.highlight_role %}<span class="role-badge role-{{ dwarf.highlight_role }}">{{ dwarf.highlight_role }}</span>{% endif %}
+            {% if not dwarf.is_alive %}<span class="deceased-badge">Deceased</span>{% endif %}
+        </div>
         <div class="dwarf-profession">
+            {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
             {{ dwarf.profession }}{% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
             &middot; Age {{ dwarf.age | int }}
+            <span class="mood-indicator mood-{{ dwarf.happiness_desc }}" title="{{ dwarf.happiness_desc }}">&#9679;</span>
         </div>
-        {% if dwarf.notable_traits %}
+        {% if dwarf.permanent_injuries %}
+        <div class="dwarf-injuries">{{ dwarf.permanent_injuries | join(', ') }}</div>
+        {% elif dwarf.notable_traits %}
         <div class="dwarf-traits">{{ dwarf.notable_traits }}</div>
         {% endif %}
     </a>
@@ -58,6 +66,35 @@
     </div>
     {% endfor %}
 </div>
+{% endif %}
+
+{% if traders %}
+<details open style="margin-top: 2rem; border: 1px solid var(--border); border-radius: 4px;">
+    <summary style="padding: 0.6rem 0.8rem; cursor: pointer; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark);">
+        Traders ({{ traders | length }})
+    </summary>
+    <div style="padding: 0.4rem 0.8rem 0.8rem;">
+        <div class="dwarf-grid">
+            {% for t in traders %}
+            <div class="dwarf-card" style="opacity: 0.85;">
+                <div class="dwarf-name">{{ t.name }} <span class="role-badge" style="font-size: 0.7rem; background: rgba(138, 109, 59, 0.25); color: #c9a84c; border: 1px solid rgba(138, 109, 59, 0.5);">trader</span></div>
+                <div class="dwarf-profession">
+                    {{ t.profession }}{% if t.race %} &middot; {{ t.race }}{% endif %}
+                    &middot; Age {{ t.age | int }}
+                    {% if t.civ_name %} &middot; {{ t.civ_name }}{% endif %}
+                </div>
+                {% if t.hfid %}
+                <div style="margin-top: 0.4rem; font-size: 0.8rem; display: flex; gap: 0.5rem;">
+                    <a href="#" onclick="showVisitorDetail({{ t.hfid }}, this); return false;" style="color: var(--gold-dark); text-decoration: none;">Details</a>
+                    <a href="/lore/figure/{{ t.hfid }}" style="color: var(--gold-dark); text-decoration: none;">View in Legends</a>
+                </div>
+                <div class="visitor-detail" id="visitor-detail-{{ t.hfid }}" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dotted var(--border); font-size: 0.85rem; color: var(--ink-light);"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
 {% endif %}
 
 {% if total_animals > 0 %}

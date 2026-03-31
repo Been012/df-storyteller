@@ -1229,6 +1229,42 @@ details[open] .lore-summary h2::before {
     border: 1px solid rgba(119, 136, 153, 0.5);
 }
 
+/* ========== Gender & Mood Badges ========== */
+
+.sex-badge {
+    font-size: 0.85rem;
+    vertical-align: middle;
+    margin-right: 0.15rem;
+}
+.sex-badge.male { color: #6b8cae; }
+.sex-badge.female { color: #c97b8b; }
+
+.mood-indicator {
+    font-size: 0.55rem;
+    vertical-align: middle;
+    margin-left: 0.3rem;
+}
+.mood-indicator.mood-ecstatic { color: #4caf50; }
+.mood-indicator.mood-happy { color: #7cb342; }
+.mood-indicator.mood-content { color: #9e9d24; }
+.mood-indicator.mood-fine { color: #a0a0a0; }
+.mood-indicator.mood-unhappy { color: #ef6c00; }
+.mood-indicator.mood-miserable { color: #d32f2f; }
+.mood-indicator.mood-broken { color: #b71c1c; }
+
+.dwarf-injuries {
+    font-size: 0.8rem;
+    color: #c98b8b;
+    font-style: italic;
+    margin-top: 0.2rem;
+}
+
+.role-suspicious {
+    background: rgba(156, 39, 176, 0.25);
+    color: #ce93d8;
+    border: 1px solid rgba(156, 39, 176, 0.5);
+}
+
 /* ========== Dwarf Timeline ========== */
 
 .dwarf-timeline {

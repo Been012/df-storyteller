@@ -11,7 +11,7 @@
 <div class="dashboard-summary">
     <div class="stat-card">
         <div class="stat-value">{{ dashboard.summary.population }}</div>
-        <div class="stat-label">Population</div>
+        <div class="stat-label">Population{% if dashboard.summary.peak_population > dashboard.summary.population %} <span style="font-size: 0.7rem; color: var(--ink-faded);">(peak: {{ dashboard.summary.peak_population }})</span>{% endif %}</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{ dashboard.summary.years_active }}</div>
@@ -29,6 +29,12 @@
         <div class="stat-value">{{ dashboard.summary.total_combats }}</div>
         <div class="stat-label">Combats</div>
     </div>
+    {% if dashboard.summary.total_sieges > 0 %}
+    <div class="stat-card">
+        <div class="stat-value">{{ dashboard.summary.total_sieges }}</div>
+        <div class="stat-label">Sieges</div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Charts Grid -->
@@ -60,6 +66,13 @@
         <canvas id="migration-chart"></canvas>
     </div>
     {% endif %}
+
+    {% if dashboard.wealth_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Fortress Wealth</h3>
+        <canvas id="wealth-chart"></canvas>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Milestones -->
@@ -72,6 +85,89 @@
             <div class="milestone-when">{{ m.season }} of Year {{ m.year }}</div>
             <div class="milestone-label">{{ m.label }}</div>
             <div class="milestone-desc">{{ m.description }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Siege History -->
+{% if dashboard.sieges %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Siege History</h3>
+    {% for s in dashboard.sieges %}
+    {% if s.status == 'started' %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ s.season }} of Year {{ s.year }}</div>
+        <div class="milestone-label" style="color: #c98b8b;">{{ s.invader_count }} {{ s.invader_race }} invaders from {{ s.civilization }}</div>
+    </div>
+    {% elif s.status == 'ended' %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ s.season }} of Year {{ s.year }}</div>
+        <div class="milestone-label" style="color: var(--success);">Siege ended &mdash; invaders defeated or driven off</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Active Mandates -->
+{% if dashboard.mandates %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Mandates</h3>
+    {% for m in dashboard.mandates %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ m.season }} of Year {{ m.year }}</div>
+        <div class="milestone-label">{{ m.issuer }}: {{ m.type }} on {{ m.item }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Crimes & Justice -->
+{% if dashboard.crimes %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Crimes &amp; Justice</h3>
+    {% for c in dashboard.crimes %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ c.season }} of Year {{ c.year }}</div>
+        <div class="milestone-label">
+            {{ c.type }} &mdash; victim: {{ c.victim }}
+            {% if c.suspect != 'unknown' %}, suspect: <a href="/dwarves/{{ c.suspect_id }}" style="color: var(--gold-dark);">{{ c.suspect }}</a>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Caravan Visits -->
+{% if dashboard.caravans %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Caravan Visits</h3>
+    {% for c in dashboard.caravans %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ c.season }} of Year {{ c.year }}</div>
+        <div class="milestone-label">{{ c.type }} from {{ c.civilization }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Artifact Gallery -->
+{% if dashboard.artifacts %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Artifact Gallery</h3>
+    <div class="dwarf-grid">
+        {% for a in dashboard.artifacts %}
+        <div class="dwarf-card" style="opacity: 0.9;">
+            <div class="dwarf-name">{{ a.name }}</div>
+            <div class="dwarf-profession">
+                {% if a.item_type %}{{ a.item_type }}{% endif %}
+                {% if a.material %} &middot; {{ a.material }}{% endif %}
+            </div>
+            {% if a.creator_name %}
+            <div class="dwarf-traits">Created by {{ a.creator_name }}</div>
+            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -143,5 +239,6 @@ makeChart('population-chart', dashboardData.population_series, 'line', '#c9a84c'
 makeChart('deaths-chart', dashboardData.deaths_series, 'bar', '#8b2500', 'rgba(139, 37, 0, 0.6)');
 makeChart('combat-chart', dashboardData.combat_series, 'bar', '#d4bc7c', 'rgba(212, 188, 124, 0.5)');
 makeChart('migration-chart', dashboardData.migration_series, 'bar', '#8a6d3b', 'rgba(138, 109, 59, 0.6)');
+makeChart('wealth-chart', dashboardData.wealth_series || [], 'line', '#c9a84c', 'rgba(201, 168, 76, 0.1)');
 </script>
 {% endblock %}

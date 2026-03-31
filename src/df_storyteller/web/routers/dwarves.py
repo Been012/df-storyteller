@@ -43,8 +43,17 @@ async def dwarves_page(request: Request):
 
     # Load highlights for badge display
     from df_storyteller.context.highlights_store import load_all_highlights
+    from df_storyteller.schema.events import EventType as ET, CrimeData
     fortress_dir = _get_fortress_dir(config, metadata)
     highlights_map = {h.unit_id: h.role.value for h in load_all_highlights(config, output_dir=fortress_dir)}
+
+    # Auto-detect suspicious dwarves from crime events (don't override manual highlights)
+    for crime_event in event_store.events_by_type(ET.CRIME):
+        data = crime_event.data
+        if isinstance(data, CrimeData) and data.suspect and data.suspect.unit_id:
+            uid = data.suspect.unit_id
+            if uid not in highlights_map:
+                highlights_map[uid] = "suspicious"
 
     dwarves = []
     for dwarf, score in ranked:
@@ -53,29 +62,65 @@ async def dwarves_page(request: Request):
             traits = [f.description for f in dwarf.personality.notable_facets[:3] if f.description]
             notable_traits = "; ".join(traits)
 
+        # Permanent injuries from wound data
+        permanent_injuries = []
+        for w in dwarf.wounds:
+            if isinstance(w, dict) and w.get("is_permanent"):
+                permanent_injuries.append(f"{w.get('wound_type', 'injured')} {w.get('body_part', '')}")
+
+        # Happiness description
+        happiness = dwarf.happiness
+        if happiness >= 500000:
+            happiness_desc = "ecstatic"
+        elif happiness >= 200000:
+            happiness_desc = "happy"
+        elif happiness >= 100000:
+            happiness_desc = "content"
+        elif happiness >= 1:
+            happiness_desc = "fine"
+        elif happiness >= -100000:
+            happiness_desc = "unhappy"
+        elif happiness >= -200000:
+            happiness_desc = "miserable"
+        else:
+            happiness_desc = "broken"
+
         dwarves.append({
             "unit_id": dwarf.unit_id,
             "name": dwarf.name,
             "profession": dwarf.profession,
             "age": dwarf.age,
+            "sex": dwarf.sex,
             "noble_positions": dwarf.noble_positions,
             "notable_traits": notable_traits,
             "highlight_role": highlights_map.get(dwarf.unit_id, ""),
+            "happiness_desc": happiness_desc,
+            "permanent_injuries": permanent_injuries,
+            "is_alive": dwarf.is_alive,
         })
 
-    # Build visitors list from metadata
+    # Build visitors and traders lists from metadata
     visitors = []
+    traders = []
     for v in metadata.get("visitors", []):
         name = v.get("name", "Unknown")
         hfid = v.get("hist_figure_id")
-        visitors.append({
+        prof = v.get("profession", "")
+        entry = {
             "name": name,
-            "profession": v.get("profession", ""),
+            "profession": prof,
             "race": v.get("race", "").replace("_", " ").title(),
             "age": v.get("age", 0),
             "role": v.get("role", "visitor"),
             "hfid": hfid if hfid and hfid > 0 else None,
-        })
+            "civ_name": v.get("civ_name", ""),
+        }
+        # Separate merchants/traders from regular visitors
+        prof_lower = prof.lower()
+        if "merchant" in prof_lower or "trader" in prof_lower or "caravan" in prof_lower:
+            traders.append(entry)
+        else:
+            visitors.append(entry)
 
     # Build animals grouped into accordion sections
     def _animal_dict(a) -> dict:
@@ -108,7 +153,7 @@ async def dwarves_page(request: Request):
     total_animals = len(pets_owned) + len(pets_adoptable) + len(livestock) + len(wild_animals)
 
     return templates.TemplateResponse(request=request, name="dwarves.html", context={
-        **ctx, "content_class": "content-wide", "dwarves": dwarves, "visitors": visitors,
+        **ctx, "content_class": "content-wide", "dwarves": dwarves, "visitors": visitors, "traders": traders,
         "pets_owned": pets_owned, "pets_adoptable": pets_adoptable,
         "livestock": livestock, "wild_animals": wild_animals,
         "total_animals": total_animals,
@@ -401,15 +446,34 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     fortress_dir = _get_fortress_dir(config, metadata)
     dwarf_highlight = get_highlight_for_dwarf(config, unit_id, output_dir=fortress_dir)
 
+    # Happiness description (more granular than stress_category)
+    happiness = dwarf.happiness
+    if happiness >= 500000:
+        happiness_desc = "ecstatic"
+    elif happiness >= 200000:
+        happiness_desc = "happy"
+    elif happiness >= 100000:
+        happiness_desc = "content"
+    elif happiness >= 1:
+        happiness_desc = "fine"
+    elif happiness >= -100000:
+        happiness_desc = "unhappy"
+    elif happiness >= -200000:
+        happiness_desc = "miserable"
+    else:
+        happiness_desc = "broken"
+
     dwarf_data = {
         "unit_id": dwarf.unit_id,
         "hist_figure_id": dwarf.hist_figure_id if dwarf.hist_figure_id > 0 else None,
         "name": dwarf.name,
         "profession": dwarf.profession,
+        "sex": dwarf.sex,
         "age": dwarf.age,
         "noble_positions": dwarf.noble_positions,
         "military_squad": dwarf.military_squad,
         "stress_desc": stress_descs.get(dwarf.stress_category) if dwarf.stress_category not in (2, 3) else "",
+        "happiness_desc": happiness_desc if happiness != 0 else "",
         "personality_traits": personality_traits,
         "beliefs": beliefs,
         "goals": goals,
