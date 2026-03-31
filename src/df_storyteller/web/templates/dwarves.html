@@ -115,6 +115,7 @@
                     {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
                 </div>
                 <div class="dwarf-profession">
+                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                     {% if a.name %}{{ a.race }} &middot; {% endif %}
                     {% if a.profession %}{{ a.profession }} &middot; {% endif %}
                     Age {{ a.age | int }}
@@ -144,6 +145,7 @@
                     <span class="role-badge" style="font-size: 0.7rem;">adoptable</span>
                 </div>
                 <div class="dwarf-profession">
+                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                     {% if a.name %}{{ a.race }} &middot; {% endif %}
                     {% if a.profession %}{{ a.profession }} &middot; {% endif %}
                     Age {{ a.age | int }}
@@ -172,6 +174,7 @@
                     {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
                 </div>
                 <div class="dwarf-profession">
+                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                     {% if a.name %}{{ a.race }} &middot; {% endif %}
                     {% if a.profession %}{{ a.profession }} &middot; {% endif %}
                     Age {{ a.age | int }}
@@ -199,6 +202,7 @@
                     {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
                 </div>
                 <div class="dwarf-profession">
+                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                     {% if a.name %}{{ a.race }} &middot; {% endif %}
                     Age {{ a.age | int }}
                 </div>

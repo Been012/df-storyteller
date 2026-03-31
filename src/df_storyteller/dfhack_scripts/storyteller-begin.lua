@@ -227,6 +227,8 @@ local function serialize_unit(unit)
         stress_category = dfhack.units.getStressCategory(unit),
         happiness = 0,
         age = unit_age,
+        sex = unit.sex == 0 and 'female' or (unit.sex == 1 and 'male' or 'unknown'),
+        birth_year = unit.birth_year or 0,
         civ_id = unit.civ_id,
         skills = {},
         personality = { facets = {}, beliefs = {}, goals = {} },
