@@ -106,6 +106,8 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
         "game_year": game_year,
         "game_tick": game_tick,
         "season": season,
+        "month_name": raw.get("month_name", ""),
+        "day": raw.get("day", 0),
         "source": EventSource.DFHACK,
     }
 

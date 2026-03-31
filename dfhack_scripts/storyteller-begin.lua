@@ -8,6 +8,14 @@
 ---
 --- Reference: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
 
+-- Guard: fortress mode only (gamemode 0 = DWARF, 1 = ADVENTURE)
+if df.global.gamemode ~= 0 then
+    local mode_name = tostring(df.global.gamemode)
+    pcall(function() mode_name = df.game_mode[df.global.gamemode] or mode_name end)
+    print('[storyteller] Skipping: this script requires fortress mode (current: ' .. mode_name .. ').')
+    return
+end
+
 local json = require('json')
 
 -- ======================= Config =======================
@@ -114,16 +122,18 @@ local function get_fortress_info()
     local info = {
         world_folder = world_folder,
         fortress_name = '', site_name = '', site_type = '',
+        site_id = -1,
         biome = '', civ_name = '', civ_id = -1,
     }
 
-    -- Fortress/site name
+    -- Fortress/site name + unique site ID
     pcall(function()
         local site = dfhack.world.getCurrentSite()
         if site then
             info.fortress_name = safe_translate_name(site.name, false)
             info.site_name = safe_translate_name(site.name, true)
             info.site_type = df.world_site_type[site.type] or ''
+            info.site_id = site.id
         end
     end)
 
@@ -587,26 +597,146 @@ ensure_output_dir()
 -- Step 0: Gather fortress info + unique session ID
 -- The session ID is generated once per fortress instance and stored in a marker
 -- file. This disambiguates different fortress attempts at the same site.
+-- We also store civ_id + fortress_name so we can detect when DF reuses a
+-- save folder (e.g. "autosave 1") for a completely different fortress.
 local session_id_path = output_dir .. '.session_id'
-local fortress_session_id = ''
+local session_info_path = output_dir .. '.session_info'
+
+-- Get current fortress identity for validation.
+-- site_id is the most reliable differentiator — unique per site in the world,
+-- persists across saves, and distinguishes retired vs new fortresses in the same world.
+local current_civ_id = -1
+local current_site_id = -1
+local current_fortress_name = ''
 pcall(function()
-    local f = io.open(session_id_path, 'r')
+    current_civ_id = df.global.plotinfo.civ_id
+    local site = dfhack.world.getCurrentSite()
+    if site then
+        current_site_id = site.id
+        current_fortress_name = dfhack.df2utf(dfhack.translation.translateName(site.name, false))
+    end
+    if current_fortress_name == '' then
+        current_fortress_name = dfhack.df2utf(dfhack.translation.translateName(df.global.plotinfo.name, false))
+    end
+end)
+
+local fortress_session_id = ''
+local need_new_session = true
+local existing_info = nil  -- preserved for session_ids_by_site migration
+
+-- Try loading existing session info and validate it matches current fortress
+pcall(function()
+    local f = io.open(session_info_path, 'r')
     if f then
-        fortress_session_id = f:read('*a'):match('^%s*(.-)%s*$') or ''
+        local content = f:read('*a')
+        f:close()
+        existing_info = json.decode(content)
+        if existing_info and existing_info.session_id and existing_info.session_id ~= '' then
+            -- Use site_id as primary check (handles retire + new fortress in same world).
+            -- Fall back to civ_id + fortress_name for older .session_info without site_id.
+            local stored_site_id = existing_info.site_id or -1
+            local match = false
+            if current_site_id >= 0 and stored_site_id >= 0 then
+                match = (stored_site_id == current_site_id)
+            else
+                match = (existing_info.civ_id == current_civ_id and existing_info.fortress_name == current_fortress_name)
+            end
+            if match then
+                fortress_session_id = existing_info.session_id
+                need_new_session = false
+            else
+                -- Check if we're reclaiming a previously-played fortress
+                local site_key = tostring(current_site_id)
+                local by_site = existing_info.session_ids_by_site or {}
+                if current_site_id >= 0 and by_site[site_key] then
+                    print('[storyteller] Reclaiming previously-played fortress (site ' .. site_key .. ')')
+                else
+                    print('[storyteller] Folder reused by different fortress — generating new session')
+                    print('[storyteller]   was: site=' .. tostring(stored_site_id) .. ' civ=' .. tostring(existing_info.civ_id) .. ' name=' .. tostring(existing_info.fortress_name))
+                    print('[storyteller]   now: site=' .. tostring(current_site_id) .. ' civ=' .. tostring(current_civ_id) .. ' name=' .. current_fortress_name)
+                end
+            end
+        end
+    end
+end)
+
+-- Fallback: try legacy .session_id file (no validation possible)
+if need_new_session then
+    pcall(function()
+        local f = io.open(session_id_path, 'r')
+        if f then
+            fortress_session_id = f:read('*a'):match('^%s*(.-)%s*$') or ''
+            f:close()
+            if fortress_session_id ~= '' then
+                print('[storyteller] Legacy session_id found but cannot validate — generating new session')
+                fortress_session_id = ''
+            end
+        end
+    end)
+end
+
+if need_new_session then
+    fortress_session_id = tostring(os.time())
+    print('[storyteller] New fortress session: ' .. fortress_session_id)
+end
+
+-- Build session_ids_by_site: maps site_id -> list of all session_ids for that site.
+-- Preserves history across retire/reclaim cycles so old events remain accessible.
+local session_ids_by_site = {}
+if existing_info and existing_info.session_ids_by_site then
+    session_ids_by_site = existing_info.session_ids_by_site
+end
+-- Ensure the old active session is tracked under its site_id
+if existing_info and existing_info.session_id and existing_info.site_id then
+    local old_key = tostring(existing_info.site_id)
+    if not session_ids_by_site[old_key] then
+        session_ids_by_site[old_key] = {}
+    end
+    local found = false
+    for _, sid in ipairs(session_ids_by_site[old_key]) do
+        if sid == existing_info.session_id then found = true; break end
+    end
+    if not found then
+        table.insert(session_ids_by_site[old_key], existing_info.session_id)
+    end
+end
+-- Add current session_id under current site_id
+if current_site_id >= 0 then
+    local cur_key = tostring(current_site_id)
+    if not session_ids_by_site[cur_key] then
+        session_ids_by_site[cur_key] = {}
+    end
+    local found = false
+    for _, sid in ipairs(session_ids_by_site[cur_key]) do
+        if sid == fortress_session_id then found = true; break end
+    end
+    if not found then
+        table.insert(session_ids_by_site[cur_key], fortress_session_id)
+    end
+end
+
+-- Write .session_info and legacy .session_id
+pcall(function()
+    local info = {
+        session_id = fortress_session_id,
+        civ_id = current_civ_id,
+        site_id = current_site_id,
+        fortress_name = current_fortress_name,
+        session_ids_by_site = session_ids_by_site,
+    }
+    local f = io.open(session_info_path, 'w')
+    if f then
+        f:write(json.encode(info))
         f:close()
     end
 end)
-if fortress_session_id == '' then
-    fortress_session_id = tostring(os.time())
-    pcall(function()
-        local f = io.open(session_id_path, 'w')
-        if f then
-            f:write(fortress_session_id)
-            f:close()
-        end
-    end)
-    print('[storyteller] New fortress session: ' .. fortress_session_id)
-end
+pcall(function()
+    local f = io.open(session_id_path, 'w')
+    if f then
+        f:write(fortress_session_id)
+        f:close()
+    end
+end)
 
 local fortress_info = get_fortress_info()
 fortress_info.session_id = fortress_session_id

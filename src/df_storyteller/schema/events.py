@@ -74,6 +74,8 @@ class GameEvent(BaseModel):
     game_year: int
     game_tick: int = 0
     season: Season = Season.SPRING
+    month_name: str = ""  # DF month name (Granite, Slate, etc.)
+    day: int = 0  # Day of month (1-28)
     source: EventSource
     timestamp: datetime = Field(default_factory=datetime.now)
     data: dict[str, Any] = Field(default_factory=dict)

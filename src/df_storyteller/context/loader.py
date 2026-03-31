@@ -219,38 +219,75 @@ def _read_current_session_gamelog(path: Path) -> list[str]:
         return []
 
 
-def _get_folder_identity(folder: Path) -> str | None:
-    """Get a stable identity for a world folder.
+def _get_valid_session_ids(folder: Path) -> set[str]:
+    """Get all valid session_ids for the current site in a folder.
 
-    Uses session_id (unique per fortress instance) when available.
-    Falls back to 'civ_id:fortress_name' for older snapshots without session_id,
-    but this can incorrectly merge different fortress attempts at the same site.
+    Reads .session_info and returns all session_ids from session_ids_by_site
+    for the current site_id. This handles retire/reclaim cycles where a
+    fortress may have multiple sessions across different play stints.
+    Falls back to just the single session_id for older formats.
     """
-    # Check for session_id marker file first (most reliable)
-    session_file = folder / ".session_id"
-    session_id = ""
-    if session_file.exists():
+    info_file = folder / ".session_info"
+    if not info_file.exists():
+        return set()
+    try:
+        info = json.loads(info_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+
+    site_id = str(info.get("site_id", -1))
+    by_site = info.get("session_ids_by_site", {})
+    if site_id in by_site:
+        return set(by_site[site_id])
+
+    # Fallback: just the single session_id
+    sid = info.get("session_id", "")
+    return {sid} if sid else set()
+
+
+def _get_folder_identity(folder: Path) -> str | None:
+    """Get a stable identity for a world folder based on fortress identity.
+
+    Returns 'site_id:civ_id:fortress_name' — the same across all save slots
+    (region2, autosave 1, test1) for the same fortress. This allows
+    merging event data from multiple save folders.
+
+    site_id is the primary differentiator — unique per site in the world,
+    handles retire-and-restart scenarios where civ_id could be the same.
+
+    Session_id is NOT included in the identity — it's only used for
+    filtering stale events within a folder that was reused by a different
+    fortress (handled separately in the event loading code).
+    """
+    # Check .session_info first (new format — has validated identity fields)
+    session_info_file = folder / ".session_info"
+    if session_info_file.exists():
         try:
-            session_id = session_file.read_text(encoding="utf-8").strip()
-        except OSError:
+            info = json.loads(session_info_file.read_text(encoding="utf-8"))
+            site_id = info.get("site_id", -1)
+            civ_id = info.get("civ_id", -1)
+            name = info.get("fortress_name", "")
+            if site_id is not None and site_id >= 0:
+                return f"{site_id}:{civ_id}:{name}"
+            if civ_id is not None and civ_id >= 0:
+                return f"{civ_id}:{name}"
+        except (json.JSONDecodeError, OSError):
             pass
 
+    # Fallback: read from most recent snapshot
     snapshots = sorted(folder.glob("snapshot_*.json"), reverse=True)
     if not snapshots:
-        # No snapshots — use session_id alone if available
-        return f"session:{session_id}" if session_id else None
+        return None
     try:
         with open(snapshots[0], encoding="utf-8", errors="replace") as f:
             snap = json.load(f)
         fi = snap.get("data", {}).get("fortress_info", {})
-        civ_id = fi.get("civ_id", "")
+        site_id = fi.get("site_id", -1)
+        civ_id = fi.get("civ_id", -1)
         name = fi.get("fortress_name", "")
-
-        # Prefer session_id from snapshot or marker file
-        sid = fi.get("session_id", "") or session_id
-        if sid:
-            return f"{civ_id}:{name}:{sid}"
-        if civ_id and name:
+        if site_id is not None and site_id >= 0:
+            return f"{site_id}:{civ_id}:{name}"
+        if civ_id is not None and civ_id >= 0:
             return f"{civ_id}:{name}"
     except (json.JSONDecodeError, OSError):
         pass
@@ -262,18 +299,33 @@ def _get_folder_identity(folder: Path) -> str | None:
 def get_fortress_output_dir(config: AppConfig, metadata: dict | None = None) -> Path:
     """Get the per-fortress output directory for stories, notes, etc.
 
-    Uses fortress identity (civ_id:fortress_name) to create isolated
-    directories per fortress. Falls back to the base output_dir if no
-    fortress identity is available.
+    Uses site_id + fortress_name to create isolated directories per fortress.
+    site_id handles retire-and-restart scenarios where civ_id could be the same.
+    Falls back to civ_id + fortress_name for older data without site_id.
     """
     base = Path(config.paths.output_dir)
     if metadata:
         fi = metadata.get("fortress_info", {})
+        site_id = fi.get("site_id", -1)
         civ_id = fi.get("civ_id", "")
         name = metadata.get("fortress_name", "")
-        if civ_id and name:
+        if name:
             safe_name = name.lower().replace(" ", "_")
-            fortress_dir = base / f"{civ_id}_{safe_name}"
+            if site_id is not None and site_id >= 0:
+                fortress_dir = base / f"s{site_id}_{safe_name}"
+            elif civ_id:
+                fortress_dir = base / f"{civ_id}_{safe_name}"
+            else:
+                fortress_dir = base / safe_name
+            # Migrate: if old civ_id-based dir exists but new site_id-based doesn't,
+            # rename it so stories carry over
+            if site_id is not None and site_id >= 0 and civ_id:
+                old_dir = base / f"{civ_id}_{safe_name}"
+                if old_dir.exists() and not fortress_dir.exists():
+                    try:
+                        old_dir.rename(fortress_dir)
+                    except OSError:
+                        pass
             fortress_dir.mkdir(parents=True, exist_ok=True)
             return fortress_dir
     base.mkdir(parents=True, exist_ok=True)
@@ -348,14 +400,28 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
 
     processed_dir = event_dir / "processed" if event_dir else None
 
-    # 1. Load the most recent snapshot across all matching folders
+    # 1. Load the most recent snapshot across all matching folders.
+    # Filter by per-folder session_ids to avoid loading a stale snapshot
+    # from a previous fortress that shared the same save folder.
+    # Uses session_ids_by_site so reclaimed fortresses keep their old snapshots.
     snapshots: list[Path] = []
     if event_dirs:
         for ed in event_dirs:
-            snapshots += list(ed.glob("snapshot_*.json"))
-            proc = ed / "processed"
-            if proc.exists():
-                snapshots += list(proc.glob("snapshot_*.json"))
+            valid_sids = _get_valid_session_ids(ed)
+
+            for snap_path in list(ed.glob("snapshot_*.json")) + (
+                list((ed / "processed").glob("snapshot_*.json")) if (ed / "processed").exists() else []
+            ):
+                if valid_sids:
+                    try:
+                        with open(snap_path, encoding="utf-8", errors="replace") as f:
+                            snap_data = json.load(f)
+                        snap_sid = snap_data.get("data", {}).get("fortress_info", {}).get("session_id", "")
+                        if snap_sid and snap_sid not in valid_sids:
+                            continue  # Stale snapshot from different fortress
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                snapshots.append(snap_path)
         snapshots.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     if event_dirs:
@@ -405,10 +471,22 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning("Failed to load snapshot %s: %s", latest_snapshot, e)
 
-        # Apply the most recent delta snapshot (lightweight updates to citizen data)
+        # Apply the most recent delta snapshot (lightweight updates to citizen data).
+        # Filter by per-folder session_ids to skip stale deltas.
         deltas = []
         for ed in event_dirs:
-            deltas += list(ed.glob("delta_*.json"))
+            valid_sids = _get_valid_session_ids(ed)
+            for delta_path in ed.glob("delta_*.json"):
+                if valid_sids:
+                    try:
+                        with open(delta_path, encoding="utf-8", errors="replace") as f:
+                            d = json.load(f)
+                        delta_sid = d.get("session_id", "")
+                        if delta_sid and delta_sid not in valid_sids:
+                            continue
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                deltas.append(delta_path)
         deltas.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         if deltas:
             try:
@@ -434,11 +512,22 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning("Failed to load delta snapshot: %s", e)
 
-    # 2. Load event files from all matching folders
-    # Filter by session_id if available to avoid loading events from a
-    # previous fortress that shared the same save folder.
-    active_session_id = metadata.get("session_id", "")
+    # 2. Load event files from all matching folders.
+    # Each folder may have been reused by a different fortress (e.g. "autosave 1"
+    # overwritten). Use per-folder session_id from .session_info to filter out
+    # stale events that belong to a previous fortress in the same folder.
     if event_dirs:
+        # Build a map of valid session_ids per folder directory.
+        # Uses session_ids_by_site so reclaimed fortresses keep their old events.
+        valid_session_ids: dict[str, set[str]] = {}
+        for ed in event_dirs:
+            sids = _get_valid_session_ids(ed)
+            if not sids:
+                # Fallback: session_id from snapshot metadata (primary folder)
+                sid = metadata.get("session_id", "")
+                sids = {sid} if sid else set()
+            valid_session_ids[str(ed)] = sids
+
         event_files: list[Path] = []
         for ed in event_dirs:
             event_files += list(ed.glob("*.json"))
@@ -448,16 +537,20 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         event_files.sort()
 
         for path in event_files:
-            if path.name.startswith("snapshot_"):
+            if path.name.startswith("snapshot_") or path.name.startswith("delta_"):
                 continue
-            # Quick session_id check before full parse (avoid loading stale events)
-            if active_session_id:
+            # Per-folder session_id check to filter stale events
+            folder_key = str(path.parent)
+            if folder_key.endswith("processed"):
+                folder_key = str(path.parent.parent)
+            folder_sids = valid_session_ids.get(folder_key, set())
+            if folder_sids:
                 try:
                     with open(path, encoding="utf-8", errors="replace") as f:
                         raw = json.load(f)
                     event_sid = raw.get("session_id", "")
-                    # Skip events from different sessions (but keep events without session_id for compatibility)
-                    if event_sid and event_sid != active_session_id:
+                    # Skip events from different sessions (keep events without session_id for compat)
+                    if event_sid and event_sid not in folder_sids:
                         continue
                 except (json.JSONDecodeError, OSError):
                     pass

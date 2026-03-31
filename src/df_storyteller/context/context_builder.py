@@ -53,9 +53,31 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
+_DF_MONTHS = [
+    "Granite", "Slate", "Felsite",
+    "Hematite", "Malachite", "Galena",
+    "Limestone", "Sandstone", "Timber",
+    "Moonstone", "Opal", "Obsidian",
+]
+
+
+def _event_date_str(event: GameEvent) -> str:
+    """Return a date string like '12th Granite, Year 100' or fall back to season."""
+    month = event.month_name
+    day = event.day
+    if not month and event.game_tick:
+        day_of_year = event.game_tick % 403200 // 1200
+        m = min(day_of_year // 28, 11)
+        month = _DF_MONTHS[m]
+        day = (day_of_year % 28) + 1
+    if month and day:
+        return f"{day} {month}, Year {event.game_year}"
+    return f"{event.season.value.title()} {event.game_year}"
+
+
 def _format_event(event: GameEvent) -> str:
     """Format a single event as a concise text line for prompt context."""
-    prefix = f"[{event.season.value.title()} {event.game_year}]"
+    prefix = f"[{_event_date_str(event)}]"
     data = event.data
 
     if hasattr(data, "victim"):

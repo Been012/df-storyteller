@@ -9,6 +9,14 @@
 --- Reference: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
 --- Key modules: dfhack.units, dfhack.world, eventful plugin
 
+-- Guard: fortress mode only (gamemode 0 = DWARF, 1 = ADVENTURE)
+if df.global.gamemode ~= 0 then
+    local mode_name = tostring(df.global.gamemode)
+    pcall(function() mode_name = df.game_mode[df.global.gamemode] or mode_name end)
+    print('[storyteller] Skipping: this script requires fortress mode (current: ' .. mode_name .. ').')
+    return
+end
+
 local eventful = require('plugins.eventful')
 local json = require('json')
 
@@ -19,14 +27,129 @@ local world_folder = dfhack.world.ReadWorldFolder()
 local output_dir = dfhack.getDFPath() .. '/storyteller_events/' .. world_folder .. '/'
 local poll_interval_ticks = 100
 
--- Read fortress session ID (written by storyteller-begin) to tag events
+-- Read fortress session ID and validate it matches the current fortress.
+-- If the folder was reused by a different fortress (e.g. "autosave 1" overwritten),
+-- generate a new session_id so old events don't contaminate the new fortress.
 local fortress_session_id = ''
 pcall(function()
-    local f = io.open(output_dir .. '.session_id', 'r')
+    -- Get current fortress identity
+    local current_civ_id = df.global.plotinfo.civ_id
+    local current_site_id = -1
+    local current_name = ''
+    pcall(function()
+        local site = dfhack.world.getCurrentSite()
+        if site then
+            current_site_id = site.id
+            current_name = dfhack.df2utf(dfhack.translation.translateName(site.name, false))
+        end
+        if current_name == '' then
+            current_name = dfhack.df2utf(dfhack.translation.translateName(df.global.plotinfo.name, false))
+        end
+    end)
+
+    local existing_info = nil
+
+    -- Try new-format .session_info (has identity validation)
+    local f = io.open(output_dir .. '.session_info', 'r')
     if f then
-        fortress_session_id = f:read('*a'):match('^%s*(.-)%s*$') or ''
+        local content = f:read('*a')
         f:close()
+        existing_info = json.decode(content)
+        if existing_info and existing_info.session_id and existing_info.session_id ~= '' then
+            local stored_site_id = existing_info.site_id or -1
+            local match = false
+            if current_site_id >= 0 and stored_site_id >= 0 then
+                match = (stored_site_id == current_site_id)
+            else
+                match = (existing_info.civ_id == current_civ_id and existing_info.fortress_name == current_name)
+            end
+            if match then
+                fortress_session_id = existing_info.session_id
+                return
+            else
+                -- Check if reclaiming a previously-played fortress
+                local site_key = tostring(current_site_id)
+                local by_site = existing_info.session_ids_by_site or {}
+                if current_site_id >= 0 and by_site[site_key] then
+                    print('[storyteller-events] Reclaiming previously-played fortress (site ' .. site_key .. ')')
+                else
+                    print('[storyteller-events] Session mismatch — folder reused by different fortress')
+                end
+            end
+        end
     end
+
+    -- Fallback: legacy .session_id (no validation, but try it)
+    f = io.open(output_dir .. '.session_id', 'r')
+    if f then
+        local sid = f:read('*a'):match('^%s*(.-)%s*$') or ''
+        f:close()
+        if sid ~= '' then
+            print('[storyteller-events] Legacy session_id found, cannot validate — generating new')
+        end
+    end
+
+    -- Generate new session_id
+    fortress_session_id = tostring(os.time())
+
+    -- Build session_ids_by_site preserving history across retire/reclaim cycles
+    local session_ids_by_site = {}
+    if existing_info and existing_info.session_ids_by_site then
+        session_ids_by_site = existing_info.session_ids_by_site
+    end
+    if existing_info and existing_info.session_id and existing_info.site_id then
+        local old_key = tostring(existing_info.site_id)
+        if not session_ids_by_site[old_key] then
+            session_ids_by_site[old_key] = {}
+        end
+        local found = false
+        for _, sid in ipairs(session_ids_by_site[old_key]) do
+            if sid == existing_info.session_id then found = true; break end
+        end
+        if not found then
+            table.insert(session_ids_by_site[old_key], existing_info.session_id)
+        end
+    end
+    if current_site_id >= 0 then
+        local cur_key = tostring(current_site_id)
+        if not session_ids_by_site[cur_key] then
+            session_ids_by_site[cur_key] = {}
+        end
+        local found = false
+        for _, sid in ipairs(session_ids_by_site[cur_key]) do
+            if sid == fortress_session_id then found = true; break end
+        end
+        if not found then
+            table.insert(session_ids_by_site[cur_key], fortress_session_id)
+        end
+    end
+
+    -- Write updated .session_info and legacy .session_id
+    if not dfhack.filesystem.isdir(output_dir) then
+        dfhack.filesystem.mkdir_recursive(output_dir)
+    end
+    pcall(function()
+        local info = {
+            session_id = fortress_session_id,
+            civ_id = current_civ_id,
+            site_id = current_site_id,
+            fortress_name = current_name,
+            session_ids_by_site = session_ids_by_site,
+        }
+        local wf = io.open(output_dir .. '.session_info', 'w')
+        if wf then
+            wf:write(json.encode(info))
+            wf:close()
+        end
+    end)
+    pcall(function()
+        local wf = io.open(output_dir .. '.session_id', 'w')
+        if wf then
+            wf:write(fortress_session_id)
+            wf:close()
+        end
+    end)
+    print('[storyteller-events] New fortress session: ' .. fortress_session_id)
 end)
 
 local event_flags = {
@@ -85,6 +208,25 @@ local function get_season(tick)
     end
 end
 
+-- DF calendar: 12 months, 28 days each, 1200 ticks per day
+local MONTH_NAMES = {
+    'Granite', 'Slate', 'Felsite',       -- spring
+    'Hematite', 'Malachite', 'Galena',   -- summer
+    'Limestone', 'Sandstone', 'Timber',  -- autumn
+    'Moonstone', 'Opal', 'Obsidian',     -- winter
+}
+
+local function get_date(tick)
+    local day_of_year = math.floor((tick % 403200) / 1200)
+    local month = math.floor(day_of_year / 28) + 1
+    local day = (day_of_year % 28) + 1
+    return {
+        month = math.min(month, 12),
+        month_name = MONTH_NAMES[math.min(month, 12)] or 'Unknown',
+        day = day,
+    }
+end
+
 --- Ensure the output directory exists.
 --- Uses dfhack.filesystem since os.execute is not available in DFHack's sandbox.
 --- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
@@ -106,11 +248,15 @@ local function write_event(event_type, data)
     local tick = df.global.cur_year_tick
     local season = get_season(tick)
 
+    local date = get_date(tick)
+
     local event = {
         event_type = event_type,
         game_year = year,
         game_tick = tick,
         season = season,
+        month_name = date.month_name,
+        day = date.day,
         session_id = fortress_session_id,
         data = data,
     }
