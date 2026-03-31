@@ -299,12 +299,15 @@ def _build_figure_context(legends: Any, hf_id: int) -> dict | None:
                 kills.append({"name": victim.name, "race": victim.race.replace("_", " ").title() if victim.race else "", "hf_id": victim.hf_id})
 
     readable_map = {
-        "hf died": "kills", "hf simple battle event": "battles",
+        "hf simple battle event": "battles",
         "hf attacked site": "site attacks", "artifact created": "artifacts created",
         "creature devoured": "devoured victims", "hf wounded": "wounds inflicted",
         "hf confronted": "confrontations", "assume identity": "assumed identities",
     }
     summary_parts = []
+    # Show kills separately (only actual kills, not own death)
+    if kills:
+        summary_parts.append(f"{len(kills)} kill{'s' if len(kills) != 1 else ''}")
     for et, count in evt_types.most_common(10):
         if et in readable_map:
             summary_parts.append(f"{count} {readable_map[et]}")
@@ -1536,8 +1539,7 @@ async def lore_region_page(request: Request, region_id: str):
                 fields.append(("Type", region["type"].replace("_", " ").title()))
             if region.get("evilness"):
                 fields.append(("Evilness", region["evilness"].replace("_", " ").title()))
-            if region.get("coords"):
-                fields.append(("Coordinates", region["coords"]))
+            # coords used for event matching, not displayed
 
             # Find events in this region via subregion_id
             from df_storyteller.context.event_renderer import describe_event_linked as _describe_evt
@@ -1569,10 +1571,6 @@ async def lore_landmass_page(request: Request, landmass_id: str):
     for lm in world_lore._legends.landmasses:
         if str(lm.get("id", "")) == str(landmass_id):
             fields = []
-            if lm.get("coord_1"):
-                fields.append(("From", lm["coord_1"]))
-            if lm.get("coord_2"):
-                fields.append(("To", lm["coord_2"]))
             return templates.TemplateResponse(request=request, name="lore_geography.html", context={
                 **ctx, "content_class": "content-wide",
                 "geo": {"name": lm.get("name", "Unknown"), "geo_type": "Landmass", "fields": fields, "description": ""},
@@ -1614,8 +1612,7 @@ async def lore_peak_page(request: Request, peak_id: str):
             fields = []
             if peak.get("height"):
                 fields.append(("Height", f"{peak['height']}"))
-            if peak.get("coords"):
-                fields.append(("Coordinates", peak["coords"]))
+            # coords used for event matching, not displayed
 
             # Find events at this peak's coordinates
             from df_storyteller.context.event_renderer import describe_event_linked as _describe_evt
@@ -1659,8 +1656,7 @@ async def lore_construction_page(request: Request, construction_id: str):
             wc_type = wc.get("type", "")
             if wc_type:
                 fields.append(("Type", wc_type.replace("_", " ").title()))
-            if wc.get("coords"):
-                fields.append(("Coordinates", wc["coords"]))
+            # coords used for event matching, not displayed
             # Check for additional fields that may be present
             if wc.get("site_id_1") or wc.get("site_id_2"):
                 legends = world_lore._legends
