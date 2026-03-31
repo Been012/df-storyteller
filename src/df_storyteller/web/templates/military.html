@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}Military — df-storyteller{% endblock %}
+
+{% block content %}
+<h1 class="page-header">Military Dashboard</h1>
+<p class="page-subtitle">{{ fortress_name or "The Fortress" }} — arms and armor</p>
+
+{% if military.summary.total_soldiers > 0 or military.summary.total_battles > 0 %}
+
+<!-- Summary Stats -->
+<div class="dashboard-summary">
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_soldiers }}</div>
+        <div class="stat-label">Soldiers</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_squads }}</div>
+        <div class="stat-label">Squads</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_kills }}</div>
+        <div class="stat-label">Kills</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_battles }}</div>
+        <div class="stat-label">Battles</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_casualties }}</div>
+        <div class="stat-label">Casualties</div>
+    </div>
+    {% if military.summary.total_sieges > 0 %}
+    <div class="stat-card">
+        <div class="stat-value">{{ military.summary.total_sieges }}</div>
+        <div class="stat-label">Sieges</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Squad Roster -->
+{% if military.squads %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Squad Roster</h3>
+    {% for squad in military.squads %}
+    <div style="margin-bottom: 1.5rem;">
+        <h4 style="color: var(--gold-dark); margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem;">
+            {{ squad.name }} <span style="font-size: 0.8rem; color: var(--ink-faded);">({{ squad.members | length }} members)</span>
+        </h4>
+        <div class="dwarf-grid">
+            {% for m in squad.members %}
+            <div class="dwarf-card{% if not m.is_alive %} dwarf-dead{% endif %}">
+                <div class="dwarf-name">
+                    <a href="/dwarves/{{ m.unit_id }}" style="color: inherit; text-decoration: none;">{{ m.name }}</a>
+                    {% if m.is_leader %}<span style="color: var(--gold-dark); font-size: 0.75rem;" title="Squad Leader"> &#9733;</span>{% endif %}
+                    {% if not m.is_alive %}<span style="color: #8b2500; font-size: 0.75rem;"> (dead)</span>{% endif %}
+                </div>
+                <div class="dwarf-profession">{{ m.profession }}</div>
+                {% if m.combat_skills %}
+                <div class="dwarf-traits" style="margin-top: 0.3rem;">
+                    {% for s in m.combat_skills[:4] %}
+                    <span style="display: inline-block; font-size: 0.7rem; padding: 1px 5px; margin: 1px; background: rgba(184,160,120,0.15); border-radius: 3px;">{{ s.name }}: {{ s.level }}</span>
+                    {% endfor %}
+                    {% if m.combat_skills | length > 4 %}
+                    <span style="font-size: 0.7rem; color: var(--ink-faded);">+{{ m.combat_skills | length - 4 }} more</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if m.wounds %}
+                <div style="font-size: 0.7rem; color: #c98b8b; margin-top: 0.2rem;">
+                    {% for w in m.wounds[:2] %}
+                    {% if w is mapping %}{{ w.wound_type | default('injured') }} {{ w.body_part | default('') }}{% else %}{{ w }}{% endif %}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Top Warriors Leaderboard -->
+{% if military.top_warriors %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Top Warriors</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+        <thead>
+            <tr style="border-bottom: 2px solid var(--border); text-align: left;">
+                <th style="padding: 0.4rem 0.5rem;">#</th>
+                <th style="padding: 0.4rem 0.5rem;">Name</th>
+                <th style="padding: 0.4rem 0.5rem;">Profession</th>
+                <th style="padding: 0.4rem 0.5rem; text-align: center;">Kills</th>
+                <th style="padding: 0.4rem 0.5rem; text-align: center;">Attacks</th>
+                <th style="padding: 0.4rem 0.5rem; text-align: center;">Defenses</th>
+                <th style="padding: 0.4rem 0.5rem; text-align: center;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for w in military.top_warriors %}
+            <tr style="border-bottom: 1px solid rgba(184,160,120,0.15);{% if not w.is_alive %} opacity: 0.5;{% endif %}">
+                <td style="padding: 0.4rem 0.5rem; color: var(--gold-dark);">{{ loop.index }}</td>
+                <td style="padding: 0.4rem 0.5rem;">
+                    <a href="/dwarves/{{ w.unit_id }}" style="color: var(--ink); text-decoration: none;">{{ w.name }}</a>
+                    {% if not w.is_alive %}<span style="color: #8b2500; font-size: 0.75rem;"> (dead)</span>{% endif %}
+                </td>
+                <td style="padding: 0.4rem 0.5rem; color: var(--ink-faded);">{{ w.profession }}</td>
+                <td style="padding: 0.4rem 0.5rem; text-align: center; font-weight: bold; color: #8b2500;">{{ w.kills }}</td>
+                <td style="padding: 0.4rem 0.5rem; text-align: center;">{{ w.attacks }}</td>
+                <td style="padding: 0.4rem 0.5rem; text-align: center;">{{ w.defenses }}</td>
+                <td style="padding: 0.4rem 0.5rem; text-align: center; color: var(--gold-dark);">{{ w.total_combat }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Charts Grid -->
+<div class="dashboard-grid">
+    {% if military.combat_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Combat Activity by Season</h3>
+        <canvas id="combat-season-chart"></canvas>
+    </div>
+    {% endif %}
+
+    {% if military.kills_series %}
+    <div class="chart-container parchment">
+        <h3 class="chart-title">Kills by Season</h3>
+        <canvas id="kills-season-chart"></canvas>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Recent Engagements -->
+{% if military.recent_engagements %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Recent Engagements</h3>
+    {% for eng in military.recent_engagements %}
+    <div class="milestone-item" style="{% if eng.casualties > 0 %}border-left: 3px solid #8b2500; padding-left: 0.8rem;{% else %}border-left: 3px solid var(--gold); padding-left: 0.8rem;{% endif %} margin-bottom: 1rem;">
+        <div class="milestone-when">{{ eng.date_label }}, Year {{ eng.year }}</div>
+        <div class="milestone-label">
+            {{ eng.fight_count }} fight{{ 's' if eng.fight_count != 1 else '' }} &mdash;
+            {{ eng.blow_count }} blow{{ 's' if eng.blow_count != 1 else '' }}
+            {% if eng.casualties > 0 %}
+            &mdash; <span style="color: #8b2500; font-weight: bold;">{{ eng.casualties }} killed</span>
+            {% endif %}
+        </div>
+        {% if eng.fortress_fighters %}
+        <div style="font-size: 0.8rem; margin-top: 0.3rem;">
+            <strong>Our fighters:</strong> {{ eng.fortress_fighters | join(', ') }}
+        </div>
+        {% endif %}
+        {% if eng.targets %}
+        <div style="font-size: 0.8rem; margin-top: 0.3rem;">
+            {% for target in eng.targets %}
+            <div style="margin-left: 1rem; color: var(--ink-faded);">
+                vs <strong>{{ target.name }}</strong> &mdash;
+                {{ target.blows }} blow{{ 's' if target.blows != 1 else '' }}
+                ({{ target.attackers | join(', ') }})
+                {% if target.defeated %}<span style="color: #8b2500;">&#x2620; defeated</span>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% elif eng.enemies %}
+        <div style="font-size: 0.8rem; margin-top: 0.3rem; color: var(--ink-faded);">
+            <strong>Enemies:</strong> {{ eng.enemies | join(', ') }}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Military Timeline -->
+{% if military.military_timeline %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Military Timeline</h3>
+    {% for item in military.military_timeline %}
+    <div class="milestone-item">
+        <div class="milestone-when">{{ item.season }} of Year {{ item.year }}</div>
+        <div class="milestone-label{% if item.type == 'siege' %}" style="color: #c98b8b;{% endif %}">
+            {% if item.type == 'siege' %}&#9876; {% endif %}{{ item.description }}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Unassigned Fighters -->
+{% if military.unassigned_fighters %}
+<div class="parchment" style="margin-top: 1.5rem;">
+    <h3 class="chart-title">Unassigned Fighters <span style="font-size: 0.8rem; color: var(--ink-faded);">(dwarves with combat skills but no squad)</span></h3>
+    <div class="dwarf-grid">
+        {% for m in military.unassigned_fighters %}
+        <div class="dwarf-card" style="border-left: 3px solid var(--gold-dark);">
+            <div class="dwarf-name">
+                <a href="/dwarves/{{ m.unit_id }}" style="color: inherit; text-decoration: none;">{{ m.name }}</a>
+            </div>
+            <div class="dwarf-profession">{{ m.profession }}</div>
+            {% if m.combat_skills %}
+            <div class="dwarf-traits" style="margin-top: 0.3rem;">
+                {% for s in m.combat_skills[:3] %}
+                <span style="display: inline-block; font-size: 0.7rem; padding: 1px 5px; margin: 1px; background: rgba(184,160,120,0.15); border-radius: 3px;">{{ s.name }}: {{ s.level }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+<div class="parchment" style="text-align: center; padding: 2rem;">
+    <p style="color: var(--ink-faded); font-style: italic;">
+        No military data yet. Assign dwarves to squads and engage in combat to see military stats here.
+    </p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+const militaryData = {{ military | tojson | safe }};
+
+Chart.defaults.color = '#d4bc7c';
+Chart.defaults.borderColor = 'rgba(184, 160, 120, 0.2)';
+Chart.defaults.font.family = "'Crimson Text', serif";
+
+const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        legend: { display: false },
+    },
+    scales: {
+        x: {
+            ticks: { maxRotation: 45, font: { size: 11 } },
+            grid: { color: 'rgba(184, 160, 120, 0.1)' },
+        },
+        y: {
+            beginAtZero: true,
+            ticks: { stepSize: 1, font: { size: 11 } },
+            grid: { color: 'rgba(184, 160, 120, 0.1)' },
+        },
+    },
+};
+
+function makeChart(canvasId, data, type, color, fillColor) {
+    const el = document.getElementById(canvasId);
+    if (!el || !data.length) return;
+    new Chart(el, {
+        type: type,
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+                data: data.map(d => d.value),
+                borderColor: color,
+                backgroundColor: fillColor || color,
+                borderWidth: 2,
+                tension: 0.3,
+                fill: type === 'line',
+                pointRadius: 3,
+                pointBackgroundColor: color,
+            }],
+        },
+        options: chartOptions,
+    });
+}
+
+makeChart('combat-season-chart', militaryData.combat_series, 'bar', '#d4bc7c', 'rgba(212, 188, 124, 0.5)');
+makeChart('kills-season-chart', militaryData.kills_series, 'bar', '#8b2500', 'rgba(139, 37, 0, 0.6)');
+</script>
+{% endblock %}

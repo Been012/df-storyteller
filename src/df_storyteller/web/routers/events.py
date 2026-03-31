@@ -31,9 +31,19 @@ def _extract_chat_lines(event_store) -> list[dict[str, str]]:
         d = event.data
         if isinstance(d, dict):
             unit = d.get("unit", {})
-            name = unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown"
+            full_name = unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown"
             prof = unit.get("profession", "") if isinstance(unit, dict) else ""
+            # Strip profession suffix from name (e.g. 'Urist "Nick", Miner' -> 'Urist "Nick"')
+            name = full_name.rsplit(", ", 1)[0] if ", " in full_name else full_name
             msg = d.get("message", "")
+            # Strip the "Name, Profession: " prefix from message if present
+            # DF reports include it: "Mebzuth Alisshem, Planter: I talked to..."
+            if msg and ": " in msg:
+                prefix_end = msg.find(": ")
+                # Only strip if the prefix looks like a name+profession
+                prefix = msg[:prefix_end]
+                if "," in prefix or prefix.endswith(prof):
+                    msg = msg[prefix_end + 2:]
             if msg:
                 chat_lines.append({"name": name, "profession": prof, "message": msg})
     return chat_lines

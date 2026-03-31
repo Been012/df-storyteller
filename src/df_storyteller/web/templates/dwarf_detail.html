@@ -139,19 +139,39 @@
 
             {% if dwarf.equipment %}
             <h3>Equipment</h3>
-            <ul class="stat-list">
-                {% for item in dwarf.equipment %}
-                <li>
-                    {% if item is mapping %}
-                        {% if item.mode == 'Weapon' %}&#x2694;{% elif item.mode == 'Strapped' %}&#x1F6E1;{% else %}&#x1F455;{% endif %}
-                        {{ item.description }}
-                        <span style="font-size: 0.75rem; color: var(--ink-faded);">({{ item.mode }})</span>
-                    {% else %}
-                        {{ item }}
-                    {% endif %}
-                </li>
+            {% set weapons = dwarf.equipment | selectattr('mode', 'equalto', 'Weapon') | list if dwarf.equipment[0] is mapping else [] %}
+            {% set strapped = dwarf.equipment | selectattr('mode', 'equalto', 'Strapped') | list if dwarf.equipment[0] is mapping else [] %}
+            {% set worn = dwarf.equipment | selectattr('mode', 'equalto', 'Worn') | list if dwarf.equipment[0] is mapping else [] %}
+            {% if weapons %}
+            <div style="margin-bottom: 0.4rem;">
+                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Weapons</span>
+                <ul class="stat-list" style="margin-top: 0.2rem;">
+                {% for item in weapons %}
+                    <li>{{ item.description }}</li>
                 {% endfor %}
-            </ul>
+                </ul>
+            </div>
+            {% endif %}
+            {% if strapped %}
+            <div style="margin-bottom: 0.4rem;">
+                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Armor</span>
+                <ul class="stat-list" style="margin-top: 0.2rem;">
+                {% for item in strapped %}
+                    <li>{{ item.description }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            {% if worn %}
+            <div style="margin-bottom: 0.4rem;">
+                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Clothing</span>
+                <ul class="stat-list" style="margin-top: 0.2rem;">
+                {% for item in worn %}
+                    <li>{{ item.description }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
             {% endif %}
 
             {% if dwarf.wounds %}

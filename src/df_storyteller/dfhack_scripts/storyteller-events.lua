@@ -854,11 +854,28 @@ local function on_syndrome(unit_id, syndrome_id)
             end
         end)
 
-        -- Filter: only report interesting syndromes (skip minor ones like "drowsiness")
-        -- Interesting = affects fortress dwarves, or is from a notable source
+        -- Filter: only report interesting syndromes, skip mundane ones
         local player_race = df.global.plotinfo.race_id
         local is_ours = (unit.race == player_race and dfhack.units.isFortControlled(unit))
-        if not is_ours then return end  -- Only track syndromes on our dwarves
+        if not is_ours then return end
+
+        -- Skip mundane syndromes (alcohol, minor ailments, food effects)
+        local boring = {
+            inebriation = true,
+            drowsiness = true,
+            nausea = true,
+            fever = true,
+            dizziness = true,
+            pain = true,
+        }
+        local lower_name = syndrome_name:lower()
+        if boring[lower_name] then return end
+        -- Also skip if the name contains common mundane keywords
+        if lower_name:match('alcohol') or lower_name:match('beer')
+            or lower_name:match('wine') or lower_name:match('rum')
+            or lower_name:match('inebriat') then
+            return
+        end
 
         write_event('syndrome', {
             unit = serialize_unit(unit),
