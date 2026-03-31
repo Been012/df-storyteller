@@ -498,16 +498,19 @@ local function serialize_unit(unit)
         end
     end)
 
-    -- Equipment
+    -- Equipment (mode: 0=Hauled, 1=Weapon, 2=Worn, 3=Piercing, 4=Flask, 5=Strapped)
+    -- In DF Premium, df.unit_inventory_item.T_mode[inv.mode] may return nil,
+    -- so we match on the raw numeric value instead.
+    local mode_names = { [1] = 'Weapon', [2] = 'Worn', [5] = 'Strapped' }
     pcall(function()
         if unit.inventory then
             for _, inv in ipairs(unit.inventory) do
-                local mode = df.unit_inventory_item.T_mode[inv.mode] or ''
-                if mode == 'Worn' or mode == 'Weapon' or mode == 'Strapped' then
+                local mode_name = mode_names[inv.mode]
+                if mode_name then
                     pcall(function()
                         local desc = dfhack.items.getDescription(inv.item, 0, true)
                         if desc and desc ~= '' then
-                            table.insert(data.equipment, { description = desc, mode = mode })
+                            table.insert(data.equipment, { description = desc, mode = mode_name })
                         end
                     end)
                 end

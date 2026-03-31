@@ -68,22 +68,19 @@ async def dwarves_page(request: Request):
             if isinstance(w, dict) and w.get("is_permanent"):
                 permanent_injuries.append(f"{w.get('wound_type', 'injured')} {w.get('body_part', '')}")
 
-        # Happiness description
-        happiness = dwarf.happiness
-        if happiness >= 500000:
-            happiness_desc = "ecstatic"
-        elif happiness >= 200000:
-            happiness_desc = "happy"
-        elif happiness >= 100000:
-            happiness_desc = "content"
-        elif happiness >= 1:
-            happiness_desc = "fine"
-        elif happiness >= -100000:
-            happiness_desc = "unhappy"
-        elif happiness >= -200000:
-            happiness_desc = "miserable"
-        else:
-            happiness_desc = "broken"
+        # Mood description from stress_category (DFHack getStressCategory)
+        # 0=haggard, 1=very stressed, 2=stressed, 3=content, 4=pleased, 5=very happy, 6=ecstatic
+        _STRESS_DESCS = {
+            0: "haggard",
+            1: "very stressed",
+            2: "stressed",
+            3: "content",
+            4: "pleased",
+            5: "very happy",
+            6: "ecstatic",
+        }
+        stress_cat = dwarf.stress_category if isinstance(dwarf.stress_category, int) else 3
+        happiness_desc = _STRESS_DESCS.get(stress_cat, "content")
 
         dwarves.append({
             "unit_id": dwarf.unit_id,
@@ -446,22 +443,18 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     fortress_dir = _get_fortress_dir(config, metadata)
     dwarf_highlight = get_highlight_for_dwarf(config, unit_id, output_dir=fortress_dir)
 
-    # Happiness description (more granular than stress_category)
-    happiness = dwarf.happiness
-    if happiness >= 500000:
-        happiness_desc = "ecstatic"
-    elif happiness >= 200000:
-        happiness_desc = "happy"
-    elif happiness >= 100000:
-        happiness_desc = "content"
-    elif happiness >= 1:
-        happiness_desc = "fine"
-    elif happiness >= -100000:
-        happiness_desc = "unhappy"
-    elif happiness >= -200000:
-        happiness_desc = "miserable"
-    else:
-        happiness_desc = "broken"
+    # Mood description from stress_category
+    _STRESS_DESCS_DETAIL = {
+        0: "haggard",
+        1: "very stressed",
+        2: "stressed",
+        3: "content",
+        4: "pleased",
+        5: "very happy",
+        6: "ecstatic",
+    }
+    stress_cat = dwarf.stress_category if isinstance(dwarf.stress_category, int) else 3
+    happiness_desc = _STRESS_DESCS_DETAIL.get(stress_cat, "content")
 
     dwarf_data = {
         "unit_id": dwarf.unit_id,
@@ -472,8 +465,8 @@ async def dwarf_detail_page(request: Request, unit_id: int):
         "age": dwarf.age,
         "noble_positions": dwarf.noble_positions,
         "military_squad": dwarf.military_squad,
-        "stress_desc": stress_descs.get(dwarf.stress_category) if dwarf.stress_category not in (2, 3) else "",
-        "happiness_desc": happiness_desc if happiness != 0 else "",
+        "stress_desc": happiness_desc if stress_cat in (0, 1, 2) else "",
+        "happiness_desc": happiness_desc,
         "personality_traits": personality_traits,
         "beliefs": beliefs,
         "goals": goals,
@@ -540,7 +533,7 @@ async def dwarf_detail_page(request: Request, unit_id: int):
             "role": "attacker" if is_attacker else "defender",
             "opponent": opponent,
             "weapon": getattr(d, "weapon", ""),
-            "blow_count": len(d.blows) if hasattr(d, "blows") else 0,
+            "blow_count": getattr(d, "blow_count", 0) or (len(d.blows) if hasattr(d, "blows") else 0),
             "injuries": getattr(d, "injuries", []),
             "outcome": getattr(d, "outcome", ""),
             "is_lethal": getattr(d, "is_lethal", False),

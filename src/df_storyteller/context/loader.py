@@ -18,7 +18,7 @@ from df_storyteller.context.event_store import EventStore
 from df_storyteller.context.world_lore import WorldLore
 from df_storyteller.ingestion.dfhack_json_parser import parse_dfhack_file
 from df_storyteller.schema.entities import Animal, Dwarf, Relationship, Skill
-from df_storyteller.schema.events import EventSource, EventType, GameEvent, Season
+from df_storyteller.schema.events import EventType, GameEvent, Season
 from df_storyteller.schema.personality import Belief, Facet, Goal, Personality
 
 logger = logging.getLogger(__name__)
@@ -133,9 +133,10 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
     mil = citizen.get("military", {})
     military_squad = mil.get("squad_name", "") if isinstance(mil, dict) else ""
 
-    # Parse equipment descriptions
+    # Parse equipment — preserve description and mode (Worn, Weapon, Strapped)
     equipment = [
-        e.get("description", "") for e in citizen.get("equipment", [])
+        {"description": e.get("description", ""), "mode": e.get("mode", "Worn")}
+        for e in citizen.get("equipment", [])
         if isinstance(e, dict) and e.get("description")
     ]
 
@@ -168,60 +169,9 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
     )
 
 
-SESSION_MARKERS = (
-    "*** STARTING NEW GAME ***",
-    "** Starting New Outpost **",
-    "** Loading Fortress **",
-    "** Unretiring Outpost **",
-    "** Reclaiming Outpost **",
-)
 
-
-def _read_current_session_gamelog(path: Path) -> list[str]:
-    """Read only the current session from gamelog.txt.
-
-    Scans backwards from the end of the file to find the last session
-    marker (STARTING NEW GAME, Loading Fortress, etc.) and returns
-    only lines from that point forward. This avoids parsing the entire
-    gamelog which can be hundreds of thousands of lines.
-    """
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            file_size = f.tell()
-
-            # Read in chunks from the end to find the last session marker
-            chunk_size = 64 * 1024  # 64KB chunks
-            offset = 0
-            tail_bytes = b""
-
-            while offset < file_size:
-                read_size = min(chunk_size, file_size - offset)
-                offset += read_size
-                f.seek(file_size - offset)
-                chunk = f.read(read_size)
-                tail_bytes = chunk + tail_bytes
-
-                # Check if any session marker is in what we've read so far.
-                # Find the LAST marker across all types (closest to end of file).
-                tail_text = tail_bytes.decode("cp437", errors="replace")
-                best_idx = -1
-                for marker in SESSION_MARKERS:
-                    idx = tail_text.rfind(marker)
-                    if idx > best_idx:
-                        best_idx = idx
-                if best_idx >= 0:
-                    session_text = tail_text[best_idx:]
-                    lines = session_text.split("\n")
-                    # Skip the marker line itself
-                    return [l.rstrip("\r") for l in lines[1:] if l.strip()]
-
-            # No marker found — fall back to last 5000 lines
-            tail_text = tail_bytes.decode("cp437", errors="replace")
-            lines = tail_text.split("\n")
-            return [l.rstrip("\r") for l in lines[-5000:] if l.strip()]
-    except OSError:
-        return []
+# Gamelog parsing was removed — chat/conversation data is now captured via
+# DFHack onReport hooks and written as CHAT events. See storyteller-events.lua.
 
 
 def _get_valid_session_ids(folder: Path) -> set[str]:
@@ -576,183 +526,9 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 for uid in event_store._extract_unit_ids(event):
                     character_tracker.add_event(uid, event)
 
-    # 3. Parse gamelog.txt for combat and other events.
-    # Loads saved history from previous sessions + current session lines,
-    # deduplicates, and persists the combined set for next time.
-    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
-    if not gamelog_path and config.paths.df_install:
-        candidate = Path(config.paths.df_install) / "gamelog.txt"
-        if candidate.exists():
-            gamelog_path = candidate
-    if gamelog_path and gamelog_path.exists():
-        from df_storyteller.ingestion.gamelog_parser import GamelogParser
-        from df_storyteller.schema.events import Season as SeasonEnum
-
-        fortress_dir = get_fortress_output_dir(config, metadata)
-        history_file = fortress_dir / "gamelog_history.txt"
-
-        # Load saved lines from previous sessions
-        saved_lines: list[str] = []
-        if history_file.exists():
-            try:
-                with open(history_file, encoding="utf-8", errors="replace") as f:
-                    saved_lines = [l.rstrip("\r\n") for l in f if l.strip()]
-            except OSError:
-                pass
-
-        # Read current session lines from gamelog.txt
-        current_lines = _read_current_session_gamelog(gamelog_path)
-
-        # Merge: saved history + current session lines.
-        # Deduplicate by finding where the saved history ends in the current
-        # session rather than filtering individual lines — DF legitimately
-        # repeats lines like injury descriptions within a single fight.
-        if saved_lines and current_lines:
-            # Find the longest suffix of saved_lines that matches a prefix of
-            # current_lines (i.e. overlapping region from last save).
-            overlap = 0
-            saved_len = len(saved_lines)
-            for start in range(saved_len):
-                tail = saved_lines[start:]
-                tail_len = len(tail)
-                if tail_len <= len(current_lines) and current_lines[:tail_len] == tail:
-                    overlap = tail_len
-                    break
-            new_lines = current_lines[overlap:]
-            all_lines = saved_lines + new_lines
-        elif saved_lines:
-            new_lines = []
-            all_lines = saved_lines
-        else:
-            new_lines = current_lines
-            all_lines = current_lines
-
-        # Persist the combined lines for next session
-        if new_lines:
-            try:
-                with open(history_file, "w", encoding="utf-8") as f:
-                    f.write("\n".join(all_lines) + "\n")
-            except OSError as e:
-                logger.warning("Failed to save gamelog history: %s", e)
-
-        # Parse all lines
-        gamelog_parser = GamelogParser()
-        gamelog_parser.set_year(metadata.get("year", 0))
-        try:
-            gamelog_parser.set_season(SeasonEnum(metadata.get("season", "spring")))
-        except ValueError:
-            pass
-        gamelog_events = list(gamelog_parser.parse_lines(all_lines))
-
-        # Match gamelog unit_id=0 references to known dwarves by name or title.
-        # Build lookup tables: name -> unit_id, profession/title -> unit_id
-        _name_to_id: dict[str, int] = {}
-        _id_to_name: dict[int, str] = {}
-        _title_to_id: dict[str, int] = {}
-        _ambiguous_titles: set[str] = set()  # titles held by multiple dwarves
-        for dwarf in character_tracker._characters.values():
-            # Full name and short name
-            short = dwarf.name.lower().split(",")[0].strip()
-            _name_to_id[short] = dwarf.unit_id
-            _name_to_id[dwarf.name.lower()] = dwarf.unit_id
-            _id_to_name[dwarf.unit_id] = short.title()
-            # Profession/title from snapshot — track collisions
-            for title in [dwarf.profession] + list(dwarf.noble_positions) + ([dwarf.military_squad] if dwarf.military_squad else []):
-                if not title:
-                    continue
-                key = title.lower()
-                if key in _title_to_id and _title_to_id[key] != dwarf.unit_id:
-                    _ambiguous_titles.add(key)
-                _title_to_id[key] = dwarf.unit_id
-
-        # Also extract titles from DFHack events (noble appointments, profession
-        # changes) which may be newer than the snapshot.
-        for event in event_store.recent_events(500):
-            data = event.data
-            unit_ref = getattr(data, "unit", None)
-            if not unit_ref or not hasattr(unit_ref, "unit_id") or not unit_ref.unit_id:
-                continue
-            uid = unit_ref.unit_id
-            if event.event_type == EventType.NOBLE_APPOINTMENT:
-                for pos in getattr(data, "positions", []):
-                    key = pos.lower()
-                    if key in _title_to_id and _title_to_id[key] != uid:
-                        _ambiguous_titles.add(key)
-                    _title_to_id[key] = uid
-            elif event.event_type == EventType.PROFESSION_CHANGE:
-                new_prof = getattr(data, "new_profession", "")
-                if new_prof:
-                    key = new_prof.lower()
-                    if key in _title_to_id and _title_to_id[key] != uid:
-                        _ambiguous_titles.add(key)
-                    _title_to_id[key] = uid
-
-        def _resolve_ref(ref) -> None:
-            """Patch unit_id and name on a UnitRef if we can match by name/title."""
-            if not ref or not hasattr(ref, "unit_id") or ref.unit_id != 0:
-                return
-            name = ref.name.lower().strip()
-            uid = _name_to_id.get(name)
-            if not uid:
-                # Only use title lookup if unambiguous
-                if name not in _ambiguous_titles:
-                    uid = _title_to_id.get(name)
-            if uid:
-                ref.unit_id = uid
-                # Replace title/profession with the dwarf's actual name
-                real_name = _id_to_name.get(uid)
-                if real_name and name != real_name.lower():
-                    ref.name = real_name
-
-        matched = 0
-        for event in gamelog_events:
-            data = event.data
-            if not isinstance(data, dict):
-                before = sum(1 for f in ("victim", "attacker", "defender", "unit", "creator")
-                             if hasattr(data, f) and getattr(data, f) and getattr(data, f).unit_id != 0)
-                for field in ("victim", "attacker", "defender", "unit", "creator", "killer"):
-                    _resolve_ref(getattr(data, field, None))
-                after = sum(1 for f in ("victim", "attacker", "defender", "unit", "creator")
-                            if hasattr(data, f) and getattr(data, f) and getattr(data, f).unit_id != 0)
-                if after > before:
-                    matched += 1
-
-        # Deduplicate: skip gamelog deaths/moods that duplicate DFHack events.
-        # Build index of existing DFHack events by (type, unit_id) for fast lookup.
-        _dfhack_event_keys: set[tuple[str, int]] = set()
-        for event in event_store.recent_events(500):
-            if event.source == EventSource.DFHACK and event.event_type in (EventType.DEATH, EventType.MOOD):
-                for uid in event_store._extract_unit_ids(event):
-                    _dfhack_event_keys.add((event.event_type.value, uid))
-
-        deduped = 0
-        filtered_events = []
-        for event in gamelog_events:
-            if event.event_type in (EventType.DEATH, EventType.MOOD):
-                uids = event_store._extract_unit_ids(event)
-                if any((event.event_type.value, uid) in _dfhack_event_keys for uid in uids if uid):
-                    deduped += 1
-                    continue
-            filtered_events.append(event)
-        gamelog_events = filtered_events
-
-        # Assign incrementing ticks so gamelog events sort after DFHack events
-        # within the same season (DFHack ticks are real game ticks, gamelog has 0)
-        max_tick = max((e.game_tick for e in event_store.recent_events(50)), default=0)
-        for i, event in enumerate(gamelog_events):
-            if event.game_tick == 0:
-                event.game_tick = max_tick + 1 + i
-        combat_count = 0
-        for event in gamelog_events:
-            idx = event_store.add(event)
-            for uid in event_store._extract_unit_ids(event):
-                character_tracker.add_event(uid, event)
-            if event.event_type == EventType.COMBAT:
-                combat_count += 1
-        logger.info(
-            "Gamelog parsed: %d events (%d combat, %d matched, %d deduped) from %d lines (%d saved + %d new)",
-            len(gamelog_events), combat_count, matched, deduped, len(all_lines), len(saved_lines), len(new_lines),
-        )
+    # 3. Gamelog parsing removed — combat, chat, and other events are now captured
+    # directly via DFHack hooks (onUnitAttack, onReport) and written as JSON events.
+    # See storyteller-events.lua for the event capture implementation.
 
     # 4. Load legends if available (skip if told to — expensive for large files)
     if skip_legends:

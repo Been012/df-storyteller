@@ -127,6 +127,15 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
             )
 
         case "combat":
+            # blows can be an integer (DFHack onUnitAttack) or list of dicts (gamelog)
+            raw_blows = data.get("blows", [])
+            if isinstance(raw_blows, int):
+                # DFHack hook: blows is a count, no detail
+                blows_list: list[dict] = []
+                blow_count = raw_blows
+            else:
+                blows_list = raw_blows
+                blow_count = len(raw_blows)
             return CombatEvent(
                 **base_kwargs,
                 data=CombatData(
@@ -136,7 +145,10 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                     body_part=data.get("body_part", ""),
                     wound_type=data.get("wound_type", ""),
                     is_lethal=data.get("is_lethal", False),
+                    is_siege=data.get("is_siege", False),
                     raw_text=data.get("raw_text", ""),
+                    blows=blows_list,
+                    blow_count=blow_count,
                 ),
             )
 
@@ -337,6 +349,41 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                     civilization=data.get("civilization", ""),
                     civ_id=data.get("civ_id", -1),
                 ),
+            )
+
+        case "syndrome":
+            return GameEvent(
+                event_type=EventType.SYNDROME,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "equipment_change":
+            return GameEvent(
+                event_type=EventType.EQUIPMENT_CHANGE,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "interaction":
+            return GameEvent(
+                event_type=EventType.INTERACTION,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "chat":
+            return GameEvent(
+                event_type=EventType.CHAT,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "report":
+            return GameEvent(
+                event_type=EventType.REPORT,
+                **base_kwargs,
+                data=data,
             )
 
         case _:

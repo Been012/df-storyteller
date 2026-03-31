@@ -1,9 +1,7 @@
 """Gazette routes."""
 from __future__ import annotations
 
-import re
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -146,18 +144,18 @@ async def api_generate_gazette():
             combat_lines.append(f"- {atk} vs {defn}: {outcome}{lethal}")
         combat_text = "\n".join(combat_lines)
 
-    # Gossip: chat log conversations
-    chat_text = ""
-    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
-    if gamelog_path and gamelog_path.exists():
-        from df_storyteller.context.loader import _read_current_session_gamelog
-        chat_pattern = re.compile(r'^(.+?),\s*(.+?):\s+(.+)$')
-        chat_lines_raw = []
-        for line in _read_current_session_gamelog(gamelog_path):
-            m = chat_pattern.match(line)
-            if m and not m.group(3).startswith("cancels "):
-                chat_lines_raw.append(f"{m.group(1)}: {m.group(3)}")
-        chat_text = "\n".join(chat_lines_raw[:50])
+    # Gossip: chat events from DFHack onReport hook
+    from df_storyteller.schema.events import EventType as _ChatET
+    chat_lines_raw = []
+    for event in event_store.events_by_type(_ChatET.CHAT):
+        d = event.data
+        if isinstance(d, dict):
+            unit = d.get("unit", {})
+            name = unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown"
+            msg = d.get("message", "")
+            if msg:
+                chat_lines_raw.append(f"{name}: {msg}")
+    chat_text = "\n".join(chat_lines_raw[:50])
 
     # Quests
     from df_storyteller.context.quest_store import get_active_quests, get_completed_quests

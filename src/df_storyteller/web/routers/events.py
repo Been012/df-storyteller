@@ -5,7 +5,6 @@ import asyncio
 import json
 import logging
 import re
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Request
@@ -24,15 +23,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _resolve_gamelog_path(config) -> Path | None:
-    """Resolve gamelog path from config, falling back to df_install/gamelog.txt."""
-    if config.paths.gamelog:
-        return Path(config.paths.gamelog)
-    if config.paths.df_install:
-        candidate = Path(config.paths.df_install) / "gamelog.txt"
-        if candidate.exists():
-            return candidate
-    return None
+def _extract_chat_lines(event_store) -> list[dict[str, str]]:
+    """Extract chat lines from CHAT events in the event store."""
+    from df_storyteller.schema.events import EventType as ET
+    chat_lines = []
+    for event in event_store.events_by_type(ET.CHAT):
+        d = event.data
+        if isinstance(d, dict):
+            unit = d.get("unit", {})
+            name = unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown"
+            prof = unit.get("profession", "") if isinstance(unit, dict) else ""
+            msg = d.get("message", "")
+            if msg:
+                chat_lines.append({"name": name, "profession": prof, "message": msg})
+    return chat_lines
 
 
 def _build_outcome_summary(group: list, title_to_dwarf: dict, ranked: list) -> str:
@@ -96,10 +100,32 @@ async def events_page(request: Request):
             continue
         if event.event_type.value == "combat":
             continue
+        if event.event_type.value == "chat":
+            continue  # Shown in dedicated Chat Log section
+        # Build date label: "12 Granite" or fall back to season
+        date_label = event.season.value.title()
+        if event.month_name and event.day:
+            date_label = f"{event.day} {event.month_name}"
+        elif event.game_tick:
+            day_of_year = event.game_tick % 403200 // 1200
+            m = min(day_of_year // 28, 11)
+            month_names = ["Granite","Slate","Felsite","Hematite","Malachite","Galena",
+                           "Limestone","Sandstone","Timber","Moonstone","Opal","Obsidian"]
+            date_label = f"{(day_of_year % 28) + 1} {month_names[m]}"
+
+        # Use report sub-type for display if available (e.g. "megabeast_arrival" instead of "report")
+        display_type = event.event_type.value
+        if event.event_type.value == "report" and isinstance(event.data, dict):
+            display_type = event.data.get("report_type", "report")
+        elif event.event_type.value == "chat" and isinstance(event.data, dict):
+            unit = event.data.get("unit", {})
+            display_type = "chat"
+
         events.append({
-            "type": event.event_type.value,
+            "type": display_type,
             "year": event.game_year,
             "season": event.season.value,
+            "date_label": date_label,
             "_sort": (event.game_year, SEASON_ORDER.get(event.season.value, 0), event.game_tick),
             "description": desc,
         })
@@ -137,6 +163,8 @@ async def events_page(request: Request):
         if hasattr(d, "blows"):
             for b in d.blows:
                 blows.append({"action": b.action, "body_part": b.body_part, "weapon": b.weapon, "effect": b.effect})
+        # blow_count: prefer explicit count (DFHack hook), fall back to len(blows)
+        blow_count = getattr(d, "blow_count", 0) or len(blows)
         raw_lines = d.raw_text.split("\n") if hasattr(d, "raw_text") and d.raw_text else []
         raw_lines = _collapse_repeats(raw_lines)
         return {
@@ -144,6 +172,7 @@ async def events_page(request: Request):
             "defender": d.defender.name if hasattr(d, "defender") else "Unknown",
             "weapon": getattr(d, "weapon", ""),
             "blows": blows,
+            "blow_count": blow_count,
             "raw_lines": raw_lines,
             "outcome": getattr(d, "outcome", ""),
             "is_lethal": getattr(d, "is_lethal", False),
@@ -186,16 +215,53 @@ async def events_page(request: Request):
             for f in fights:
                 participants.add(f["attacker"])
                 participants.add(f["defender"])
-                total_blows += len(f["blows"])
+                total_blows += f["blow_count"]
                 if f["is_lethal"]:
                     any_lethal = True
                 all_raw_lines.extend(f["raw_lines"])
 
             casualties = [f for f in fights if f["is_lethal"]]
+
+            # Group fights by target (defender) for a condensed summary
+            from collections import defaultdict as _dd
+            target_summary: dict[str, dict] = _dd(lambda: {
+                "blows": 0, "fights": 0, "attackers": set(),
+                "defeated": False, "lethal": False,
+            })
+            for f in fights:
+                target = f["defender"]
+                if target == "Unknown":
+                    continue
+                target_summary[target]["blows"] += f["blow_count"]
+                target_summary[target]["fights"] += 1
+                if f["attacker"] != "Unknown":
+                    target_summary[target]["attackers"].add(f["attacker"])
+                if f["outcome"] and any(w in f["outcome"].lower() for w in ("gives in", "knocked unconscious", "explodes", "collapses")):
+                    target_summary[target]["defeated"] = True
+                if f["is_lethal"]:
+                    target_summary[target]["lethal"] = True
+            targets = []
+            for tname, tdata in sorted(target_summary.items(), key=lambda x: x[1]["blows"], reverse=True):
+                targets.append({
+                    "name": tname,
+                    "blows": tdata["blows"],
+                    "fights": tdata["fights"],
+                    "attackers": sorted(tdata["attackers"]),
+                    "defeated": tdata["defeated"],
+                    "lethal": tdata["lethal"],
+                })
+
+            # Check if any event in this engagement was during a siege
+            engagement_is_siege = any(
+                getattr(e.data, "is_siege", False) for e in group
+            )
+
             combat_encounters.append({
                 "is_engagement": True,
+                "is_siege": engagement_is_siege,
                 "fight_count": len(fights),
                 "fights": fights,
+                "targets": targets,
                 "participants": sorted(participants),
                 "total_blows": total_blows,
                 "is_lethal": any_lethal,
@@ -207,27 +273,8 @@ async def events_page(request: Request):
         if len(combat_encounters) >= 20:
             break
 
-    # Extract conversation lines from the gamelog for the chat log
-    chat_lines = []
-    gamelog_path = _resolve_gamelog_path(config)
-    if gamelog_path and gamelog_path.exists():
-        from df_storyteller.context.loader import _read_current_session_gamelog
-        # Conversation pattern: "Name, Profession: I talked to..."
-        chat_pattern = re.compile(r'^(.+?),\s*(.+?):\s+(.+)$')
-        for line in _read_current_session_gamelog(gamelog_path):
-            m = chat_pattern.match(line)
-            if m:
-                name = m.group(1)
-                profession = m.group(2)
-                message = m.group(3)
-                # Skip lines that are actually cancellation messages
-                if message.startswith("cancels "):
-                    continue
-                chat_lines.append({
-                    "name": name,
-                    "profession": profession,
-                    "message": message,
-                })
+    # Extract conversation lines from CHAT events (captured via DFHack onReport hook)
+    chat_lines = _extract_chat_lines(event_store)
 
     # Load saved battle reports — split into engagement reports (shown in section) and solo (shown inline)
     saved_battle_reports = []
@@ -269,22 +316,13 @@ async def events_page(request: Request):
 async def api_summarize_chat(request: Request):
     """Use AI to summarize the fortress chat log."""
     config = _get_config()
-    _, _, _, metadata = _load_game_state_safe(config)
+    event_store, _, _, metadata = _load_game_state_safe(config)
 
-    gamelog_path = _resolve_gamelog_path(config)
-    if not gamelog_path or not gamelog_path.exists():
-        return StreamingResponse(iter(["No gamelog found."]), media_type="text/plain")
-
-    from df_storyteller.context.loader import _read_current_session_gamelog
-    chat_pattern = re.compile(r'^(.+?),\s*(.+?):\s+(.+)$')
-    chat_text = ""
-    for line in _read_current_session_gamelog(gamelog_path):
-        m = chat_pattern.match(line)
-        if m and not m.group(3).startswith("cancels "):
-            chat_text += f"{m.group(1)}: {m.group(3)}\n"
-
-    if not chat_text.strip():
+    chat_lines = _extract_chat_lines(event_store)
+    if not chat_lines:
         return StreamingResponse(iter(["No conversations found in the current session."]), media_type="text/plain")
+
+    chat_text = "\n".join(f"{cl['name']}: {cl['message']}" for cl in chat_lines)
 
     fortress_name = metadata.get("fortress_name", "the fortress")
     season = metadata.get("season", "").title()
@@ -365,7 +403,10 @@ async def api_battle_report(encounter_index: int):
         return StreamingResponse(iter(["Combat encounter not found."]), media_type="text/plain")
 
     group = engagement_groups[encounter_index]
-    is_siege = len(group) > 1
+    # Determine if this is a siege: check if any combat event has is_siege flag
+    is_siege = any(
+        getattr(e.data, "is_siege", False) for e in group
+    )
 
     # Build combined combat text and collect combatant unit_ids directly
     all_raw = []
@@ -484,7 +525,7 @@ Keep it to 150-250 words. Sign off with the author's name at the end.
 
         name_map_text = ""
         if name_mappings:
-            name_map_text = "\n## Name Key (the gamelog uses titles, these are the real names)\n" + "\n".join(name_mappings)
+            name_map_text = "\n## Name Key (combat reports use titles, these are the real names)\n" + "\n".join(name_mappings)
 
         user_prompt = f"""Write a {'siege report' if is_siege else 'battle report'} for {fortress_name}, {season} of Year {year}.
 

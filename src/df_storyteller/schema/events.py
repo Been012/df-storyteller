@@ -37,6 +37,11 @@ class EventType(str, Enum):
     CRIME = "crime"
     CARAVAN = "caravan"
     SIEGE = "siege"
+    SYNDROME = "syndrome"
+    EQUIPMENT_CHANGE = "equipment_change"
+    INTERACTION = "interaction"
+    CHAT = "chat"
+    REPORT = "report"  # Categorized DF reports (dramatic, social, trade, achievement)
 
 
 class EventSource(str, Enum):
@@ -116,8 +121,10 @@ class CombatData(BaseModel):
     body_part: str = ""
     wound_type: str = ""
     is_lethal: bool = False
+    is_siege: bool = False  # True if combat occurred during an active siege
     raw_text: str = ""
     blows: list[CombatBlow] = Field(default_factory=list)
+    blow_count: int = 0  # Total blows (from DFHack hook or len(blows))
     injuries: list[str] = Field(default_factory=list)  # "An artery has been opened", etc.
     outcome: str = ""  # "gives in to pain", "falls over", "cloven asunder", ""
 

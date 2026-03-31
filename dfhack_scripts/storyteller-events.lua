@@ -366,6 +366,572 @@ end
 
 -- ======================= Event Handlers =======================
 
+--- Handle unit attack events (fires per-blow).
+--- Hook: eventful.onUnitAttack(attacker_id, defender_id, wound_id)
+--- We aggregate blows into engagements and flush them periodically.
+--- Hook: eventful.onReport(report_id) collects combat text for rich descriptions.
+if not state.pending_combat then
+    state.pending_combat = {}  -- key: "attacker_id:defender_id" -> {attacker, defender, blows, last_tick, weapon, report_lines}
+end
+if not state.last_combat_key then
+    state.last_combat_key = nil  -- tracks which pending_combat entry gets report text
+end
+
+local function on_unit_attack(attacker_id, defender_id, wound_id)
+    if not event_flags.combat then return end
+
+    pcall(function()
+        local attacker = df.unit.find(attacker_id)
+        local defender = df.unit.find(defender_id)
+        if not attacker or not defender then return end
+
+        local key = tostring(attacker_id) .. ':' .. tostring(defender_id)
+        local tick = df.global.cur_year_tick
+
+        if not state.pending_combat[key] then
+            -- Get weapon from attacker's main hand item
+            local weapon_name = ''
+            pcall(function()
+                local weapon = dfhack.items.getItemAtPosition(attacker.pos)
+                if attacker.body and attacker.body.weapon_bp >= 0 then
+                    -- Try to find wielded weapon via inventory
+                    for _, inv_item in ipairs(attacker.inventory) do
+                        if inv_item.mode == 1 then  -- 1 = Weapon (T_mode enum may be nil in DF Premium)
+                            weapon_name = dfhack.items.getDescription(inv_item.item, 0, false) or ''
+                            break
+                        end
+                    end
+                end
+            end)
+
+            state.pending_combat[key] = {
+                attacker = serialize_unit(attacker),
+                defender = serialize_unit(defender),
+                blows = 0,
+                weapon = weapon_name,
+                first_tick = tick,
+                last_tick = tick,
+                is_lethal = false,
+                report_lines = {},
+            }
+        end
+
+        local entry = state.pending_combat[key]
+        entry.blows = entry.blows + 1
+        entry.last_tick = tick
+        state.last_combat_key = key
+
+        -- Check if defender died from this blow
+        pcall(function()
+            if not dfhack.units.isAlive(defender) then
+                entry.is_lethal = true
+            end
+        end)
+    end)
+end
+
+--- Handle report events — capture combat narrative text and chat/conversation reports.
+--- Hook: eventful.onReport(report_id)
+--- Combat: attaches descriptive text to the most recent pending combat entry.
+--- Chat: detects conversation/thought reports and writes them as chat events.
+local function on_report(report_id)
+    pcall(function()
+        -- Find the report object
+        local report = nil
+        pcall(function()
+            -- Reports are in df.global.world.status.reports
+            for i = #df.global.world.status.reports - 1, math.max(0, #df.global.world.status.reports - 10), -1 do
+                local r = df.global.world.status.reports[i]
+                if r and r.id == report_id then
+                    report = r
+                    break
+                end
+            end
+        end)
+
+        if not report then return end
+        if not report.text or report.text == '' then return end
+
+        local text = report.text
+        pcall(function() text = dfhack.df2utf(text) end)
+
+        -- Get report type and speaker
+        local report_type = -1
+        local speaker_id = -1
+        pcall(function() report_type = report.type end)
+        pcall(function() speaker_id = report.speaker_id end)
+
+        -- === REPORT TYPE ROUTING ===
+        -- Full enum: https://github.com/DFHack/df-structures/blob/master/df.g_src.basics.xml
+
+        -- Skip: noise, handled elsewhere, or uninteresting
+        local skip_types = {
+            [104] = true,   -- CANCEL_JOB
+            [236] = true,   -- PROFESSION_CHANGES (handled by polling)
+            [237] = true,   -- RECRUIT_PROMOTED (handled by polling)
+            [278] = true,   -- SOMEBODY_GROWS_UP (animal growth)
+            [282] = true,   -- CITIZEN_BECOMES_SOLDIER (handled by polling)
+            [283] = true,   -- CITIZEN_BECOMES_NONSOLDIER (handled by polling)
+            [297] = true,   -- SEASON_SPRING (handled by polling)
+            [298] = true,   -- SEASON_SUMMER
+            [299] = true,   -- SEASON_AUTUMN
+            [300] = true,   -- SEASON_WINTER
+            [342] = true,   -- EMBARK_MESSAGE
+        }
+        if skip_types[report_type] then return end
+
+        -- 1. Combat reports (types 6-48, 111-134, 166-167, 239): attach to pending combat
+        local is_combat_type = (report_type >= 6 and report_type <= 48)
+            or (report_type >= 111 and report_type <= 134)
+            or report_type == 166 or report_type == 167
+            or report_type == 239 or report_type == 171
+        if is_combat_type and state.last_combat_key then
+            local entry = state.pending_combat[state.last_combat_key]
+            if entry then
+                if #entry.report_lines < 50 then
+                    table.insert(entry.report_lines, text)
+                end
+                return
+            end
+        end
+
+        -- 2. Dramatic events: threats, megabeasts, transformations, discoveries
+        local dramatic_types = {
+            [1] = 'era_change',
+            [2] = 'feature_discovery',
+            [3] = 'struck_deep_metal',
+            [4] = 'struck_mineral',
+            [5] = 'struck_economic_mineral',
+            [51] = 'dig_cancel_warm',
+            [52] = 'dig_cancel_damp',
+            [53] = 'ambush', [54] = 'ambush', [55] = 'ambush', [56] = 'ambush',
+            [57] = 'ambush', [58] = 'ambush', [59] = 'ambush', [60] = 'ambush',
+            [61] = 'ambush', [62] = 'ambush', [63] = 'ambush', [64] = 'ambush',
+            [65] = 'ambush', [66] = 'ambush',
+            [82] = 'cave_collapse',
+            [93] = 'megabeast_arrival',
+            [94] = 'werebeast_arrival',
+            [96] = 'berserk_citizen',
+            [97] = 'magma_defaces_engraving',
+            [98] = 'engraving_melts',
+            [100] = 'master_architecture_lost',
+            [101] = 'master_construction_lost',
+            [108] = 'endgame_event', [109] = 'endgame_event', [110] = 'endgame_event',
+            [136] = 'night_attack_start',
+            [137] = 'night_attack_end',
+            [145] = 'creature_steals_object',
+            [147] = 'body_transformation',
+            [150] = 'undead_attack',
+            [151] = 'citizen_missing',
+            [152] = 'pet_missing',
+            [154] = 'strange_rain',
+            [155] = 'strange_cloud',
+            [181] = 'stressed_citizen',
+            [182] = 'citizen_lost_to_stress',
+            [183] = 'citizen_tantrum',
+            [252] = 'citizen_snatched',
+            [257] = 'artwork_defaced',
+            [285] = 'possessed_tantrum',
+            [286] = 'building_toppled_by_ghost',
+            [313] = 'building_destroyed',
+            [314] = 'deity_curse',
+            [348] = 'food_warning',
+            [351] = 'deity_pronouncement',
+        }
+        if dramatic_types[report_type] then
+            write_event('report', {
+                report_type = dramatic_types[report_type],
+                text = text,
+                category = 'dramatic',
+            })
+            return
+        end
+
+        -- 3. Social/political events
+        local social_types = {
+            [153] = 'embrace',
+            [176] = 'gain_site_control',
+            [178] = 'position_succession',
+            [254] = 'land_gains_status',
+            [255] = 'land_elevated_status',
+            [258] = 'power_learned',
+            [266] = 'election_results',
+            [284] = 'party_organized',
+            [289] = 'marriage',
+            [303] = 'research_breakthrough',
+            [321] = 'rumor_spread',
+            [331] = 'new_guild',
+            [332] = 'crime_witness', [333] = 'crime_witness',
+            [334] = 'crime_witness', [335] = 'crime_witness',
+        }
+        if social_types[report_type] then
+            write_event('report', {
+                report_type = social_types[report_type],
+                text = text,
+                category = 'social',
+            })
+            return
+        end
+
+        -- 4. Trade/visitor events
+        local trade_types = {
+            [67] = 'caravan_arrival',
+            [68] = 'noble_arrival',
+            [79] = 'diplomat_arrival',
+            [80] = 'liaison_arrival',
+            [81] = 'trade_diplomat_arrival',
+            [242] = 'merchants_unloading',
+            [245] = 'merchants_leaving_soon',
+            [246] = 'merchants_embarked',
+            [301] = 'guest_arrival',
+            [341] = 'diplomat_left_unhappy',
+            [343] = 'first_caravan_arrival',
+            [344] = 'monarch_arrival',
+            [345] = 'hasty_monarch',
+            [346] = 'satisfied_monarch',
+        }
+        if trade_types[report_type] then
+            write_event('report', {
+                report_type = trade_types[report_type],
+                text = text,
+                category = 'trade',
+            })
+            return
+        end
+
+        -- 5. Achievement/mood progression events
+        local achievement_types = {
+            [86] = 'artifact_created',
+            [87] = 'artifact_named',
+            [91] = 'mood_building_claimed',
+            [92] = 'artifact_begun',
+            [99] = 'masterpiece_construction',
+            [238] = 'soldier_becomes_master',
+            [256] = 'masterpiece_crafted',
+            [261] = 'dyed_masterpiece',
+            [262] = 'cooked_masterpiece',
+            [287] = 'masterful_improvement',
+            [288] = 'masterpiece_engraving',
+            [315] = 'composition_complete',
+        }
+        if achievement_types[report_type] then
+            write_event('report', {
+                report_type = achievement_types[report_type],
+                text = text,
+                category = 'achievement',
+            })
+            return
+        end
+
+        -- 6. Chat/conversation: speaker_id >= 0 means a dwarf said/thought this.
+        --    Type 163 = REGULAR_CONVERSATION, 177 = CONFLICT_CONVERSATION
+        if speaker_id >= 0 then
+            local speaker = df.unit.find(speaker_id)
+            if speaker and is_our_dwarf(speaker) then
+                -- Skip if speaker is in active combat (battle cries during fights)
+                local in_combat = false
+                if state.pending_combat then
+                    for key, _ in pairs(state.pending_combat) do
+                        if key:match('^' .. tostring(speaker_id) .. ':') or key:match(':' .. tostring(speaker_id) .. '$') then
+                            in_combat = true
+                            break
+                        end
+                    end
+                end
+                if not in_combat then
+                    write_event('chat', {
+                        unit = serialize_unit(speaker),
+                        message = text,
+                    })
+                end
+            end
+            return
+        end
+    end)
+end
+
+--- Flush pending combat events that have gone stale (no new blows for 200+ ticks).
+local function flush_combat()
+    if not state.pending_combat then return end
+    local tick = df.global.cur_year_tick
+    local stale_keys = {}
+
+    for key, entry in pairs(state.pending_combat) do
+        -- Flush if 200+ ticks since last blow (fight is over)
+        if tick - entry.last_tick > 200 then
+            table.insert(stale_keys, key)
+
+            -- Check if defender is now dead (may have died after last blow callback)
+            pcall(function()
+                if entry.defender and entry.defender.unit_id then
+                    local defender = df.unit.find(entry.defender.unit_id)
+                    if defender and not dfhack.units.isAlive(defender) then
+                        entry.is_lethal = true
+                    end
+                end
+            end)
+
+            write_event('combat', {
+                attacker = entry.attacker,
+                defender = entry.defender,
+                weapon = entry.weapon,
+                blows = entry.blows,
+                is_lethal = entry.is_lethal,
+                is_siege = state.siege_active or false,
+                raw_text = table.concat(entry.report_lines or {}, '\n'),
+            })
+        end
+    end
+
+    for _, key in ipairs(stale_keys) do
+        state.pending_combat[key] = nil
+    end
+end
+
+--- Handle item creation events.
+--- Hook: eventful.onItemCreated(item_id)
+--- We only care about artifacts (mood-created items), not routine crafts.
+local function on_item_created(item_id)
+    pcall(function()
+        local item = df.item.find(item_id)
+        if not item then return end
+
+        -- Check if this item is an artifact
+        local dominated = false
+        for _, artifact in ipairs(df.global.world.artifacts.all) do
+            if artifact.item and artifact.item.id == item_id then
+                dominated = true
+
+                local data = {
+                    artifact_id = artifact.id,
+                    name = '',
+                    item_type = '',
+                    material = '',
+                    creator_unit_id = -1,
+                    creator = nil,
+                }
+
+                pcall(function()
+                    data.name = dfhack.items.getDescription(item, 0, true) or ''
+                    data.item_type = df.item_type[item:getType()] or ''
+                end)
+                pcall(function()
+                    local mat_info = dfhack.matinfo.decode(item)
+                    if mat_info then data.material = mat_info:toString() end
+                end)
+                pcall(function()
+                    if item.maker and item.maker.unit_id >= 0 then
+                        data.creator_unit_id = item.maker.unit_id
+                        local creator = df.unit.find(item.maker.unit_id)
+                        if creator then data.creator = serialize_unit(creator) end
+                    end
+                end)
+                pcall(function()
+                    if artifact.name and artifact.name.has_name then
+                        local art_name = dfhack.df2utf(dfhack.translation.translateName(artifact.name, true))
+                        if art_name ~= '' then data.name = art_name end
+                    end
+                end)
+
+                write_event('artifact', data)
+                break
+            end
+        end
+    end)
+end
+
+--- Handle invasion events.
+--- Hook: eventful.onInvasion(invasion_id)
+--- Fires instantly when invaders appear — replaces polling for siege start.
+local function on_invasion(invasion_id)
+    pcall(function()
+        state.siege_active = true
+
+        local data = {
+            status = 'started',
+            invasion_id = invasion_id,
+            invader_count = 0,
+            invader_race = 'unknown',
+            civilization = 'unknown',
+        }
+
+        -- Try to get details from the active army controllers
+        pcall(function()
+            local invaders = {}
+            local race_name = ''
+            local civ_name = ''
+            for _, unit in ipairs(df.global.world.units.active) do
+                if dfhack.units.isAlive(unit) and dfhack.units.isInvader(unit) then
+                    table.insert(invaders, unit)
+                    if race_name == '' then
+                        pcall(function()
+                            local raw = df.creature_raw.find(unit.race)
+                            if raw then race_name = raw.creature_id end
+                        end)
+                    end
+                    if civ_name == '' then
+                        pcall(function()
+                            if unit.civ_id >= 0 then
+                                local civ = df.historical_entity.find(unit.civ_id)
+                                if civ then
+                                    civ_name = dfhack.df2utf(dfhack.translation.translateName(civ.name, true))
+                                end
+                            end
+                        end)
+                    end
+                end
+            end
+            data.invader_count = #invaders
+            if race_name ~= '' then data.invader_race = race_name end
+            if civ_name ~= '' then data.civilization = civ_name end
+        end)
+
+        write_event('siege', data)
+    end)
+end
+
+--- Handle new unit becoming active on the map.
+--- Hook: eventful.onUnitNewActive(unit_id)
+--- Detects migrants, visitors, invaders arriving. Filters to only fortress-relevant units.
+local function on_unit_new_active(unit_id)
+    pcall(function()
+        local unit = df.unit.find(unit_id)
+        if not unit or not dfhack.units.isAlive(unit) then return end
+
+        local player_race = df.global.plotinfo.race_id
+
+        -- Skip units we already know about
+        if state.known_unit_ids[unit_id] then return end
+
+        -- Check if this is a fortress dwarf (migrant)
+        if unit.race == player_race and dfhack.units.isFortControlled(unit) then
+            state.known_unit_ids[unit_id] = true
+            write_event('migrant_arrived', {
+                unit = serialize_unit(unit),
+            })
+            return
+        end
+
+        -- Check if this is an invader
+        if dfhack.units.isInvader(unit) then
+            -- Handled by onInvasion — skip to avoid duplicates
+            return
+        end
+    end)
+end
+
+--- Handle syndrome application (werebeast bites, vampire curses, FB syndromes).
+--- Hook: eventful.onSyndrome(unit_id, syndrome_id)
+if not state.known_syndromes then
+    state.known_syndromes = {}  -- "unit_id:syndrome_id" -> true
+end
+
+local function on_syndrome(unit_id, syndrome_id)
+    pcall(function()
+        local unit = df.unit.find(unit_id)
+        if not unit then return end
+
+        -- Deduplicate: only report each syndrome once per unit
+        local key = tostring(unit_id) .. ':' .. tostring(syndrome_id)
+        if state.known_syndromes[key] then return end
+        state.known_syndromes[key] = true
+
+        -- Get syndrome details
+        local syndrome_name = 'unknown'
+        local syndrome_class = ''
+        pcall(function()
+            local syn = df.syndrome.find(syndrome_id)
+            if syn then
+                if syn.syn_name and syn.syn_name ~= '' then
+                    syndrome_name = syn.syn_name
+                end
+                -- Check syndrome class flags for narrative interest
+                for _, cls in ipairs(syn.syn_class) do
+                    if cls and cls.value then
+                        syndrome_class = syndrome_class .. cls.value .. ' '
+                    end
+                end
+            end
+        end)
+
+        -- Filter: only report interesting syndromes (skip minor ones like "drowsiness")
+        -- Interesting = affects fortress dwarves, or is from a notable source
+        local player_race = df.global.plotinfo.race_id
+        local is_ours = (unit.race == player_race and dfhack.units.isFortControlled(unit))
+        if not is_ours then return end  -- Only track syndromes on our dwarves
+
+        write_event('syndrome', {
+            unit = serialize_unit(unit),
+            syndrome_name = syndrome_name,
+            syndrome_class = syndrome_class:match('^%s*(.-)%s*$') or '',
+        })
+    end)
+end
+
+--- Handle inventory changes.
+--- Hook: eventful.onInventoryChange(unit_id, item_id, old_item, new_item)
+--- Very noisy — only track weapon/armor equip changes for military dwarves.
+local function on_inventory_change(unit_id, item_id, old_inv, new_inv)
+    pcall(function()
+        local unit = df.unit.find(unit_id)
+        if not unit then return end
+
+        -- Only track fortress dwarves in military squads
+        local player_race = df.global.plotinfo.race_id
+        if unit.race ~= player_race or not dfhack.units.isFortControlled(unit) then return end
+        if not unit.military.squad_id or unit.military.squad_id < 0 then return end
+
+        -- Determine what changed: equip or unequip, weapon or armor
+        local new_mode = new_inv and new_inv.mode or -1
+        local old_mode = old_inv and old_inv.mode or -1
+
+        -- Only care about weapon/armor changes (mode 1=Weapon, 2=Worn, 5=Strapped)
+        local dominated = (new_mode == 1 or new_mode == 2 or new_mode == 5 or
+                         old_mode == 1 or old_mode == 2 or old_mode == 5)
+        if not dominated then return end
+
+        local item = df.item.find(item_id)
+        if not item then return end
+
+        local item_desc = ''
+        pcall(function() item_desc = dfhack.items.getDescription(item, 0, false) or '' end)
+
+        local action = 'changed'
+        if new_mode == 1 or new_mode == 2 or new_mode == 5 then
+            action = 'equipped'
+        elseif old_mode == 1 or old_mode == 2 or old_mode == 5 then
+            action = 'unequipped'
+        end
+
+        write_event('equipment_change', {
+            unit = serialize_unit(unit),
+            item = item_desc,
+            action = action,
+        })
+    end)
+end
+
+--- Handle interaction events (magic, FB attacks, necromancy, etc.).
+--- Hook: eventful.onInteraction(interaction_name, interaction_token, attacker_id, defender_id, attacker_hf_id, defender_hf_id)
+local function on_interaction(interaction_name, interaction_token, attacker_id, defender_id, attacker_hf_id, defender_hf_id)
+    pcall(function()
+        local attacker = df.unit.find(attacker_id)
+        local defender = df.unit.find(defender_id)
+
+        -- Skip if neither unit is valid
+        if not attacker and not defender then return end
+
+        local data = {
+            interaction_name = interaction_name or 'unknown',
+            interaction_token = interaction_token or '',
+            attacker = attacker and serialize_unit(attacker) or nil,
+            defender = defender and serialize_unit(defender) or nil,
+        }
+
+        write_event('interaction', data)
+    end)
+end
+
 --- Handle unit death events.
 --- Hook: eventful.onUnitDeath
 --- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html#units-module
@@ -549,29 +1115,12 @@ local function poll_moods()
                 end
             elseif prev and prev >= 0 then
                 -- Was in a mood, now finished (mood == -1)
+                -- Artifact creation is captured by onItemCreated hook separately.
                 state.prev_moods[uid] = nil
-
-                -- Check if they created an artifact (mood_completed)
-                local artifact_name = ''
-                pcall(function()
-                    -- After a successful mood, the dwarf's job artifact can be found
-                    -- by checking recently created artifacts
-                    for i = #df.global.world.artifacts.all - 1, math.max(0, #df.global.world.artifacts.all - 5), -1 do
-                        local art = df.global.world.artifacts.all[i]
-                        if art and art.item and art.item.maker == uid then
-                            local item = art.item
-                            local item_name = dfhack.items.getDescription(item, 0, true)
-                            pcall(function() item_name = dfhack.df2utf(item_name) end)
-                            artifact_name = item_name
-                            break
-                        end
-                    end
-                end)
 
                 write_event('mood_completed', {
                     unit = serialize_unit(unit),
                     previous_mood = mood_names[prev] or 'unknown',
-                    artifact_name = artifact_name,
                     success = dfhack.units.isAlive(unit),
                 })
             end
@@ -854,20 +1403,9 @@ local function poll_changes()
             state.prev_tantrum[uid] = tantrum_state
         end)
 
-        -- Detect new arrivals (migrants) — units we haven't seen before who aren't babies.
-        -- Only fire after baseline is established (prev_population > 0) to avoid
-        -- false positives for existing dwarves on first poll.
+        -- Track known unit IDs (individual migrant_arrived events handled by onUnitNewActive hook)
         if not state.known_unit_ids[uid] then
             state.known_unit_ids[uid] = true
-            if state.prev_population > 0 then
-                local unit_age = 0
-                pcall(function() unit_age = dfhack.units.getAge(unit) or 0 end)
-                if unit_age > 1 then
-                    write_event('migrant_arrived', {
-                        unit = udata,
-                    })
-                end
-            end
         end
 
         ::continue::
@@ -1037,48 +1575,23 @@ local function poll_caravans()
 end
 
 --- Poll for siege / invasion events.
+--- Poll for siege end only — siege start is handled by onInvasion hook.
 local function poll_sieges()
     if not event_flags.siege then return end
     pcall(function()
+        if not state.siege_active then return end
+
+        -- Check if all invaders are gone
         local invader_count = 0
-        local invader_race = ''
-        local invader_civ = ''
-        local invader_civ_id = -1
         for _, unit in ipairs(df.global.world.units.active) do
             pcall(function()
                 if dfhack.units.isAlive(unit) and unit.flags1 and unit.flags1.active_invader then
                     invader_count = invader_count + 1
-                    if invader_race == '' then
-                        pcall(function()
-                            invader_race = df.creature_raw.find(unit.race).creature_id
-                        end)
-                        pcall(function()
-                            if unit.civ_id >= 0 then
-                                invader_civ_id = unit.civ_id
-                                local entity = df.historical_entity.find(unit.civ_id)
-                                if entity and entity.name then
-                                    invader_civ = dfhack.df2utf(dfhack.translation.translateName(entity.name, true))
-                                end
-                            end
-                        end)
-                    end
                 end
             end)
         end
 
-        local was_active = state.siege_active or false
-        if invader_count > 0 and not was_active then
-            -- Siege just started
-            state.siege_active = true
-            write_event('siege', {
-                status = 'started',
-                invader_count = invader_count,
-                invader_race = invader_race,
-                civilization = invader_civ,
-                civ_id = invader_civ_id,
-            })
-        elseif invader_count == 0 and was_active then
-            -- Siege ended
+        if invader_count == 0 then
             state.siege_active = false
             write_event('siege', {
                 status = 'ended',
@@ -1108,12 +1621,10 @@ local function write_delta_snapshot()
                         name = safe_unit_name(unit),
                         profession = dfhack.units.getProfessionName(unit),
                         stress_category = dfhack.units.getStressCategory(unit),
-                        happiness = 0,
                         is_alive = true,
                         current_job = '',
                         mood = -1,
                     }
-                    pcall(function() entry.happiness = dfhack.units.getHappiness(unit) or 0 end)
                     pcall(function()
                         if unit.job and unit.job.current_job then
                             entry.current_job = df.job_type[unit.job.current_job.job_type] or ''
@@ -1181,6 +1692,7 @@ local function on_tick()
     state.poll_count = (state.poll_count or 0) + 1
 
     local ok, err = pcall(function()
+        flush_combat()
         poll_moods()
         poll_season()
         poll_births()
@@ -1326,6 +1838,18 @@ local function start()
             pcall(function()
                 state.prev_stress[uid] = dfhack.units.getStressCategory(unit)
             end)
+
+            -- Seed skills so existing skill levels don't trigger level-up events
+            pcall(function()
+                if not state.prev_skills then state.prev_skills = {} end
+                state.prev_skills[uid] = {}
+                local soul = unit.status and unit.status.current_soul
+                if soul and soul.skills then
+                    for _, skill in ipairs(soul.skills) do
+                        state.prev_skills[uid][skill.id] = skill.rating or 0
+                    end
+                end
+            end)
         end
     end
     state.prev_population = pop
@@ -1343,11 +1867,35 @@ local function start()
 
     -- Register event hooks
     -- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html#eventful
-    -- Available events (from eventful.cpp): onUnitDeath, onJobCompleted,
-    -- onBuildingCreatedDestroyed, onReport, onUnitAttack, etc.
+    -- Register event hooks and enable them via EventManager.
+    -- enableEvent(eventType, frequency) must be called for hooks to fire.
+    -- eventType IDs: UNIT_DEATH=5, JOB_COMPLETED=3, BUILDING=7, UNIT_ATTACK=13,
+    --   REPORT=12, ITEM_CREATED=6, INVASION=10, UNIT_NEW_ACTIVE=4,
+    --   SYNDROME=9, INVENTORY_CHANGE=11, INTERACTION=15
+    -- Frequency 0 = every tick (immediate).
+    eventful.enableEvent(eventful.eventType.UNIT_DEATH, 0)
+    eventful.enableEvent(eventful.eventType.JOB_COMPLETED, 0)
+    eventful.enableEvent(eventful.eventType.BUILDING, 0)
+    eventful.enableEvent(eventful.eventType.UNIT_ATTACK, 0)
+    eventful.enableEvent(eventful.eventType.REPORT, 0)
+    eventful.enableEvent(eventful.eventType.ITEM_CREATED, 0)
+    eventful.enableEvent(eventful.eventType.INVASION, 0)
+    eventful.enableEvent(eventful.eventType.UNIT_NEW_ACTIVE, 0)
+    eventful.enableEvent(eventful.eventType.SYNDROME, 0)
+    eventful.enableEvent(eventful.eventType.INVENTORY_CHANGE, 0)
+    eventful.enableEvent(eventful.eventType.INTERACTION, 0)
+
     eventful.onUnitDeath.storyteller = on_unit_death
     eventful.onBuildingCreatedDestroyed.storyteller = on_building_created
     eventful.onJobCompleted.storyteller = on_job_completed
+    eventful.onUnitAttack.storyteller = on_unit_attack
+    eventful.onReport.storyteller = on_report
+    eventful.onItemCreated.storyteller = on_item_created
+    eventful.onInvasion.storyteller = on_invasion
+    eventful.onUnitNewActive.storyteller = on_unit_new_active
+    eventful.onSyndrome.storyteller = on_syndrome
+    eventful.onInventoryChange.storyteller = on_inventory_change
+    eventful.onInteraction.storyteller = on_interaction
 
     -- Use dfhack.timeout for periodic polling (moods, births, seasons).
     -- The eventful plugin does not support TICK subscriptions.
@@ -1371,6 +1919,17 @@ local function stop()
     eventful.onUnitDeath.storyteller = nil
     eventful.onBuildingCreatedDestroyed.storyteller = nil
     eventful.onJobCompleted.storyteller = nil
+    eventful.onUnitAttack.storyteller = nil
+    eventful.onReport.storyteller = nil
+    eventful.onItemCreated.storyteller = nil
+    eventful.onInvasion.storyteller = nil
+    eventful.onUnitNewActive.storyteller = nil
+    eventful.onSyndrome.storyteller = nil
+    eventful.onInventoryChange.storyteller = nil
+    eventful.onInteraction.storyteller = nil
+
+    -- Flush any remaining combat events before stopping
+    pcall(flush_combat)
 
     save_baselines()
     state.enabled = false

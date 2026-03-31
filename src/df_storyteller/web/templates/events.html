@@ -49,7 +49,7 @@
                     </div>
                 {% endif %}
                 <div class="event-card {{ event.type }}" data-type="{{ event.type }}">
-                    <div class="event-time">{{ event.type | replace('_', ' ') | title }}</div>
+                    <div class="event-time">{{ event.date_label | default(event.type | replace('_', ' ') | title) }} · {{ event.type | replace('_', ' ') | title }}</div>
                     <div class="event-text">{{ event.description }}</div>
                 </div>
             {% endfor %}
@@ -97,7 +97,7 @@
         <summary style="padding: 0.6rem 0.8rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="font-family: 'Cinzel', serif; font-size: 1.05rem; color: var(--gold-dark);">
-                    Battle &mdash; {{ encounter.fight_count }} fights
+                    {% if encounter.is_siege is defined and encounter.is_siege %}Siege{% else %}Battle{% endif %} &mdash; {{ encounter.fight_count }} fights
                 </span>
                 <span style="font-size: 0.8rem; color: var(--ink-faded); margin-left: 0.5rem;">
                     {{ encounter.total_blows }} blows &middot; {{ encounter.participants | length }} combatants
@@ -108,34 +108,54 @@
         </summary>
 
         <div style="padding: 0.4rem 0.8rem 0.8rem;">
-            <div style="font-size: 0.85rem; color: var(--ink-faded); margin-bottom: 0.5rem;">
-                Combatants: {{ encounter.participants | join(', ') }}
+            {# Condensed target summary #}
+            {% if encounter.targets is defined and encounter.targets %}
+            <div style="margin-bottom: 0.5rem;">
+                {% for target in encounter.targets %}
+                <div style="font-size: 0.9rem; padding: 0.2rem 0; {% if target.lethal %}color: #c98b8b;{% endif %}">
+                    <span style="color: var(--ink-faded);">vs</span>
+                    <strong>{{ target.name }}</strong>
+                    &mdash; {{ target.blows }} blow{{ 's' if target.blows != 1 else '' }}
+                    <span style="font-size: 0.8rem; color: var(--ink-faded);">({{ target.attackers | join(', ') }})</span>
+                    {% if target.defeated %}<span style="color: #8b2500;">&#x2620; defeated</span>{% endif %}
+                    {% if target.lethal %}<span style="color: #c98b8b;">[FATAL]</span>{% endif %}
+                </div>
+                {% endfor %}
             </div>
+            {% endif %}
 
-            {% for fight in encounter.fights %}
-            <details class="combat-details" style="margin-bottom: 0.4rem; border: 1px solid rgba(184,160,120,0.2); border-radius: 3px; {% if fight.is_lethal %}border-left: 2px solid #c98b8b;{% endif %}">
-                <summary style="padding: 0.4rem 0.6rem; cursor: pointer; font-size: 0.9rem;">
-                    {{ fight.attacker }} <span style="color: var(--ink-faded);">vs</span> {{ fight.defender }}
-                    {% if fight.weapon %}<span style="color: var(--gold-dark);"> &mdash; {{ fight.weapon }}</span>{% endif %}
-                    <span style="color: var(--ink-faded);">
-                        {{ fight.blows | length }} blow{{ 's' if fight.blows | length != 1 else '' }}{% if fight.outcome %} &middot; {{ fight.outcome }}{% endif %}{% if fight.is_lethal %} <span style="color: #c98b8b;">[FATAL]</span>{% endif %}
-                    </span>
+            {# Detailed fight breakdown — collapsed by default #}
+            <details style="margin-top: 0.3rem;">
+                <summary style="cursor: pointer; font-size: 0.8rem; color: var(--ink-faded);">
+                    Show {{ encounter.fight_count }} individual fight{{ 's' if encounter.fight_count != 1 else '' }}
                 </summary>
-                <div style="padding: 0.3rem 0.6rem 0.5rem;">
-                    {{ render_blowbyblow(fight.raw_lines) }}
-                    {% if fight.outcome %}
-                    <div style="margin-top: 0.3rem; font-style: italic; font-size: 0.85rem; color: {% if fight.is_lethal %}#c98b8b{% else %}var(--ink-faded){% endif %};">
-                        {{ fight.defender }} {{ fight.outcome }}{% if fight.is_lethal %} — FATAL{% endif %}
+                <div style="margin-top: 0.4rem;">
+                {% for fight in encounter.fights %}
+                <details class="combat-details" style="margin-bottom: 0.4rem; border: 1px solid rgba(184,160,120,0.2); border-radius: 3px; {% if fight.is_lethal %}border-left: 2px solid #c98b8b;{% endif %}">
+                    <summary style="padding: 0.4rem 0.6rem; cursor: pointer; font-size: 0.9rem;">
+                        {{ fight.attacker }} <span style="color: var(--ink-faded);">vs</span> {{ fight.defender }}
+                        {% if fight.weapon %}<span style="color: var(--gold-dark);"> &mdash; {{ fight.weapon }}</span>{% endif %}
+                        <span style="color: var(--ink-faded);">
+                            {{ fight.blow_count }} blow{{ 's' if fight.blow_count != 1 else '' }}{% if fight.outcome %} &middot; {{ fight.outcome }}{% endif %}{% if fight.is_lethal %} <span style="color: #c98b8b;">[FATAL]</span>{% endif %}
+                        </span>
+                    </summary>
+                    <div style="padding: 0.3rem 0.6rem 0.5rem;">
+                        {{ render_blowbyblow(fight.raw_lines) }}
+                        {% if fight.outcome %}
+                        <div style="margin-top: 0.3rem; font-style: italic; font-size: 0.85rem; color: {% if fight.is_lethal %}#c98b8b{% else %}var(--ink-faded){% endif %};">
+                            {{ fight.defender }} {{ fight.outcome }}{% if fight.is_lethal %} — FATAL{% endif %}
+                        </div>
+                        {% endif %}
                     </div>
-                    {% endif %}
+                </details>
+                {% endfor %}
                 </div>
             </details>
-            {% endfor %}
 
             {% if not no_llm_mode %}
             <div style="margin-top: 0.6rem;">
                 <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="writeBattleReport({{ loop.index0 }})">
-                    Write Siege Report
+                    Write {% if encounter.is_siege is defined and encounter.is_siege %}Siege{% else %}Battle{% endif %} Report
                 </button>
                 <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
             </div>
@@ -153,7 +173,7 @@
                 </span>
                 {% if encounter.weapon %}<span style="font-size: 0.85rem; color: var(--gold-dark);"> &mdash; {{ encounter.weapon }}</span>{% endif %}
                 <span style="font-size: 0.8rem; color: var(--ink-faded); margin-left: 0.5rem;">
-                    {{ encounter.blows | length }} blow{{ 's' if encounter.blows | length != 1 else '' }}{% if encounter.outcome %} &middot; {{ encounter.outcome }}{% endif %}{% if encounter.is_lethal %} <span style="color: #c98b8b;">[FATAL]</span>{% endif %}
+                    {{ encounter.blow_count }} blow{{ 's' if encounter.blow_count != 1 else '' }}{% if encounter.outcome %} &middot; {{ encounter.outcome }}{% endif %}{% if encounter.is_lethal %} <span style="color: #c98b8b;">[FATAL]</span>{% endif %}
                 </span>
             </div>
             <span style="font-size: 0.8rem; color: var(--ink-faded);">{{ encounter.season | title }} {{ encounter.year }}</span>
@@ -327,7 +347,8 @@ function addEventCard(event) {
 
     const timeDiv = document.createElement('div');
     timeDiv.className = 'event-time';
-    timeDiv.textContent = `${event.season || ''} ${event.year || ''} · ${event.type || ''}`;
+    const dateLabel = event.date_label || `${event.season || ''} ${event.year || ''}`;
+    timeDiv.textContent = `${dateLabel} · ${event.type || ''}`;
 
     const textDiv = document.createElement('div');
     textDiv.className = 'event-text';

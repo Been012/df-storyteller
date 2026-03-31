@@ -51,7 +51,7 @@ import df_storyteller.web.templates_setup  # noqa: F401, E402
 from df_storyteller.web.routers import (  # noqa: E402
     settings, highlights, notes, worlds,
     dashboard, quests, chronicle, stories, gazette,
-    dwarves, events,
+    dwarves, events, military,
     lore_index, lore_detail, lore_api,
 )
 
@@ -65,6 +65,7 @@ app.include_router(chronicle.router)
 app.include_router(stories.router)
 app.include_router(gazette.router)
 app.include_router(dwarves.router)
+app.include_router(military.router)
 app.include_router(events.router)
 app.include_router(lore_index.router)
 app.include_router(lore_detail.router)

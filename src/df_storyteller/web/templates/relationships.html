@@ -505,5 +505,10 @@ function toggleIsolated() { hideIsolated = document.getElementById('hide-isolate
 window.addEventListener('resize', () => { resize(); draw(); });
 resize();
 loadData();
+
+// Auto-switch to family view if ?view=family in URL
+if (new URLSearchParams(window.location.search).get('view') === 'family') {
+    switchGraphView('family');
+}
 </script>
 {% endblock %}

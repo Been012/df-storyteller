@@ -82,7 +82,7 @@ async def websocket_events(websocket: WebSocket):
             seen_files = current_files
 
             for fname in sorted(new_files):
-                if fname.startswith("snapshot_"):
+                if fname.startswith("snapshot_") or fname.startswith("delta_"):
                     continue
                 fpath = watch_dir / fname
                 try:
@@ -93,10 +93,19 @@ async def websocket_events(websocket: WebSocket):
                     event = parse_dfhack_event(data)
                     desc = _format_event(event)
                     desc = re.sub(r"^\[.*?\]\s*", "", desc)
+                    date_label = event.season.value.title()
+                    if event.month_name and event.day:
+                        date_label = f"{event.day} {event.month_name}"
+                    # Use report sub-type for display
+                    display_type = event.event_type.value
+                    if display_type == "report":
+                        raw = data.get("data", {})
+                        display_type = raw.get("report_type", "report") if isinstance(raw, dict) else "report"
                     await websocket.send_json({
-                        "type": event.event_type.value,
+                        "type": display_type,
                         "year": event.game_year,
                         "season": event.season.value,
+                        "date_label": date_label,
                         "description": desc,
                     })
                 except Exception:

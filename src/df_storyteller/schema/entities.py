@@ -41,7 +41,7 @@ class Dwarf(BaseModel):
     noble_positions: list[str] = Field(default_factory=list)
     military_squad: str = ""
     current_job: str = ""
-    equipment: list[str] = Field(default_factory=list)
+    equipment: list[str | dict] = Field(default_factory=list)  # str (legacy) or {description, mode}
     wounds: list[str | dict] = Field(default_factory=list)  # str (legacy) or {body_part, is_permanent, wound_type}
     pets: list[dict] = Field(default_factory=list)  # [{name, race, is_alive}]
     physical_attributes: dict[str, int] = Field(default_factory=dict)

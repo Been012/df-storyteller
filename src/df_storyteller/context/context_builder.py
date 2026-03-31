@@ -192,6 +192,40 @@ def _format_event(event: GameEvent) -> str:
                 return f"{prefix} MOOD COMPLETED: {name} completed a {mood} mood and created {artifact}"
             return f"{prefix} MOOD COMPLETED: {name} finished a {mood} mood"
 
+        if event.event_type == EventType.SYNDROME:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            syn = data.get("syndrome_name", "unknown")
+            return f"{prefix} SYNDROME: {name} was afflicted with {syn}"
+
+        if event.event_type == EventType.EQUIPMENT_CHANGE:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            item = data.get("item", "an item")
+            action = data.get("action", "changed")
+            return f"{prefix} EQUIPMENT: {name} {action} {item}"
+
+        if event.event_type == EventType.CHAT:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            msg = data.get("message", "")
+            return f"{prefix} CHAT: {name}: {msg}"
+
+        if event.event_type == EventType.REPORT:
+            rtype = data.get("report_type", "unknown")
+            text = data.get("text", "")
+            category = data.get("category", "")
+            label = rtype.replace("_", " ").upper()
+            return f"{prefix} {label}: {text}"
+
+        if event.event_type == EventType.INTERACTION:
+            att = data.get("attacker", {})
+            defe = data.get("defender", {})
+            att_name = att.get("name", "Unknown") if isinstance(att, dict) else "Unknown"
+            def_name = defe.get("name", "Unknown") if isinstance(defe, dict) else "Unknown"
+            interaction = data.get("interaction_name", "unknown")
+            return f"{prefix} INTERACTION: {att_name} used {interaction} on {def_name}"
+
         raw = data.get("raw_text", "")
         return f"{prefix} {event.event_type.value}: {raw}" if raw else f"{prefix} {event.event_type.value}"
 

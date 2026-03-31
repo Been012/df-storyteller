@@ -141,7 +141,15 @@
             <h3>Equipment</h3>
             <ul class="stat-list">
                 {% for item in dwarf.equipment %}
-                <li>{{ item }}</li>
+                <li>
+                    {% if item is mapping %}
+                        {% if item.mode == 'Weapon' %}&#x2694;{% elif item.mode == 'Strapped' %}&#x1F6E1;{% else %}&#x1F455;{% endif %}
+                        {{ item.description }}
+                        <span style="font-size: 0.75rem; color: var(--ink-faded);">({{ item.mode }})</span>
+                    {% else %}
+                        {{ item }}
+                    {% endif %}
+                </li>
                 {% endfor %}
             </ul>
             {% endif %}
