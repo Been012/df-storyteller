@@ -350,8 +350,17 @@ def _build_figure_context(legends: Any, hf_id: int) -> dict | None:
             level_name = _skill_level_name(level_num)
             skill_strs.append({"name": skill_name, "level": level_name, "level_num": level_num})
 
-    # Active interactions (curses)
-    interactions = [ai.replace("_", " ").title() for ai in hf.active_interactions]
+    # Active interactions (curses, secrets, powers)
+    def _describe_interaction(raw: str) -> str:
+        lower = raw.lower()
+        if "secret_undead_res" in lower:
+            return "Necromancy — can raise the dead"
+        if "secret" in lower:
+            return "Holds a dark secret (night creature power)"
+        if "mythical" in lower:
+            return "Granted a supernatural power by a deity"
+        return raw.replace("_", " ").title()
+    interactions = [_describe_interaction(ai) for ai in hf.active_interactions]
 
     # Journey pets
     pets = [p.replace("_", " ").title() for p in hf.journey_pets]
@@ -1494,6 +1503,94 @@ async def lore_cultural_form_page(request: Request, form_type: str, form_id: str
     return templates.TemplateResponse(request=request, name="lore_cultural_form.html", context={
         **ctx, "content_class": "content-wide", "form": form,
     })
+
+
+@router.get("/lore/region/{region_id}", response_class=HTMLResponse)
+async def lore_region_page(request: Request, region_id: str):
+    """Detail page for a geographic region."""
+    config = _get_config()
+    _, _, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ctx = _base_context(config, "lore", metadata)
+    if not world_lore.is_loaded or not world_lore._legends:
+        return RedirectResponse("/lore")
+    for region in world_lore._legends.regions:
+        if str(region.get("id", "")) == str(region_id):
+            fields = []
+            if region.get("type"):
+                fields.append(("Type", region["type"].replace("_", " ").title()))
+            if region.get("evilness"):
+                fields.append(("Evilness", region["evilness"].replace("_", " ").title()))
+            if region.get("coords"):
+                fields.append(("Coordinates", region["coords"]))
+            return templates.TemplateResponse(request=request, name="lore_geography.html", context={
+                **ctx, "content_class": "content-wide",
+                "geo": {"name": region.get("name", "Unknown"), "geo_type": "Region", "fields": fields, "description": ""},
+            })
+    return RedirectResponse("/lore")
+
+
+@router.get("/lore/landmass/{landmass_id}", response_class=HTMLResponse)
+async def lore_landmass_page(request: Request, landmass_id: str):
+    """Detail page for a landmass."""
+    config = _get_config()
+    _, _, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ctx = _base_context(config, "lore", metadata)
+    if not world_lore.is_loaded or not world_lore._legends:
+        return RedirectResponse("/lore")
+    for lm in world_lore._legends.landmasses:
+        if str(lm.get("id", "")) == str(landmass_id):
+            fields = []
+            if lm.get("coord_1"):
+                fields.append(("From", lm["coord_1"]))
+            if lm.get("coord_2"):
+                fields.append(("To", lm["coord_2"]))
+            return templates.TemplateResponse(request=request, name="lore_geography.html", context={
+                **ctx, "content_class": "content-wide",
+                "geo": {"name": lm.get("name", "Unknown"), "geo_type": "Landmass", "fields": fields, "description": ""},
+            })
+    return RedirectResponse("/lore")
+
+
+@router.get("/lore/river/{river_name}", response_class=HTMLResponse)
+async def lore_river_page(request: Request, river_name: str):
+    """Detail page for a river."""
+    config = _get_config()
+    _, _, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ctx = _base_context(config, "lore", metadata)
+    if not world_lore.is_loaded or not world_lore._legends:
+        return RedirectResponse("/lore")
+    for river in getattr(world_lore._legends, "rivers", []):
+        if river.get("name", "").lower() == river_name.lower():
+            fields = []
+            if river.get("end_pos"):
+                fields.append(("Empties at", river["end_pos"]))
+            return templates.TemplateResponse(request=request, name="lore_geography.html", context={
+                **ctx, "content_class": "content-wide",
+                "geo": {"name": river.get("name", "Unknown"), "geo_type": "River", "fields": fields, "description": ""},
+            })
+    return RedirectResponse("/lore")
+
+
+@router.get("/lore/peak/{peak_id}", response_class=HTMLResponse)
+async def lore_peak_page(request: Request, peak_id: str):
+    """Detail page for a mountain peak."""
+    config = _get_config()
+    _, _, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ctx = _base_context(config, "lore", metadata)
+    if not world_lore.is_loaded or not world_lore._legends:
+        return RedirectResponse("/lore")
+    for peak in getattr(world_lore._legends, "mountain_peaks", []):
+        if str(peak.get("id", "")) == str(peak_id):
+            fields = []
+            if peak.get("height"):
+                fields.append(("Height", f"{peak['height']}"))
+            if peak.get("coords"):
+                fields.append(("Coordinates", peak["coords"]))
+            return templates.TemplateResponse(request=request, name="lore_geography.html", context={
+                **ctx, "content_class": "content-wide",
+                "geo": {"name": peak.get("name", "Unknown"), "geo_type": "Mountain Peak", "fields": fields, "description": ""},
+            })
+    return RedirectResponse("/lore")
 
 
 @router.get("/lore/map", response_class=HTMLResponse)

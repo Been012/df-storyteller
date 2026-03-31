@@ -54,7 +54,7 @@
             <h3>Supernatural</h3>
             <ul class="stat-list">
                 {% for interaction in active_interactions %}
-                <li style="color: var(--danger);">{{ interaction }}</li>
+                <li style="color: var(--danger); cursor: pointer;" onclick="this.innerHTML = this.dataset.secret" data-secret="{{ interaction }}">[ Secret — click to reveal ]</li>
                 {% endfor %}
             </ul>
             {% endif %}

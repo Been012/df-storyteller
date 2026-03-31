@@ -659,7 +659,8 @@ async def api_lore_search(q: str = ""):
     for hfid, hf in legends.historical_figures.items():
         if count >= MAX_PER_CATEGORY:
             break
-        if query in hf.name.lower() or query in hf.race.lower():
+        searchable = f"{hf.name} {hf.race} {getattr(hf, 'associated_type', '')} {' '.join(hf.spheres)}".lower()
+        if query in searchable:
             race = hf.race.replace("_", " ").title() if hf.race else ""
             detail = race
             if hf.spheres:
@@ -681,7 +682,7 @@ async def api_lore_search(q: str = ""):
     for aid, art in legends.artifacts.items():
         if count >= MAX_PER_CATEGORY:
             break
-        searchable = f"{art.name} {art.item_type} {art.material}".lower()
+        searchable = f"{art.name} {art.item_type} {art.material} {art.description}".lower()
         if query in searchable:
             detail_parts = []
             if art.item_type:
@@ -710,7 +711,9 @@ async def api_lore_search(q: str = ""):
         if count >= MAX_PER_CATEGORY:
             break
         title = wc.get("title", "")
-        if query in title.lower():
+        wc_style = wc.get("style", "")
+        searchable = f"{title} {wc_style}".lower()
+        if query in searchable:
             wc_type = wc.get("type", "").replace("_", " ").title()
             author_id = wc.get("author")
             author_name = ""
@@ -736,6 +739,78 @@ async def api_lore_search(q: str = ""):
         if name and query in name.lower():
             ec_type = ec.get("type", "").replace("_", " ").title()
             results.append({"category": ec_type, "name": name, "detail": "", "id": ec.get("id", ""), "entity_type": "war"})
+            count += 1
+
+    # Search cultural forms (poetic, musical, dance)
+    count = 0
+    for form_type, forms in [("Poetic Form", legends.poetic_forms), ("Musical Form", legends.musical_forms), ("Dance Form", legends.dance_forms)]:
+        for form in forms:
+            if count >= MAX_PER_CATEGORY:
+                break
+            name = form.get("name", "")
+            desc = form.get("description", "")
+            searchable = f"{name} {desc}".lower()
+            if query in searchable:
+                fid = form.get("id", "")
+                detail = desc[:120] if desc else ""
+                entity_type = form_type.lower().replace(" ", "_")
+                results.append({
+                    "category": form_type,
+                    "name": name,
+                    "detail": detail,
+                    "id": fid,
+                    "entity_type": "cultural_form",
+                    "link": f"/lore/form/{entity_type}/{fid}" if fid else "",
+                })
+                count += 1
+
+    # Search regions
+    count = 0
+    for region in legends.regions:
+        if count >= MAX_PER_CATEGORY:
+            break
+        name = region.get("name", "") if isinstance(region, dict) else getattr(region, "name", "")
+        rtype = region.get("type", "") if isinstance(region, dict) else getattr(region, "type", "")
+        rid = region.get("id", "") if isinstance(region, dict) else getattr(region, "id", "")
+        searchable = f"{name} {rtype}".lower()
+        if query in searchable:
+            rtype_display = rtype.replace("_", " ").title() if rtype else ""
+            results.append({"category": "Region", "name": name, "detail": rtype_display, "id": rid, "entity_type": "region", "link": f"/lore/region/{rid}"})
+            count += 1
+
+    # Search landmasses
+    count = 0
+    for lm in getattr(legends, "landmasses", []):
+        if count >= MAX_PER_CATEGORY:
+            break
+        name = lm.get("name", "") if isinstance(lm, dict) else getattr(lm, "name", "")
+        if name and query in name.lower():
+            lm_id = lm.get("id", "") if isinstance(lm, dict) else getattr(lm, "id", "")
+            results.append({"category": "Landmass", "name": name, "detail": "", "id": lm_id, "entity_type": "landmass", "link": f"/lore/landmass/{lm_id}"})
+            count += 1
+
+    # Search rivers
+    count = 0
+    for river in getattr(legends, "rivers", []):
+        if count >= MAX_PER_CATEGORY:
+            break
+        name = river.get("name", "") if isinstance(river, dict) else ""
+        if name and query in name.lower():
+            from urllib.parse import quote
+            results.append({"category": "River", "name": name, "detail": "", "entity_type": "river", "link": f"/lore/river/{quote(name)}"})
+            count += 1
+
+    # Search mountain peaks
+    count = 0
+    for peak in getattr(legends, "mountain_peaks", []):
+        if count >= MAX_PER_CATEGORY:
+            break
+        name = peak.get("name", "") if isinstance(peak, dict) else ""
+        pid = peak.get("id", "") if isinstance(peak, dict) else ""
+        if name and query in name.lower():
+            height = peak.get("height", "") if isinstance(peak, dict) else ""
+            detail = f"Height: {height}" if height else ""
+            results.append({"category": "Mountain Peak", "name": name, "detail": detail, "id": pid, "entity_type": "peak", "link": f"/lore/peak/{pid}"})
             count += 1
 
     return {"results": results}

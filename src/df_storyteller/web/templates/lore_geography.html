@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ geo.name }} — df-storyteller{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 1rem;">
+    <a href="/lore" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Legends</a>
+</div>
+
+<div class="parchment">
+    <div class="char-sheet">
+        <div class="char-header">
+            <div class="char-name">{{ geo.name }}</div>
+            <div class="char-title">{{ geo.geo_type }}</div>
+        </div>
+
+        {% if geo.fields %}
+        <div class="bio-section" style="margin-top: 1rem;">
+            <table style="width: 100%; font-size: 0.9rem;">
+            {% for label, value in geo.fields %}
+                <tr>
+                    <td style="padding: 0.2rem 0.5rem; color: var(--ink-faded); white-space: nowrap; vertical-align: top;">{{ label }}</td>
+                    <td style="padding: 0.2rem 0.5rem;">{{ value }}</td>
+                </tr>
+            {% endfor %}
+            </table>
+        </div>
+        {% endif %}
+
+        {% if geo.description %}
+        <div class="bio-section" style="margin-top: 1rem;">
+            <div class="story-text" style="line-height: 1.8; text-align: justify;">
+                {{ geo.description }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
