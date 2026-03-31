@@ -225,6 +225,7 @@ local function serialize_unit(unit)
         profession = dfhack.units.getProfessionName(unit),
         is_alive = dfhack.units.isAlive(unit),
         stress_category = dfhack.units.getStressCategory(unit),
+        happiness = 0,
         age = unit_age,
         sex = unit.sex == 0 and 'female' or (unit.sex == 1 and 'male' or 'unknown'),
         birth_year = unit.birth_year or 0,
@@ -240,6 +241,8 @@ local function serialize_unit(unit)
         equipment = {},
         wounds = {},
     }
+
+    pcall(function() data.happiness = dfhack.units.getHappiness(unit) or 0 end)
 
     local soul = unit.status and unit.status.current_soul
 
@@ -502,7 +505,7 @@ local function serialize_unit(unit)
         end
     end)
 
-    -- Wounds
+    -- Wounds (with permanent injury detection)
     pcall(function()
         if unit.body and unit.body.wounds then
             for _, wound in ipairs(unit.body.wounds) do
@@ -511,10 +514,61 @@ local function serialize_unit(unit)
                         pcall(function()
                             local raw = df.creature_raw.find(unit.race)
                             local bp = raw.caste[unit.caste].body_info.body_parts[part.body_part_id].name_singular[0].value
-                            if bp then table.insert(data.wounds, bp) end
+                            if bp then
+                                local is_permanent = false
+                                local wound_type = 'injured'
+                                pcall(function()
+                                    if part.flags2 and part.flags2.severed then
+                                        is_permanent = true
+                                        wound_type = 'severed'
+                                    elseif part.flags2 and part.flags2.missing then
+                                        is_permanent = true
+                                        wound_type = 'missing'
+                                    elseif wound.age and wound.age > 1000 then
+                                        is_permanent = true
+                                        wound_type = 'old wound'
+                                    end
+                                end)
+                                table.insert(data.wounds, {
+                                    body_part = bp,
+                                    is_permanent = is_permanent,
+                                    wound_type = wound_type,
+                                })
+                            end
                         end)
                     end
                 end)
+            end
+        end
+    end)
+
+    -- Vampire / werebeast / assumed identity detection
+    data.is_vampire = false
+    data.is_werebeast = false
+    data.assumed_identity = ''
+    pcall(function()
+        if unit.curse then
+            pcall(function()
+                if unit.curse.add_tags1 and unit.curse.add_tags1.BLOODSUCKER then
+                    data.is_vampire = true
+                end
+            end)
+            pcall(function()
+                if unit.curse.add_tags1 and unit.curse.add_tags1.CRAZED then
+                    data.is_werebeast = true
+                end
+            end)
+        end
+    end)
+    pcall(function()
+        local identity = dfhack.units.getIdentity(unit)
+        if identity and identity.name then
+            local id_name = ''
+            pcall(function()
+                id_name = dfhack.df2utf(dfhack.translation.translateName(identity.name, true))
+            end)
+            if id_name ~= '' then
+                data.assumed_identity = id_name
             end
         end
     end)
@@ -676,18 +730,83 @@ for _, unit in ipairs(df.global.world.units.active) do
     end
 end
 
--- Buildings
+-- Buildings (with owner, room type, workshop details)
 local buildings = {}
 for _, building in ipairs(df.global.world.buildings.all) do
     local ok, data = pcall(function()
-        return {
+        local bdata = {
             building_type = df.building_type[building:getType()] or 'unknown',
             name = dfhack.buildings.getName(building) or '',
             position = { x = building.centerx, y = building.centery, z = building.z },
+            owner_name = '',
+            owner_id = -1,
+            room_type = '',
+            job_count = 0,
         }
+        pcall(function()
+            if building.owner and building.owner >= 0 then
+                bdata.owner_id = building.owner
+                local owner_unit = df.unit.find(building.owner)
+                if owner_unit then bdata.owner_name = safe_unit_name(owner_unit) end
+            end
+        end)
+        pcall(function()
+            if building.is_room then
+                bdata.room_type = 'room'
+            end
+        end)
+        pcall(function()
+            if building.jobs then
+                bdata.job_count = #building.jobs
+            end
+        end)
+        return bdata
     end)
     if ok then table.insert(buildings, data) end
 end
+
+-- Artifacts (fortress-created and held)
+local artifacts = {}
+pcall(function()
+    for _, artifact in ipairs(df.global.world.artifacts.all) do
+        pcall(function()
+            local adata = {
+                artifact_id = artifact.id,
+                name = '',
+                item_type = '',
+                material = '',
+                creator_unit_id = -1,
+                creator_name = '',
+            }
+            pcall(function()
+                if artifact.item then
+                    adata.name = dfhack.items.getDescription(artifact.item, 0, true) or ''
+                    pcall(function() adata.item_type = df.item_type[artifact.item:getType()] or '' end)
+                    pcall(function()
+                        local mat_info = dfhack.matinfo.decode(artifact.item)
+                        if mat_info then adata.material = mat_info:toString() end
+                    end)
+                    pcall(function()
+                        if artifact.item.maker and artifact.item.maker.unit_id >= 0 then
+                            adata.creator_unit_id = artifact.item.maker.unit_id
+                            local creator = df.unit.find(adata.creator_unit_id)
+                            if creator then adata.creator_name = safe_unit_name(creator) end
+                        end
+                    end)
+                end
+            end)
+            pcall(function()
+                if artifact.name and artifact.name.has_name then
+                    local art_name = dfhack.df2utf(dfhack.translation.translateName(artifact.name, true))
+                    if art_name ~= '' then adata.name = art_name end
+                end
+            end)
+            if adata.name ~= '' then
+                table.insert(artifacts, adata)
+            end
+        end)
+    end
+end)
 
 -- Write snapshot
 local year = df.global.cur_year
@@ -706,6 +825,7 @@ local snapshot = {
         visitors = visitors,
         animals = animals,
         buildings = buildings,
+        artifacts = artifacts,
     },
 }
 

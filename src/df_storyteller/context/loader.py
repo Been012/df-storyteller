@@ -148,8 +148,9 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
         age=citizen.get("age", 0),
         skills=skills,
         stress_category=citizen.get("stress_category", 3),
+        happiness=citizen.get("happiness", 0),
         relationships=relationships,
-        birth_year=0,
+        birth_year=citizen.get("birth_year", 0),
         is_alive=citizen.get("is_alive", True),
         personality=_load_personality(citizen),
         noble_positions=citizen.get("noble_positions", []),
@@ -160,6 +161,9 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
         pets=citizen.get("pets", []),
         physical_attributes=citizen.get("physical_attributes", {}),
         mental_attributes=citizen.get("mental_attributes", {}),
+        is_vampire=citizen.get("is_vampire", False),
+        is_werebeast=citizen.get("is_werebeast", False),
+        assumed_identity=citizen.get("assumed_identity", ""),
     )
 
 
@@ -382,6 +386,7 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                     _load_animal_from_snapshot(a) for a in data.get("animals", [])
                 ]
                 metadata["buildings"] = data.get("buildings", [])
+                metadata["artifacts"] = data.get("artifacts", [])
 
                 # Register citizens
                 for citizen in data.get("citizens", []):

@@ -19,8 +19,12 @@ from df_storyteller.schema.events import (
     BirthEvent,
     BuildingData,
     BuildingEvent,
+    CaravanData,
+    CaravanEvent,
     CombatData,
     CombatEvent,
+    CrimeData,
+    CrimeEvent,
     DeathData,
     DeathEvent,
     EventSource,
@@ -28,6 +32,8 @@ from df_storyteller.schema.events import (
     GameEvent,
     JobData,
     JobEvent,
+    MandateData,
+    MandateEvent,
     MigrantArrivedData,
     MigrantArrivedEvent,
     MigrationWaveData,
@@ -43,6 +49,8 @@ from df_storyteller.schema.events import (
     Season,
     SeasonChangeData,
     SeasonChangeEvent,
+    SiegeData,
+    SiegeEvent,
     StressChangeData,
     StressChangeEvent,
     UnitRef,
@@ -137,6 +145,7 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                     unit=_parse_unit_ref(data.get("unit", data)),
                     mood_type=data.get("mood_type", "unknown"),
                     skill_used=data.get("skill_used", ""),
+                    claimed_materials=data.get("claimed_materials", []),
                 ),
             )
 
@@ -282,6 +291,50 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                 event_type=EventType.RELATIONSHIP_FORMED,
                 **base_kwargs,
                 data=data,
+            )
+
+        case "mandate":
+            return MandateEvent(
+                **base_kwargs,
+                data=MandateData(
+                    issuer=_parse_unit_ref(data["issuer"]) if data.get("issuer") else None,
+                    mandate_type=data.get("mandate_type", "unknown"),
+                    item_type=data.get("item_type", ""),
+                    material=data.get("material", ""),
+                ),
+            )
+
+        case "crime":
+            return CrimeEvent(
+                **base_kwargs,
+                data=CrimeData(
+                    crime_type=data.get("crime_type", "unknown"),
+                    victim=_parse_unit_ref(data["victim"]) if data.get("victim") else None,
+                    suspect=_parse_unit_ref(data["suspect"]) if data.get("suspect") else None,
+                ),
+            )
+
+        case "caravan":
+            return CaravanEvent(
+                **base_kwargs,
+                data=CaravanData(
+                    caravan_type=data.get("caravan_type", ""),
+                    civilization=data.get("civilization", ""),
+                    civ_id=data.get("civ_id", -1),
+                    visitor=_parse_unit_ref(data["visitor"]) if data.get("visitor") else None,
+                ),
+            )
+
+        case "siege":
+            return SiegeEvent(
+                **base_kwargs,
+                data=SiegeData(
+                    status=data.get("status", ""),
+                    invader_count=data.get("invader_count", 0),
+                    invader_race=data.get("invader_race", ""),
+                    civilization=data.get("civilization", ""),
+                    civ_id=data.get("civ_id", -1),
+                ),
             )
 
         case _:

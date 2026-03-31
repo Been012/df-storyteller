@@ -13,14 +13,18 @@ from df_storyteller.context.character_tracker import CharacterTracker
 from df_storyteller.context.event_store import EventStore
 from df_storyteller.context.world_lore import WorldLore
 from df_storyteller.schema.events import (
+    CaravanData,
+    CrimeData,
     EventType,
     GameEvent,
+    MandateData,
     MigrantArrivedData,
     MigrationWaveData,
     MilitaryChangeData,
     NobleAppointmentData,
     ProfessionChangeData,
     Season,
+    SiegeData,
     StressChangeData,
 )
 
@@ -82,7 +86,8 @@ def _format_event(event: GameEvent) -> str:
 
     if hasattr(data, "mood_type"):
         unit_name = data.unit.name if hasattr(data.unit, "name") else "Unknown"
-        return f"{prefix} MOOD: {unit_name} entered a {data.mood_type} mood"
+        materials = f" (claiming: {', '.join(data.claimed_materials)})" if data.claimed_materials else ""
+        return f"{prefix} MOOD: {unit_name} entered a {data.mood_type} mood{materials}"
 
     if hasattr(data, "artifact_name"):
         creator = data.creator.name if data.creator else "Unknown"
@@ -116,6 +121,23 @@ def _format_event(event: GameEvent) -> str:
         return f"{prefix} MIGRANT: {_strip_profession(data.unit.name)} arrived at the fortress"
     if isinstance(data, MigrationWaveData):
         return f"{prefix} MIGRANTS: {data.new_arrivals} new dwarves arrived (population: {data.total_population})"
+    if isinstance(data, MandateData):
+        issuer = data.issuer.name if data.issuer else "A noble"
+        item = data.item_type or data.material or "certain goods"
+        return f"{prefix} MANDATE: {issuer} issued a {data.mandate_type.replace('_', ' ')} on {item}"
+    if isinstance(data, CrimeData):
+        victim = data.victim.name if data.victim else "unknown"
+        suspect = data.suspect.name if data.suspect else "unknown suspect"
+        return f"{prefix} CRIME: {data.crime_type.replace('_', ' ')} — victim: {victim}, suspect: {suspect}"
+    if isinstance(data, CaravanData):
+        civ = data.civilization or "an unknown civilization"
+        return f"{prefix} CARAVAN: A {data.caravan_type} from {civ} has arrived"
+    if isinstance(data, SiegeData):
+        if data.status == "ended":
+            return f"{prefix} SIEGE ENDED: The invaders have been defeated or driven off"
+        race = data.invader_race.replace("_", " ").title() if data.invader_race else "Unknown"
+        civ = data.civilization or "an unknown force"
+        return f"{prefix} SIEGE: {data.invader_count} {race} invaders from {civ} attack!"
 
     # Dict-based events
     if isinstance(data, dict):

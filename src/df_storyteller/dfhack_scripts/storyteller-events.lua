@@ -37,6 +37,10 @@ local event_flags = {
     building_created = true,
     job_completed = true,
     season_change = true,
+    mandate = true,
+    crime = true,
+    caravan = true,
+    siege = true,
 }
 
 --- Get the current season name from the year tick.
@@ -58,6 +62,12 @@ if not dfhack.storyteller_state then
         prev_population = 0,
         prev_stress = {},
         poll_count = 0,
+        prev_mandates = {},
+        prev_crimes = {},
+        peak_population = 0,
+        death_count = 0,
+        known_caravans = {},
+        siege_active = false,
     }
 end
 local state = dfhack.storyteller_state
@@ -224,6 +234,7 @@ local function on_unit_death(unit_id)
     end)
 
     write_event('death', data)
+    state.death_count = (state.death_count or 0) + 1
 end
 
 --- Handle building creation events.
@@ -288,9 +299,27 @@ local function poll_moods()
                     [4] = 'fell',
                 }
 
+                -- Try to capture claimed materials from the mood job
+                local claimed = {}
+                pcall(function()
+                    if unit.job and unit.job.current_job and unit.job.current_job.items then
+                        for _, item_ref in ipairs(unit.job.current_job.items) do
+                            pcall(function()
+                                if item_ref.item then
+                                    local desc = dfhack.items.getDescription(item_ref.item, 0, true)
+                                    if desc and desc ~= '' then
+                                        table.insert(claimed, desc)
+                                    end
+                                end
+                            end)
+                        end
+                    end
+                end)
+
                 write_event('mood', {
                     unit = serialize_unit(unit),
                     mood_type = mood_names[unit.mood] or 'unknown',
+                    claimed_materials = claimed,
                 })
             end
         end
@@ -312,11 +341,22 @@ local function poll_season()
             end
         end
 
+        state.peak_population = math.max(state.peak_population or 0, pop)
+
         write_event('season_change', {
             new_season = current,
             population = pop,
-            fortress_wealth = 0,
+            fortress_wealth = (function()
+                local ok, val = pcall(function()
+                    return df.global.plotinfo.tasks.wealth.total
+                end)
+                return ok and val or 0
+            end)(),
+            deaths_this_season = state.death_count or 0,
+            peak_population = state.peak_population or 0,
         })
+
+        state.death_count = 0
 
         -- Auto-snapshot on season change to capture current dwarf state.
         -- Schedule slightly after the season tick to avoid issues with
@@ -467,6 +507,179 @@ local function poll_changes()
     state.prev_population = current_pop
 end
 
+--- Poll for new noble mandates.
+local function poll_mandates()
+    if not event_flags.mandate then return end
+    pcall(function()
+        local mandates = df.global.plotinfo.tasks.mandates
+        if not mandates then return end
+        for i, mandate in ipairs(mandates) do
+            pcall(function()
+                local key = tostring(i) .. '_' .. tostring(mandate.mode or 0) .. '_' .. tostring(mandate.item_type or 0)
+                if state.prev_mandates[key] then return end
+                state.prev_mandates[key] = true
+                local data = {
+                    mandate_type = 'unknown',
+                    item_type = '',
+                    material = '',
+                    issuer = nil,
+                }
+                pcall(function()
+                    if mandate.mode == 0 then data.mandate_type = 'export_prohibition'
+                    elseif mandate.mode == 1 then data.mandate_type = 'production_order'
+                    else data.mandate_type = tostring(mandate.mode) end
+                end)
+                pcall(function()
+                    if mandate.item_type >= 0 then
+                        data.item_type = df.item_type[mandate.item_type] or tostring(mandate.item_type)
+                    end
+                end)
+                pcall(function()
+                    if mandate.mat_type >= 0 then
+                        local mat = dfhack.matinfo.decode(mandate.mat_type, mandate.mat_index)
+                        if mat then data.material = mat:toString() end
+                    end
+                end)
+                pcall(function()
+                    if mandate.unit and mandate.unit.id then
+                        data.issuer = serialize_unit(mandate.unit)
+                    end
+                end)
+                write_event('mandate', data)
+            end)
+        end
+    end)
+end
+
+--- Poll for new crime/incident reports.
+local function poll_crimes()
+    if not event_flags.crime then return end
+    pcall(function()
+        local incidents = df.global.world.incidents.all
+        if not incidents then return end
+        for _, incident in ipairs(incidents) do
+            pcall(function()
+                local key = tostring(incident.id)
+                if state.prev_crimes[key] then return end
+                state.prev_crimes[key] = true
+                local data = {
+                    crime_type = 'unknown',
+                    victim = nil,
+                    suspect = nil,
+                }
+                pcall(function()
+                    if incident.type then
+                        data.crime_type = df.incident_type[incident.type] or tostring(incident.type)
+                    end
+                end)
+                pcall(function()
+                    if incident.victim and incident.victim >= 0 then
+                        local victim = df.unit.find(incident.victim)
+                        if victim then data.victim = serialize_unit(victim) end
+                    end
+                end)
+                pcall(function()
+                    if incident.criminal and incident.criminal >= 0 then
+                        local suspect = df.unit.find(incident.criminal)
+                        if suspect then data.suspect = serialize_unit(suspect) end
+                    end
+                end)
+                write_event('crime', data)
+            end)
+        end
+    end)
+end
+
+--- Poll for caravan/diplomat arrivals.
+local function poll_caravans()
+    if not event_flags.caravan then return end
+    pcall(function()
+        for _, unit in ipairs(df.global.world.units.active) do
+            pcall(function()
+                if not dfhack.units.isAlive(unit) then return end
+                local uid = unit.id
+                if state.known_caravans[uid] then return end
+                local caravan_type = nil
+                pcall(function()
+                    if unit.flags1.merchant then caravan_type = 'merchant' end
+                end)
+                pcall(function()
+                    if unit.flags1.diplomat then caravan_type = 'diplomat' end
+                end)
+                if not caravan_type then return end
+                state.known_caravans[uid] = true
+                local civ_name = ''
+                pcall(function()
+                    if unit.civ_id >= 0 then
+                        local entity = df.historical_entity.find(unit.civ_id)
+                        if entity and entity.name then
+                            civ_name = dfhack.df2utf(dfhack.translation.translateName(entity.name, true))
+                        end
+                    end
+                end)
+                write_event('caravan', {
+                    caravan_type = caravan_type,
+                    civilization = civ_name,
+                    civ_id = unit.civ_id,
+                    visitor = serialize_unit(unit),
+                })
+            end)
+        end
+    end)
+end
+
+--- Poll for siege / invasion events.
+local function poll_sieges()
+    if not event_flags.siege then return end
+    pcall(function()
+        local invader_count = 0
+        local invader_race = ''
+        local invader_civ = ''
+        local invader_civ_id = -1
+        for _, unit in ipairs(df.global.world.units.active) do
+            pcall(function()
+                if dfhack.units.isAlive(unit) and unit.flags1 and unit.flags1.active_invader then
+                    invader_count = invader_count + 1
+                    if invader_race == '' then
+                        pcall(function()
+                            invader_race = df.creature_raw.find(unit.race).creature_id
+                        end)
+                        pcall(function()
+                            if unit.civ_id >= 0 then
+                                invader_civ_id = unit.civ_id
+                                local entity = df.historical_entity.find(unit.civ_id)
+                                if entity and entity.name then
+                                    invader_civ = dfhack.df2utf(dfhack.translation.translateName(entity.name, true))
+                                end
+                            end
+                        end)
+                    end
+                end
+            end)
+        end
+        local was_active = state.siege_active or false
+        if invader_count > 0 and not was_active then
+            state.siege_active = true
+            write_event('siege', {
+                status = 'started',
+                invader_count = invader_count,
+                invader_race = invader_race,
+                civilization = invader_civ,
+                civ_id = invader_civ_id,
+            })
+        elseif invader_count == 0 and was_active then
+            state.siege_active = false
+            write_event('siege', {
+                status = 'ended',
+                invader_count = 0,
+                invader_race = '',
+                civilization = '',
+                civ_id = -1,
+            })
+        end
+    end)
+end
+
 --- Main tick handler.
 local function on_tick()
     if not state.enabled then return end
@@ -477,6 +690,10 @@ local function on_tick()
         poll_season()
         poll_births()
         poll_changes()
+        poll_mandates()
+        poll_crimes()
+        poll_caravans()
+        poll_sieges()
     end)
 
     if not ok then

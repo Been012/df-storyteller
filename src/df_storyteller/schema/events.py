@@ -33,6 +33,10 @@ class EventType(str, Enum):
     TANTRUM = "tantrum"
     SKILL_LEVEL_UP = "skill_level_up"
     RELATIONSHIP_FORMED = "relationship_formed"
+    MANDATE = "mandate"
+    CRIME = "crime"
+    CARAVAN = "caravan"
+    SIEGE = "siege"
 
 
 class EventSource(str, Enum):
@@ -125,6 +129,7 @@ class MoodData(BaseModel):
     unit: UnitRef
     mood_type: str  # fey, secretive, possessed, macabre, fell
     skill_used: str = ""
+    claimed_materials: list[str] = Field(default_factory=list)
 
 
 class MoodEvent(GameEvent):
@@ -251,3 +256,51 @@ class MigrationWaveData(BaseModel):
 class MigrationWaveEvent(GameEvent):
     event_type: Literal[EventType.MIGRATION_WAVE] = EventType.MIGRATION_WAVE
     data: MigrationWaveData  # type: ignore[assignment]
+
+
+class MandateData(BaseModel):
+    issuer: UnitRef | None = None
+    mandate_type: str = "unknown"  # export_prohibition, production_order
+    item_type: str = ""
+    material: str = ""
+
+
+class MandateEvent(GameEvent):
+    event_type: Literal[EventType.MANDATE] = EventType.MANDATE
+    data: MandateData  # type: ignore[assignment]
+
+
+class CrimeData(BaseModel):
+    crime_type: str = "unknown"
+    victim: UnitRef | None = None
+    suspect: UnitRef | None = None
+
+
+class CrimeEvent(GameEvent):
+    event_type: Literal[EventType.CRIME] = EventType.CRIME
+    data: CrimeData  # type: ignore[assignment]
+
+
+class CaravanData(BaseModel):
+    caravan_type: str = ""  # merchant, diplomat
+    civilization: str = ""
+    civ_id: int = -1
+    visitor: UnitRef | None = None
+
+
+class CaravanEvent(GameEvent):
+    event_type: Literal[EventType.CARAVAN] = EventType.CARAVAN
+    data: CaravanData  # type: ignore[assignment]
+
+
+class SiegeData(BaseModel):
+    status: str = ""  # started, ended
+    invader_count: int = 0
+    invader_race: str = ""
+    civilization: str = ""
+    civ_id: int = -1
+
+
+class SiegeEvent(GameEvent):
+    event_type: Literal[EventType.SIEGE] = EventType.SIEGE
+    data: SiegeData  # type: ignore[assignment]

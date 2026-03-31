@@ -30,6 +30,7 @@ class Dwarf(BaseModel):
     age: float = 0.0
     skills: list[Skill] = Field(default_factory=list)
     stress_category: int = 3  # 0=ecstatic, 6=on the edge
+    happiness: int = 0  # Actual happiness value (more granular than stress_category)
     relationships: list[Relationship] = Field(default_factory=list)
     event_ids: list[int] = Field(default_factory=list)
     birth_year: int = 0
@@ -40,10 +41,13 @@ class Dwarf(BaseModel):
     military_squad: str = ""
     current_job: str = ""
     equipment: list[str] = Field(default_factory=list)
-    wounds: list[str] = Field(default_factory=list)
+    wounds: list[str | dict] = Field(default_factory=list)  # str (legacy) or {body_part, is_permanent, wound_type}
     pets: list[dict] = Field(default_factory=list)  # [{name, race, is_alive}]
     physical_attributes: dict[str, int] = Field(default_factory=dict)
     mental_attributes: dict[str, int] = Field(default_factory=dict)
+    is_vampire: bool = False
+    is_werebeast: bool = False
+    assumed_identity: str = ""  # Non-empty if unit is using a fake name
 
 
 class Animal(BaseModel):
