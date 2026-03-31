@@ -233,11 +233,10 @@ class TestPageRoutes:
             assert resp.status_code == 200
 
     def test_lore_page_no_legends(self, client, config, game_state, fortress_dir):
-        # Without legends loaded, lore page returns 500 due to uninitialized
-        # variables (pre-existing bug — route assumes legends are always preloaded).
+        # Without legends loaded, lore page renders with empty data sections.
         with _patch_all(f"{R}.lore_index", config, game_state, fortress_dir):
             resp = client.get("/lore")
-            assert resp.status_code == 500
+            assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ class PathsConfig(BaseModel):
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     model: str = "llama3"
+    num_ctx: int = 32768  # Context window size sent to Ollama (default 2048 is too small)
 
 
 class LLMConfig(BaseModel):
@@ -40,6 +41,8 @@ class LLMConfig(BaseModel):
     api_key_env: str = ""  # Legacy: env var name fallback
     max_tokens: int = 4096
     temperature: float = 0.8
+    top_p: float = 1.0  # Nucleus sampling (1.0 = disabled)
+    repetition_penalty: float = 1.0  # Penalize repeated phrases (1.0 = disabled, >1.0 = penalize)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
 
 
@@ -53,6 +56,7 @@ class StoryConfig(BaseModel):
     chronicle_auto_generate: bool = False
     chronicle_trigger: str = "season"  # season | manual
     narrative_style: str = "dramatic"  # dramatic | factual | humorous
+    author_instructions: str = ""  # Custom user instructions appended to all story prompts
     biography_max_tokens: int = 1024  # Bios should be short — they get updated over time
     chronicle_max_tokens: int = 4096
     saga_max_tokens: int = 4096

@@ -365,6 +365,10 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
     # Loads saved history from previous sessions + current session lines,
     # deduplicates, and persists the combined set for next time.
     gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    if not gamelog_path and config.paths.df_install:
+        candidate = Path(config.paths.df_install) / "gamelog.txt"
+        if candidate.exists():
+            gamelog_path = candidate
     if gamelog_path and gamelog_path.exists():
         from df_storyteller.ingestion.gamelog_parser import GamelogParser
         from df_storyteller.schema.events import Season as SeasonEnum
@@ -384,10 +388,29 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         # Read current session lines from gamelog.txt
         current_lines = _read_current_session_gamelog(gamelog_path)
 
-        # Merge: saved history + current session, deduplicate while preserving order
-        saved_set = set(saved_lines)
-        new_lines = [l for l in current_lines if l not in saved_set]
-        all_lines = saved_lines + new_lines
+        # Merge: saved history + current session lines.
+        # Deduplicate by finding where the saved history ends in the current
+        # session rather than filtering individual lines — DF legitimately
+        # repeats lines like injury descriptions within a single fight.
+        if saved_lines and current_lines:
+            # Find the longest suffix of saved_lines that matches a prefix of
+            # current_lines (i.e. overlapping region from last save).
+            overlap = 0
+            saved_len = len(saved_lines)
+            for start in range(saved_len):
+                tail = saved_lines[start:]
+                tail_len = len(tail)
+                if tail_len <= len(current_lines) and current_lines[:tail_len] == tail:
+                    overlap = tail_len
+                    break
+            new_lines = current_lines[overlap:]
+            all_lines = saved_lines + new_lines
+        elif saved_lines:
+            new_lines = []
+            all_lines = saved_lines
+        else:
+            new_lines = current_lines
+            all_lines = current_lines
 
         # Persist the combined lines for next session
         if new_lines:

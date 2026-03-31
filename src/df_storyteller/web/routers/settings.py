@@ -46,9 +46,30 @@ async def save_settings(request: Request):
     config.paths.df_install = form.get("df_install", config.paths.df_install)
     config.story.no_llm_mode = form.get("no_llm_mode") == "true"
     config.llm.provider = form.get("llm_provider", config.llm.provider)
+    if form.get("model_name") is not None:
+        config.llm.model = form["model_name"]
     if form.get("api_key"):
         config.llm.api_key = form["api_key"]
+    if form.get("ollama_model"):
+        config.llm.ollama.model = form["ollama_model"]
+    if form.get("ollama_base_url"):
+        config.llm.ollama.base_url = form["ollama_base_url"]
+    try:
+        num_ctx = form.get("ollama_num_ctx")
+        if num_ctx:
+            config.llm.ollama.num_ctx = int(num_ctx)
+    except (ValueError, TypeError):
+        pass
     config.story.narrative_style = form.get("narrative_style", config.story.narrative_style)
+    if form.get("author_instructions") is not None:
+        config.story.author_instructions = form["author_instructions"]
+    for field in ("temperature", "top_p", "repetition_penalty"):
+        try:
+            val = form.get(field)
+            if val:
+                setattr(config.llm, field, float(val))
+        except (ValueError, AttributeError):
+            pass
     for field in ("chronicle_max_tokens", "biography_max_tokens", "saga_max_tokens", "chat_summary_max_tokens", "gazette_max_tokens", "quest_generation_max_tokens", "quest_narrative_max_tokens"):
         try:
             val = form.get(field)

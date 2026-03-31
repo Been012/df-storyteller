@@ -79,18 +79,30 @@ async def api_generate_chronicle(request: Request):
 
 
 async def _stream_chronicle(config: AppConfig, one_time_context: str = "") -> AsyncGenerator[str, None]:
-    from df_storyteller.stories.chronicle import generate_chronicle
+    from df_storyteller.stories.chronicle import prepare_chronicle
+    from df_storyteller.stories.base import create_provider
     try:
         fortress_dir = _get_fortress_dir(config)
-        result = await generate_chronicle(config, None, one_time_context=one_time_context, output_dir=fortress_dir)
-        # Simulate streaming by yielding in chunks
-        words = result.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
-    except Exception as e:
+        system_prompt, user_prompt, max_tokens, temperature, save = await prepare_chronicle(
+            config, None, one_time_context=one_time_context, output_dir=fortress_dir,
+        )
+        provider = create_provider(config)
+        full_text = ""
+        async for chunk in provider.stream_generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ):
+            full_text += chunk
+            yield chunk
+        save(full_text)
+    except ValueError as e:
+        logger.warning("Generation failed: %s", e)
+        yield f"Error: {e}"
+    except Exception:
         logger.exception("Generation failed")
-        yield "Error: generation failed. Check server logs for details."
+        yield "Error: generation failed. Check Settings and try again."
 
 
 @router.post("/api/chronicle/manual")

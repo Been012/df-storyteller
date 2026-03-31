@@ -7,15 +7,17 @@ Ref: https://docs.anthropic.com/en/docs
 from __future__ import annotations
 
 import os
+from typing import AsyncGenerator
 
 from df_storyteller.llm.base import LLMProvider
 
 
 class ClaudeProvider(LLMProvider):
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514", api_key: str = "") -> None:
+    def __init__(self, model: str = "claude-sonnet-4-20250514", api_key: str = "", top_p: float = 1.0) -> None:
         self._model = model
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self._top_p = top_p
         if not self._api_key:
             raise ValueError(
                 "No Anthropic API key found. Run 'python -m df_storyteller init' to configure, "
@@ -33,16 +35,62 @@ class ClaudeProvider(LLMProvider):
 
         try:
             client = anthropic.AsyncAnthropic(api_key=self._api_key)
-            message = await client.messages.create(
-                model=self._model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
+            kwargs: dict = {
+                "model": self._model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+            }
+            if self._top_p < 1.0:
+                kwargs["top_p"] = self._top_p
+            message = await client.messages.create(**kwargs)
             if not message.content:
                 return "[Claude returned an empty response. Try again or check your prompt.]"
             return message.content[0].text
+        except anthropic.AuthenticationError:
+            raise ValueError(
+                "Invalid Anthropic API key. Check your key in Settings or run 'python -m df_storyteller init'."
+            )
+        except anthropic.RateLimitError:
+            raise ValueError(
+                "Anthropic rate limit reached. Wait a moment and try again."
+            )
+        except anthropic.APIConnectionError:
+            raise ValueError(
+                "Cannot connect to the Anthropic API. Check your internet connection."
+            )
+        except anthropic.BadRequestError as e:
+            if "max_tokens" in str(e).lower() or "context" in str(e).lower():
+                raise ValueError(
+                    "Prompt too large for Claude's context window. Try reducing token limits in Settings, "
+                    "or generate shorter content."
+                )
+            raise ValueError(f"Claude API error: {e}")
+
+    async def stream_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 4096,
+        temperature: float = 0.8,
+    ) -> AsyncGenerator[str, None]:
+        import anthropic
+
+        try:
+            client = anthropic.AsyncAnthropic(api_key=self._api_key)
+            kwargs: dict = {
+                "model": self._model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "system": system_prompt,
+                "messages": [{"role": "user", "content": user_prompt}],
+            }
+            if self._top_p < 1.0:
+                kwargs["top_p"] = self._top_p
+            async with client.messages.stream(**kwargs) as stream:
+                async for text in stream.text_stream:
+                    yield text
         except anthropic.AuthenticationError:
             raise ValueError(
                 "Invalid Anthropic API key. Check your key in Settings or run 'python -m df_storyteller init'."

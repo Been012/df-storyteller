@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from df_storyteller.config import AppConfig
@@ -12,13 +13,17 @@ from df_storyteller.llm.prompt_templates import render_system_prompt, render_use
 from df_storyteller.stories.base import create_provider
 
 
-async def generate_chronicle(
+async def prepare_chronicle(
     config: AppConfig,
     season_spec: str | None = None,
     one_time_context: str = "",
     output_dir: Path | None = None,
-) -> str:
-    """Generate a fortress chronicle entry from all available game data."""
+) -> tuple[str, str, int, float, Callable[[str], None]]:
+    """Prepare prompts for chronicle generation.
+
+    Returns (system_prompt, user_prompt, max_tokens, temperature, save_fn)
+    where save_fn persists the generated text to the fortress journal.
+    """
     provider = create_provider(config)
     event_store, character_tracker, world_lore, metadata = load_game_state(config)
 
@@ -65,12 +70,12 @@ async def generate_chronicle(
         events_section = ""
 
     # Combine: fortress context + captured events + any existing context
-    parts = [fortress_context]
+    ctx_parts = [fortress_context]
     if events_section:
-        parts.append(events_section)
+        ctx_parts.append(events_section)
     if ctx.events_text.strip():
-        parts.append(ctx.events_text)
-    ctx.events_text = "\n\n".join(p for p in parts if p)
+        ctx_parts.append(ctx.events_text)
+    ctx.events_text = "\n\n".join(p for p in ctx_parts if p)
     ctx.year = year
     ctx.season = season
 
@@ -149,20 +154,38 @@ async def generate_chronicle(
         highlights_text = "PLAYER-HIGHLIGHTED DWARVES (give these characters more narrative focus):\n" + "\n".join(highlight_lines)
         ctx.lore_text = (ctx.lore_text + "\n\n" + highlights_text).strip()
 
+    ctx.author_instructions = config.story.author_instructions
     system_prompt = render_system_prompt(ctx)
     user_prompt = render_user_prompt(ctx)
 
+    def save(text: str) -> None:
+        from df_storyteller.output.journal import append_to_journal
+        append_to_journal(config, text, year, season, output_dir)
+
+    return system_prompt, user_prompt, config.story.chronicle_max_tokens, config.llm.temperature, save
+
+
+async def generate_chronicle(
+    config: AppConfig,
+    season_spec: str | None = None,
+    one_time_context: str = "",
+    output_dir: Path | None = None,
+) -> str:
+    """Generate a fortress chronicle entry from all available game data."""
+    system_prompt, user_prompt, max_tokens, temperature, save = await prepare_chronicle(
+        config, season_spec, one_time_context, output_dir,
+    )
+
+    provider = create_provider(config)
     try:
         story = await provider.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=config.story.chronicle_max_tokens,
-            temperature=config.llm.temperature,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
     except Exception as e:
         return f"[Chronicle generation failed: {e}. Check your LLM provider settings and try again.]"
 
-    from df_storyteller.output.journal import append_to_journal
-    append_to_journal(config, story, year, season, output_dir)
-
+    save(story)
     return story

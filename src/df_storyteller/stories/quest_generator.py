@@ -319,15 +319,16 @@ Return ONLY a JSON array, no other text."""
     return quests
 
 
-async def generate_completion_narrative(
+async def prepare_completion_narrative(
     config: AppConfig,
     quest: Quest,
     output_dir: Path | None = None,
-) -> str:
-    """Generate a narrative describing how a quest was fulfilled."""
-    provider = create_provider(config)
-    event_store, character_tracker, world_lore, metadata = load_game_state(config)
+) -> tuple[str, str, int, float]:
+    """Prepare prompts for quest completion narrative.
 
+    Returns (system_prompt, user_prompt, max_tokens, temperature).
+    """
+    event_store, character_tracker, world_lore, metadata = load_game_state(config)
     current_context = _build_fortress_context(metadata, character_tracker, event_store, world_lore)
 
     from df_storyteller.stories.df_mechanics import DF_MECHANICS_REFERENCE
@@ -353,12 +354,25 @@ Issued: {quest.game_season.title()} of Year {quest.game_year}
 Write a narrative of how the fortress completed this quest. Focus on what changed
 between the fortress state when the quest was issued and now."""
 
+    return system_prompt, user_prompt, config.story.quest_narrative_max_tokens, config.llm.temperature
+
+
+async def generate_completion_narrative(
+    config: AppConfig,
+    quest: Quest,
+    output_dir: Path | None = None,
+) -> str:
+    """Generate a narrative describing how a quest was fulfilled."""
+    system_prompt, user_prompt, max_tokens, temperature = await prepare_completion_narrative(
+        config, quest, output_dir,
+    )
+    provider = create_provider(config)
     try:
         return await provider.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=config.story.quest_narrative_max_tokens,
-            temperature=config.llm.temperature,
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
     except Exception as e:
         return f"[Completion narrative generation failed: {e}]"

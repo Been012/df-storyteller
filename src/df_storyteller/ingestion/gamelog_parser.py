@@ -90,6 +90,9 @@ COMBAT_OUTCOME_PATTERN = re.compile(
 
 CANCEL_PATTERN = re.compile(r"^(.+) cancels (.+): (.+)\.$")
 
+# Conversation lines: "Name, Profession: I talked to..."
+CONVERSATION_PATTERN = re.compile(r"^.+?,\s*.+?:\s+.+$")
+
 
 def _season_from_str(s: str) -> Season:
     return Season(s.lower())
@@ -169,9 +172,18 @@ class GamelogParser:
                 self._combat_lines.append(line)
                 continue
 
-            # Non-combat, non-empty line flushes combat block
-            yield from self._flush_combat()
+            # If we're mid-combat, absorb unrecognized lines as part of the
+            # fight rather than flushing — DF interleaves announcements
+            # (promotions, titles) between combat blows. But flush if the
+            # line is clearly a different event type (conversation, cancel).
+            if self._combat_lines:
+                if CONVERSATION_PATTERN.match(line) or CANCEL_PATTERN.match(line):
+                    yield from self._flush_combat()
+                else:
+                    self._combat_lines.append(line)
+                    continue
 
+            # Non-combat, non-empty line outside combat block
             # Generic announcement
             yield GameEvent(
                 event_type=EventType.ANNOUNCEMENT,
@@ -263,11 +275,21 @@ class GamelogParser:
                 "counterattack", "latch", "shakes", "collaps",
                 "gives in", "is no longer", "cloven asunder",
                 "sails off", "flies off", "injured part",
+                "collides", "knocked over", "tumbles",
+                "propelled away", "slams into", "skids along",
+                "latches on", "locks on", "struggles in vain",
+                "releases the", "shakes the", "pulls the",
+                "is stunned", "regains composure",
             ]
         ):
             return True
+        # Possessive combat lines: "The horseshoe crab's body skids..."
+        if line.startswith("The ") and "'s " in line and any(
+            w in lower for w in ["fracturing", "tearing", "bruising", "sails off", "flies off", "skids"]
+        ):
+            return True
         # Injury follow-ups that don't start with "The"
-        if lower.startswith(("an artery", "a tendon", "a sensory", "a motor", "many nerves")):
+        if lower.startswith(("an artery", "a tendon", "a sensory", "a motor", "many nerves", "a ligament")):
             return True
         return False
 

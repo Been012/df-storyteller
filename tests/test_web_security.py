@@ -8,28 +8,10 @@ Validates fixes for:
 
 from __future__ import annotations
 
-import sys
-import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Stub out missing modules so app.py can be imported without them installed.
-_STUB_MODULES = [
-    "df_storyteller.stories",
-    "df_storyteller.stories.base",
-    "df_storyteller.stories.chronicle",
-    "df_storyteller.stories.biography",
-    "df_storyteller.stories.saga",
-]
-for _mod_name in _STUB_MODULES:
-    if _mod_name not in sys.modules:
-        _stub = types.ModuleType(_mod_name)
-        if _mod_name == "df_storyteller.stories.base":
-            _stub.create_provider = MagicMock()  # type: ignore[attr-defined]
-        sys.modules[_mod_name] = _stub
-
 from fastapi.testclient import TestClient
 
 from df_storyteller.config import AppConfig, PathsConfig
@@ -122,27 +104,32 @@ class TestExceptionExposure:
     SECRET = "/super/secret/internal/path/config.toml"
 
     def test_chronicle_hides_exception_details(self, client):
-        with patch(
-            "df_storyteller.stories.chronicle.generate_chronicle",
+        # prepare_chronicle is imported lazily inside _stream_chronicle
+        from df_storyteller.stories import chronicle
+        with patch.object(
+            chronicle, "prepare_chronicle",
             side_effect=RuntimeError(self.SECRET),
-            create=True,
         ):
             resp = client.post("/api/chronicle/generate")
             assert self.SECRET not in resp.text
-            assert "generation failed" in resp.text.lower()
+            assert "error" in resp.text.lower()
 
     def test_saga_hides_exception_details(self, client):
+        from df_storyteller.stories import saga
         with patch(
-            "df_storyteller.stories.saga.generate_saga",
+            "df_storyteller.web.routers.stories._load_game_state_safe",
+            return_value=(MagicMock(), MagicMock(), MagicMock(), {}),
+        ), patch.object(
+            saga, "prepare_saga",
             side_effect=RuntimeError(self.SECRET),
-            create=True,
         ):
             resp = client.post("/api/saga/generate")
             assert self.SECRET not in resp.text
-            assert "generation failed" in resp.text.lower()
+            assert "error" in resp.text.lower()
 
     def test_bio_hides_exception_details(self, client):
         """Bio endpoint requires a valid dwarf — mock the tracker too."""
+        from df_storyteller.stories import biography
         mock_dwarf = MagicMock()
         mock_dwarf.name = "Urist"
         mock_tracker = MagicMock()
@@ -151,14 +138,13 @@ class TestExceptionExposure:
         with patch(
             "df_storyteller.web.routers.stories._load_game_state_safe",
             return_value=(MagicMock(), mock_tracker, MagicMock(), {}),
-        ), patch(
-            "df_storyteller.stories.biography.generate_biography",
+        ), patch.object(
+            biography, "prepare_biography",
             side_effect=RuntimeError(self.SECRET),
-            create=True,
         ):
             resp = client.post("/api/bio/1")
             assert self.SECRET not in resp.text
-            assert "generation failed" in resp.text.lower()
+            assert "error" in resp.text.lower()
 
     def test_bio_dwarf_not_found(self, client):
         """Non-existent dwarf should return a clean message, not a traceback."""

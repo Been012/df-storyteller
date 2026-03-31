@@ -32,6 +32,7 @@ async def lore_page(request: Request):
 
     civilizations = []
     wars = []
+    battles: list[dict] = []
     figures = []
     beast_attacks: list[dict] = []
     site_conquests: list[dict] = []
@@ -779,7 +780,7 @@ async def lore_page(request: Request):
             "civilizations": len(civilizations),
             "wars": len(wars),
             "battles": len(battles),
-            "figures": sum(1 for hf in legends.historical_figures.values() if hf.name),
+            "figures": len(figures),
             "artifacts": len(artifacts),
             "written_works": len(written_works),
             "relationships": len(relationships),

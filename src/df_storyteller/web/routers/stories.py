@@ -1,8 +1,9 @@
 """Story generation routes (biography, eulogy, diary, saga)."""
 from __future__ import annotations
 
-import asyncio
+import json as _json
 import logging
+from datetime import datetime as _dt
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Request
@@ -18,6 +19,41 @@ from df_storyteller.web.state import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _stream_with_save(
+    config: AppConfig,
+    prepare_fn,
+    *args,
+) -> AsyncGenerator[str, None]:
+    """Generic true-streaming helper: prepare prompts, stream from LLM, save result."""
+    from df_storyteller.stories.base import create_provider
+
+    try:
+        result = await prepare_fn(config, *args)
+        if isinstance(result, str):
+            yield result
+            return
+
+        system_prompt, user_prompt, max_tokens, temperature, save = result
+        provider = create_provider(config)
+        full_text = ""
+        async for chunk in provider.stream_generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ):
+            full_text += chunk
+            yield chunk
+
+        save(full_text)
+    except ValueError as e:
+        logger.warning("Generation failed: %s", e)
+        yield f"Error: {e}"
+    except Exception:
+        logger.exception("Generation failed")
+        yield "Error: generation failed. Check Settings and try again."
 
 
 # ==================== Biography ====================
@@ -39,24 +75,13 @@ async def api_generate_bio(unit_id: int, request: Request):
     if not dwarf:
         return StreamingResponse(iter(["Dwarf not found."]), media_type="text/plain")
 
+    from df_storyteller.stories.biography import prepare_biography
+    fortress_dir = _get_fortress_dir(config, metadata)
+
     return StreamingResponse(
-        _stream_bio(config, dwarf.name, one_time),
+        _stream_with_save(config, prepare_biography, dwarf.name, one_time, fortress_dir),
         media_type="text/plain",
     )
-
-
-async def _stream_bio(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
-    from df_storyteller.stories.biography import generate_biography
-    try:
-        fortress_dir = _get_fortress_dir(config)
-        result = await generate_biography(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
-        words = result.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
-    except Exception as e:
-        logger.exception("Generation failed")
-        yield "Error: generation failed. Check server logs for details."
 
 
 @router.post("/api/bio/{unit_id}/manual")
@@ -111,24 +136,13 @@ async def api_generate_eulogy(unit_id: int, request: Request):
     if not dwarf:
         return StreamingResponse(iter(["Dwarf not found."]), media_type="text/plain")
 
+    from df_storyteller.stories.biography import prepare_eulogy
+    fortress_dir = _get_fortress_dir(config, metadata)
+
     return StreamingResponse(
-        _stream_eulogy(config, dwarf.name, one_time),
+        _stream_with_save(config, prepare_eulogy, dwarf.name, one_time, fortress_dir),
         media_type="text/plain",
     )
-
-
-async def _stream_eulogy(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
-    from df_storyteller.stories.biography import generate_eulogy
-    try:
-        fortress_dir = _get_fortress_dir(config)
-        result = await generate_eulogy(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
-        words = result.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
-    except Exception as e:
-        logger.exception("Eulogy generation failed")
-        yield "Error: generation failed. Check server logs for details."
 
 
 # ==================== Diary ====================
@@ -150,24 +164,13 @@ async def api_generate_diary(unit_id: int, request: Request):
     if not dwarf:
         return StreamingResponse(iter(["Dwarf not found."]), media_type="text/plain")
 
+    from df_storyteller.stories.biography import prepare_diary
+    fortress_dir = _get_fortress_dir(config, metadata)
+
     return StreamingResponse(
-        _stream_diary(config, dwarf.name, one_time),
+        _stream_with_save(config, prepare_diary, dwarf.name, one_time, fortress_dir),
         media_type="text/plain",
     )
-
-
-async def _stream_diary(config: AppConfig, dwarf_name: str, one_time_context: str = "") -> AsyncGenerator[str, None]:
-    from df_storyteller.stories.biography import generate_diary
-    try:
-        fortress_dir = _get_fortress_dir(config)
-        result = await generate_diary(config, dwarf_name, one_time_context=one_time_context, output_dir=fortress_dir)
-        words = result.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
-    except Exception as e:
-        logger.exception("Diary generation failed")
-        yield "Error: generation failed. Check server logs for details."
 
 
 @router.post("/api/diary/{unit_id}/manual")
@@ -207,53 +210,19 @@ async def api_diary_manual(unit_id: int, request: Request):
 async def api_generate_saga():
     """Stream a saga."""
     config = _get_config()
+    from df_storyteller.stories.saga import prepare_saga
+    _, _, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+
     return StreamingResponse(
-        _stream_saga(config),
+        _stream_with_save(config, prepare_saga, "full", fortress_dir),
         media_type="text/plain",
     )
-
-
-async def _stream_saga(config: AppConfig) -> AsyncGenerator[str, None]:
-    from df_storyteller.stories.saga import generate_saga
-    try:
-        result = await generate_saga(config, "full")
-
-        # Save saga to per-fortress directory
-        try:
-            _, _, _, metadata = _load_game_state_safe(config)
-            fortress_dir = _get_fortress_dir(config, metadata)
-            import json as _json
-            saga_path = fortress_dir / "saga.json"
-            existing = []
-            if saga_path.exists():
-                try:
-                    existing = _json.loads(saga_path.read_text(encoding="utf-8", errors="replace"))
-                except (ValueError, OSError):
-                    existing = []
-            from datetime import datetime as _dt
-            existing.append({
-                "text": result,
-                "year": metadata.get("year", 0),
-                "season": metadata.get("season", ""),
-                "generated_at": _dt.now().isoformat(),
-            })
-            saga_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
-        except Exception:
-            logger.warning("Failed to save saga to disk")
-
-        words = result.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
-    except Exception as e:
-        logger.exception("Generation failed")
-        yield "Error: generation failed. Check server logs for details."
 
 
 @router.post("/api/saga/manual")
 async def api_saga_manual(request: Request):
     """Save a player-written saga entry."""
-    import json as _json
     config = _get_config()
     try:
         data = await request.json()

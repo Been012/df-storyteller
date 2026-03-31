@@ -521,7 +521,7 @@ class TestSettingsSave:
 
     def test_save_settings_redirects(self, client, config):
         with patch(f"{R}.settings._get_config", return_value=config), \
-             patch("df_storyteller.config.save_config"):
+             patch(f"{R}.settings.save_config"):
             resp = client.post("/settings", data={
                 "df_install": "/path/to/df",
                 "llm_provider": "claude",

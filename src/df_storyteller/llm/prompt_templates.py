@@ -138,7 +138,10 @@ def render_system_prompt(ctx: StoryContext, **extra: str) -> str:
         world_name=ctx.world_name,
         **extra,
     )
-    return prompt + "\n\n" + DF_MECHANICS_REFERENCE
+    full = prompt + "\n\n" + DF_MECHANICS_REFERENCE
+    if ctx.author_instructions:
+        full += f"\n\n## Additional Author Instructions\n{ctx.author_instructions}"
+    return full
 
 
 def render_user_prompt(ctx: StoryContext) -> str:

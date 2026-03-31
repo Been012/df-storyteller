@@ -9,6 +9,7 @@ their development.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from df_storyteller.config import AppConfig
@@ -47,17 +48,16 @@ def _save_biography_entry(config: AppConfig, unit_id: int, entry: dict, output_d
         json.dump(history, f, indent=2, ensure_ascii=False)
 
 
-async def generate_biography(
+async def prepare_biography(
     config: AppConfig,
     dwarf_name: str,
     one_time_context: str = "",
     output_dir: Path | None = None,
-) -> str:
-    """Generate a dated biography entry for a dwarf.
+) -> tuple[str, str, int, float, Callable[[str], None]] | str:
+    """Prepare prompts for biography generation.
 
-    Each call creates a new entry timestamped with the current game year/season.
-    Previous entries are included as context so the LLM can describe how the
-    dwarf has changed over time.
+    Returns (system_prompt, user_prompt, max_tokens, temperature, save_fn)
+    or an error string if the dwarf is not found.
     """
     provider = create_provider(config)
     event_store, character_tracker, world_lore, metadata = load_game_state(config)
@@ -98,6 +98,7 @@ async def generate_biography(
             previous_text += f"--- {entry.get('season', '').title()} of Year {entry.get('year', '?')} ---\n"
             previous_text += entry.get("text", "") + "\n\n"
 
+    ctx.author_instructions = config.story.author_instructions
     system_prompt = render_system_prompt(
         ctx,
         character_name=dwarf.name,
@@ -148,40 +149,68 @@ async def generate_biography(
 
 Write 2-3 short paragraphs (150-250 words). Date the entry as "{season.title()} of Year {year}"."""
 
-    try:
-        bio_text = await provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=config.story.biography_max_tokens,
-            temperature=config.llm.temperature,
-        )
-    except Exception as e:
-        return f"[Biography generation failed: {e}. Check your LLM provider settings and try again.]"
+    # Capture dwarf info for save callback
+    _unit_id = dwarf.unit_id
+    _profession = dwarf.profession
+    _stress = dwarf.stress_category
 
-    # Save this entry
-    _save_biography_entry(config, dwarf.unit_id, {
-        "year": year,
-        "season": season,
-        "text": bio_text,
-        "profession": dwarf.profession,
-        "stress_category": dwarf.stress_category,
-    }, output_dir)
+    def save(text: str) -> None:
+        _save_biography_entry(config, _unit_id, {
+            "year": year,
+            "season": season,
+            "text": text,
+            "profession": _profession,
+            "stress_category": _stress,
+        }, output_dir)
 
-    return bio_text
+    return system_prompt, user_prompt, config.story.biography_max_tokens, config.llm.temperature, save
 
 
-async def generate_eulogy(
+async def generate_biography(
     config: AppConfig,
     dwarf_name: str,
     one_time_context: str = "",
     output_dir: Path | None = None,
 ) -> str:
-    """Generate a death eulogy — the final biography entry for a fallen dwarf.
+    """Generate a dated biography entry for a dwarf.
 
-    Gathers the dwarf's full history, cause of death, relationships, and
-    achievements to produce a memorial narrative.
+    Each call creates a new entry timestamped with the current game year/season.
+    Previous entries are included as context so the LLM can describe how the
+    dwarf has changed over time.
     """
-    from df_storyteller.context.context_builder import ContextBuilder, _format_event
+    result = await prepare_biography(config, dwarf_name, one_time_context, output_dir)
+    if isinstance(result, str):
+        return result
+
+    system_prompt, user_prompt, max_tokens, temperature, save = result
+    provider = create_provider(config)
+
+    try:
+        bio_text = await provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    except Exception as e:
+        return f"[Biography generation failed: {e}. Check your LLM provider settings and try again.]"
+
+    save(bio_text)
+    return bio_text
+
+
+async def prepare_eulogy(
+    config: AppConfig,
+    dwarf_name: str,
+    one_time_context: str = "",
+    output_dir: Path | None = None,
+) -> tuple[str, str, int, float, Callable[[str], None]] | str:
+    """Prepare prompts for eulogy generation.
+
+    Returns (system_prompt, user_prompt, max_tokens, temperature, save_fn)
+    or an error string if the dwarf is not found.
+    """
+    from df_storyteller.context.context_builder import _format_event
     from df_storyteller.context.notes_store import get_notes_for_dwarf, get_fortress_notes
     from df_storyteller.context.narrative_formatter import format_player_notes
     from df_storyteller.schema.events import EventType
@@ -239,6 +268,7 @@ async def generate_eulogy(
     fortress_notes = get_fortress_notes(config, output_dir)
     notes_text = format_player_notes(dwarf_notes + fortress_notes, one_time_context=one_time_context)
 
+    ctx.author_instructions = config.story.author_instructions
     system_prompt = render_system_prompt(
         ctx,
         character_name=dwarf.name,
@@ -265,39 +295,66 @@ Address how they died and what is lost with their passing. \
 The tone should be solemn and reverent, befitting a dwarven memorial. \
 End with a line about how the fortress remembers them."""
 
-    try:
-        eulogy_text = await provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=config.story.biography_max_tokens,
-            temperature=config.llm.temperature,
-        )
-    except Exception as e:
-        return f"[Eulogy generation failed: {e}. Check your LLM provider settings and try again.]"
+    # Capture dwarf info for save callback
+    _unit_id = dwarf.unit_id
+    _profession = dwarf.profession
+    _stress = dwarf.stress_category
 
-    # Save as a final biography entry marked as eulogy
-    _save_biography_entry(config, dwarf.unit_id, {
-        "year": year,
-        "season": season,
-        "text": eulogy_text,
-        "profession": dwarf.profession,
-        "stress_category": dwarf.stress_category,
-        "is_eulogy": True,
-    }, output_dir)
+    def save(text: str) -> None:
+        _save_biography_entry(config, _unit_id, {
+            "year": year,
+            "season": season,
+            "text": text,
+            "profession": _profession,
+            "stress_category": _stress,
+            "is_eulogy": True,
+        }, output_dir)
 
-    return eulogy_text
+    return system_prompt, user_prompt, config.story.biography_max_tokens, config.llm.temperature, save
 
 
-async def generate_diary(
+async def generate_eulogy(
     config: AppConfig,
     dwarf_name: str,
     one_time_context: str = "",
     output_dir: Path | None = None,
 ) -> str:
-    """Generate a first-person diary entry from a dwarf's perspective.
+    """Generate a death eulogy — the final biography entry for a fallen dwarf.
 
-    The entry is heavily influenced by the dwarf's personality traits, beliefs,
-    stress level, and recent events. Written in first person as the dwarf.
+    Gathers the dwarf's full history, cause of death, relationships, and
+    achievements to produce a memorial narrative.
+    """
+    result = await prepare_eulogy(config, dwarf_name, one_time_context, output_dir)
+    if isinstance(result, str):
+        return result
+
+    system_prompt, user_prompt, max_tokens, temperature, save = result
+    provider = create_provider(config)
+
+    try:
+        eulogy_text = await provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    except Exception as e:
+        return f"[Eulogy generation failed: {e}. Check your LLM provider settings and try again.]"
+
+    save(eulogy_text)
+    return eulogy_text
+
+
+async def prepare_diary(
+    config: AppConfig,
+    dwarf_name: str,
+    one_time_context: str = "",
+    output_dir: Path | None = None,
+) -> tuple[str, str, int, float, Callable[[str], None]] | str:
+    """Prepare prompts for diary generation.
+
+    Returns (system_prompt, user_prompt, max_tokens, temperature, save_fn)
+    or an error string if the dwarf is not found.
     """
     provider = create_provider(config)
     event_store, character_tracker, world_lore, metadata = load_game_state(config)
@@ -425,24 +482,54 @@ VOICE RULES:
 
 Write a first-person diary entry. Start with something like "Today..." or a thought, not "Dear diary". Be specific about real events, real people, real feelings. 100-200 words."""
 
+    # Capture dwarf info for save callback
+    _unit_id = dwarf.unit_id
+    _profession = dwarf.profession
+    _stress = dwarf.stress_category
+
+    def save(text: str) -> None:
+        _save_biography_entry(config, _unit_id, {
+            "year": year,
+            "season": season,
+            "text": text,
+            "profession": _profession,
+            "stress_category": _stress,
+            "is_diary": True,
+        }, output_dir)
+
+    if config.story.author_instructions:
+        system_prompt += f"\n\n## Additional Author Instructions\n{config.story.author_instructions}"
+
+    return system_prompt, user_prompt, config.story.biography_max_tokens, 0.9, save
+
+
+async def generate_diary(
+    config: AppConfig,
+    dwarf_name: str,
+    one_time_context: str = "",
+    output_dir: Path | None = None,
+) -> str:
+    """Generate a first-person diary entry from a dwarf's perspective.
+
+    The entry is heavily influenced by the dwarf's personality traits, beliefs,
+    stress level, and recent events. Written in first person as the dwarf.
+    """
+    result = await prepare_diary(config, dwarf_name, one_time_context, output_dir)
+    if isinstance(result, str):
+        return result
+
+    system_prompt, user_prompt, max_tokens, temperature, save = result
+    provider = create_provider(config)
+
     try:
         diary_text = await provider.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
-            max_tokens=config.story.biography_max_tokens,
-            temperature=0.9,  # Higher temp for more personality variation
+            max_tokens=max_tokens,
+            temperature=temperature,
         )
     except Exception as e:
         return f"[Diary generation failed: {e}. Check your LLM provider settings and try again.]"
 
-    # Save as a diary entry in the bio history
-    _save_biography_entry(config, dwarf.unit_id, {
-        "year": year,
-        "season": season,
-        "text": diary_text,
-        "profession": dwarf.profession,
-        "stress_category": dwarf.stress_category,
-        "is_diary": True,
-    }, output_dir)
-
+    save(diary_text)
     return diary_text

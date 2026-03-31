@@ -24,6 +24,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _resolve_gamelog_path(config) -> Path | None:
+    """Resolve gamelog path from config, falling back to df_install/gamelog.txt."""
+    if config.paths.gamelog:
+        return Path(config.paths.gamelog)
+    if config.paths.df_install:
+        candidate = Path(config.paths.df_install) / "gamelog.txt"
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def _build_outcome_summary(group: list, title_to_dwarf: dict, ranked: list) -> str:
     """Build a specific outcome summary stating who died and who survived."""
     killed = []
@@ -83,6 +94,8 @@ async def events_page(request: Request):
             continue
         if event.event_type.value == "announcement":
             continue
+        if event.event_type.value == "combat":
+            continue
         events.append({
             "type": event.event_type.value,
             "year": event.game_year,
@@ -101,6 +114,23 @@ async def events_page(request: Request):
     # Consecutive combat events (close in tick) are grouped as a single battle/siege
     from df_storyteller.schema.events import EventType as ET
 
+    def _collapse_repeats(lines: list[str]) -> list[str]:
+        """Collapse consecutive duplicate lines into 'line x3' format like DF does."""
+        if not lines:
+            return lines
+        result = []
+        prev = lines[0]
+        count = 1
+        for line in lines[1:]:
+            if line == prev:
+                count += 1
+            else:
+                result.append(f"{prev} x{count}" if count > 1 else prev)
+                prev = line
+                count = 1
+        result.append(f"{prev} x{count}" if count > 1 else prev)
+        return result
+
     def _build_encounter(event):
         d = event.data
         blows = []
@@ -108,6 +138,7 @@ async def events_page(request: Request):
             for b in d.blows:
                 blows.append({"action": b.action, "body_part": b.body_part, "weapon": b.weapon, "effect": b.effect})
         raw_lines = d.raw_text.split("\n") if hasattr(d, "raw_text") and d.raw_text else []
+        raw_lines = _collapse_repeats(raw_lines)
         return {
             "attacker": d.attacker.name if hasattr(d, "attacker") else "Unknown",
             "defender": d.defender.name if hasattr(d, "defender") else "Unknown",
@@ -178,7 +209,7 @@ async def events_page(request: Request):
 
     # Extract conversation lines from the gamelog for the chat log
     chat_lines = []
-    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    gamelog_path = _resolve_gamelog_path(config)
     if gamelog_path and gamelog_path.exists():
         from df_storyteller.context.loader import _read_current_session_gamelog
         # Conversation pattern: "Name, Profession: I talked to..."
@@ -217,9 +248,20 @@ async def events_page(request: Request):
     except (ValueError, OSError):
         pass
 
+    # Load saved chat summaries
+    saved_chat_summaries: list[dict] = []
+    try:
+        fortress_dir = _get_fortress_dir(config, metadata)
+        summaries_path = fortress_dir / "chat_summaries.json"
+        if summaries_path.exists():
+            saved_chat_summaries = json.loads(summaries_path.read_text(encoding="utf-8", errors="replace"))
+    except (ValueError, OSError):
+        pass
+
     return templates.TemplateResponse(request=request, name="events.html", context={
         **ctx, "content_class": "content-wide", "events": events, "combat_encounters": combat_encounters, "chat_lines": chat_lines,
         "saved_battle_reports": saved_battle_reports, "solo_reports": solo_reports_by_index,
+        "saved_chat_summaries": saved_chat_summaries,
     })
 
 
@@ -229,7 +271,7 @@ async def api_summarize_chat(request: Request):
     config = _get_config()
     _, _, _, metadata = _load_game_state_safe(config)
 
-    gamelog_path = Path(config.paths.gamelog) if config.paths.gamelog else None
+    gamelog_path = _resolve_gamelog_path(config)
     if not gamelog_path or not gamelog_path.exists():
         return StreamingResponse(iter(["No gamelog found."]), media_type="text/plain")
 
@@ -251,9 +293,12 @@ async def api_summarize_chat(request: Request):
     from df_storyteller.stories.base import create_provider
     provider = create_provider(config)
 
+    fortress_dir = _get_fortress_dir(config, metadata)
+
     async def _stream():
         try:
-            result = await provider.generate(
+            full_text = ""
+            async for chunk in provider.stream_generate(
                 system_prompt="You are a dwarven chronicler summarizing the social life of a fortress. Write in a warm, narrative tone befitting a fantasy chronicle. Focus on relationships, emotions, conflicts, and notable interactions.",
                 user_prompt=f"""Summarize the social happenings in {fortress_name} during {season} of Year {year} based on these dwarf conversations and thoughts:
 
@@ -262,14 +307,32 @@ async def api_summarize_chat(request: Request):
 Write 2-3 paragraphs summarizing the social mood, notable relationships, tensions, and daily life. Mention specific dwarves by name. Note any new friendships, family bonds, grievances, or emotional states that stand out.""",
                 max_tokens=config.story.chat_summary_max_tokens,
                 temperature=config.llm.temperature,
-            )
-            words = result.split(" ")
-            for i, word in enumerate(words):
-                yield word + (" " if i < len(words) - 1 else "")
-                await asyncio.sleep(0.02)
-        except Exception as e:
+            ):
+                full_text += chunk
+                yield chunk
+
+            # Save summary to disk
+            try:
+                summaries_path = fortress_dir / "chat_summaries.json"
+                existing: list[dict] = []
+                if summaries_path.exists():
+                    existing = json.loads(summaries_path.read_text(encoding="utf-8", errors="replace"))
+                from datetime import datetime as _dt
+                existing.append({
+                    "text": full_text,
+                    "season": season,
+                    "year": year,
+                    "generated_at": _dt.now().isoformat(),
+                })
+                summaries_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                logger.warning("Failed to save chat summary to disk")
+        except ValueError as e:
+            logger.warning("Chat summary generation failed: %s", e)
+            yield f"Error: {e}"
+        except Exception:
             logger.exception("Chat summary generation failed")
-            yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
+            yield "Error: generation failed. Check Settings and try again."
 
     return StreamingResponse(_stream(), media_type="text/plain")
 
@@ -442,12 +505,15 @@ Keep it to 150-250 words. Sign off with the author's name at the end.
 IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia commander". Write a dramatic narrative using the actual combat details. Be ACCURATE about who died and who survived — do not invent casualties."""
 
         try:
-            result = await provider.generate(
+            full_text = ""
+            async for chunk in provider.stream_generate(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 max_tokens=config.story.biography_max_tokens,
                 temperature=0.85,
-            )
+            ):
+                full_text += chunk
+                yield chunk
 
             # Save the battle report persistently
             try:
@@ -461,7 +527,7 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
                         existing = []
                 from datetime import datetime as _dt
                 new_report = {
-                    "text": result,
+                    "text": full_text,
                     "author": author_name,
                     "year": year,
                     "season": season,
@@ -473,7 +539,6 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
                     "encounter_index": encounter_index,
                     "generated_at": _dt.now().isoformat(),
                 }
-                # Replace existing report for same encounter, or append
                 replaced = False
                 for i, r in enumerate(existing):
                     if r.get("encounter_index") == encounter_index:
@@ -485,11 +550,6 @@ IMPORTANT: Use the REAL NAMES from the Name Key above, not titles like "militia 
                 reports_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
             except Exception:
                 logger.warning("Failed to save battle report to disk")
-
-            words = result.split(" ")
-            for i, word in enumerate(words):
-                yield word + (" " if i < len(words) - 1 else "")
-                await asyncio.sleep(0.02)
         except Exception as e:
             logger.exception("Battle report generation failed")
             yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."

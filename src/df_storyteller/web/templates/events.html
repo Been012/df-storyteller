@@ -162,18 +162,23 @@
 
             <div style="margin-top: 0.6rem;">
                 {% if solo_reports and loop.index0 in solo_reports %}
-                <div id="solo-report-{{ loop.index0 }}" style="margin-top: 0.5rem; line-height: 1.7;">
-                    <div class="story-text" style="white-space: pre-wrap;">{{ solo_reports[loop.index0].text }}</div>
-                    <div style="font-size: 0.8rem; color: var(--ink-faded); text-align: right; font-style: italic; margin-top: 0.3rem;">
-                        — {{ solo_reports[loop.index0].author }}
+                <details style="margin-top: 0.5rem;">
+                    <summary style="cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--ink-faded);">
+                        Battle Report — {{ solo_reports[loop.index0].author }}
+                    </summary>
+                    <div id="solo-report-{{ loop.index0 }}" style="margin-top: 0.5rem; line-height: 1.7;">
+                        <div class="story-text" style="white-space: pre-wrap;">{{ solo_reports[loop.index0].text }}</div>
+                        <div style="font-size: 0.8rem; color: var(--ink-faded); text-align: right; font-style: italic; margin-top: 0.3rem;">
+                            — {{ solo_reports[loop.index0].author }}
+                        </div>
                     </div>
-                </div>
-                {% if not no_llm_mode %}
-                <button class="btn btn-secondary" style="font-size: 0.8rem; margin-top: 0.3rem;" onclick="rewriteBattleReport({{ loop.index0 }})">
-                    Rewrite
-                </button>
-                <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
-                {% endif %}
+                    {% if not no_llm_mode %}
+                    <button class="btn btn-secondary" style="font-size: 0.8rem; margin-top: 0.3rem;" onclick="rewriteBattleReport({{ loop.index0 }})">
+                        Rewrite
+                    </button>
+                    <div class="story-text streaming-text" id="battle-report-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;"></div>
+                    {% endif %}
+                </details>
                 {% else %}
                 {% if not no_llm_mode %}
                 <button class="btn btn-secondary" style="font-size: 0.85rem;" onclick="writeBattleReport({{ loop.index0 }})">
@@ -242,6 +247,25 @@
         {% endfor %}
     </div>
 </div>
+
+{% if saved_chat_summaries %}
+<details style="margin-top: 1.5rem;">
+    <summary style="font-family: 'Cinzel', serif; font-size: 1rem; color: var(--ink-light); cursor: pointer; list-style: none;">
+        <span style="margin-right: 0.4rem;">&#9662;</span>Chat Summaries ({{ saved_chat_summaries | length }})
+    </summary>
+    <div style="margin-top: 0.8rem;">
+    {% for summary in saved_chat_summaries | reverse %}
+    <div class="parchment" style="margin-bottom: 0.8rem;">
+        <div style="font-size: 0.78rem; color: var(--ink-faded); margin-bottom: 0.4rem; font-family: 'Cinzel', serif;">
+            {{ summary.season }} of Year {{ summary.year }}
+        </div>
+        <div class="story-text" style="font-size: 0.88rem; line-height: 1.6; white-space: pre-line;">{{ summary.text }}</div>
+    </div>
+    {% endfor %}
+    </div>
+</details>
+{% endif %}
+
 {% endif %}
 {% endblock %}
 

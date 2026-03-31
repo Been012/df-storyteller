@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import AsyncGenerator
 
 
 class LLMProvider(ABC):
@@ -18,6 +19,18 @@ class LLMProvider(ABC):
     ) -> str:
         """Generate a text completion."""
         ...
+
+    @abstractmethod
+    async def stream_generate(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 4096,
+        temperature: float = 0.8,
+    ) -> AsyncGenerator[str, None]:
+        """Yield text chunks as they arrive from the model."""
+        ...
+        yield ""  # pragma: no cover — makes this a valid generator
 
     @abstractmethod
     def estimate_tokens(self, text: str) -> int:

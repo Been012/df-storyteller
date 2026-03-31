@@ -70,7 +70,8 @@ async def api_complete_quest(quest_id: str):
     fortress_dir = _get_fortress_dir(config)
 
     async def _stream() -> AsyncGenerator[str, None]:
-        from df_storyteller.stories.quest_generator import generate_completion_narrative
+        from df_storyteller.stories.quest_generator import prepare_completion_narrative
+        from df_storyteller.stories.base import create_provider
         from df_storyteller.context.quest_store import load_all_quests, save_all_quests
         from df_storyteller.schema.quests import QuestStatus
 
@@ -81,24 +82,29 @@ async def api_complete_quest(quest_id: str):
             return
 
         try:
-            narrative = await generate_completion_narrative(config, quest, fortress_dir)
+            system_prompt, user_prompt, max_tokens, temperature = await prepare_completion_narrative(
+                config, quest, fortress_dir,
+            )
+            provider = create_provider(config)
+            full_text = ""
+            async for chunk in provider.stream_generate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            ):
+                full_text += chunk
+                yield chunk
+
+            # Save completion
+            from datetime import datetime
+            quest.status = QuestStatus.COMPLETED
+            quest.completed_at = datetime.now()
+            quest.completion_narrative = full_text
+            save_all_quests(config, quests, fortress_dir)
         except Exception as e:
             logger.exception("Quest completion narrative failed")
             yield f"Error: {e}" if str(e) else "Error: generation failed. Check Settings and try again."
-            return
-
-        # Save completion
-        from datetime import datetime
-        quest.status = QuestStatus.COMPLETED
-        quest.completed_at = datetime.now()
-        quest.completion_narrative = narrative
-        save_all_quests(config, quests, fortress_dir)
-
-        # Stream word by word
-        words = narrative.split(" ")
-        for i, word in enumerate(words):
-            yield word + (" " if i < len(words) - 1 else "")
-            await asyncio.sleep(0.02)
 
     return StreamingResponse(_stream(), media_type="text/plain")
 

@@ -5,92 +5,259 @@
 <h1 class="page-header">Settings</h1>
 <p class="page-subtitle">Configure your storytelling experience</p>
 
-<div class="parchment" style="max-width: 600px; margin: 0 auto;">
-    <form method="POST" action="/settings">
-        <div class="form-group">
-            <label>Dwarf Fortress Path</label>
-            <input type="text" name="df_install" value="{{ config.paths.df_install }}">
-        </div>
+<style>
+.settings-section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+.settings-section:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+.settings-section h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.8rem;
+}
+.slider-group { display: flex; align-items: center; gap: 0.8rem; }
+.slider-group input[type="range"] { flex: 1; accent-color: var(--gold-dark); }
+.slider-group .slider-value {
+    min-width: 3.5rem;
+    text-align: right;
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--ink-light);
+}
+.token-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1.2rem; }
+.token-item label { font-size: 0.85rem; }
+.token-item .slider-group { margin-top: 0.2rem; }
+.token-item small { font-size: 0.75rem; }
+</style>
 
-        <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                <input type="checkbox" name="no_llm_mode" value="true"
-                    {% if config.story.no_llm_mode %}checked{% endif %}
-                    onchange="document.getElementById('llm-settings').style.opacity = this.checked ? '0.4' : '1'; document.getElementById('llm-settings').style.pointerEvents = this.checked ? 'none' : 'auto';">
-                No-LLM Mode
-            </label>
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Disable AI generation. The UI becomes a structured journal for player-written entries. Data visualization pages (events, relationships, lore) are unaffected.</small>
+<div class="parchment" style="max-width: 650px; margin: 0 auto;">
+    <form method="POST" action="/settings">
+
+        {# ==================== Game Path ==================== #}
+        <div class="settings-section">
+            <div class="form-group">
+                <label>Dwarf Fortress Path</label>
+                <input type="text" name="df_install" value="{{ config.paths.df_install }}">
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" name="no_llm_mode" value="true"
+                        {% if config.story.no_llm_mode %}checked{% endif %}
+                        onchange="document.getElementById('llm-settings').style.opacity = this.checked ? '0.4' : '1'; document.getElementById('llm-settings').style.pointerEvents = this.checked ? 'none' : 'auto';">
+                    No-LLM Mode
+                </label>
+                <small style="color: var(--ink-faded); font-size: 0.8rem;">Disable AI generation. The UI becomes a structured journal for player-written entries.</small>
+            </div>
         </div>
 
         <div id="llm-settings" style="{% if config.story.no_llm_mode %}opacity: 0.4; pointer-events: none;{% endif %}">
-        <div class="form-group">
-            <label>LLM Provider</label>
-            <select name="llm_provider">
-                <option value="claude" {% if config.llm.provider == 'claude' %}selected{% endif %}>Claude (Anthropic)</option>
-                <option value="openai" {% if config.llm.provider == 'openai' %}selected{% endif %}>OpenAI</option>
-                <option value="ollama" {% if config.llm.provider == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
-            </select>
+
+        {# ==================== AI Provider ==================== #}
+        <div class="settings-section">
+            <h3>AI Provider</h3>
+
+            <div class="form-group">
+                <label>Provider</label>
+                <select name="llm_provider" onchange="
+                    var isOllama = this.value === 'ollama';
+                    document.getElementById('ollama-settings').style.display = isOllama ? '' : 'none';
+                    document.getElementById('cloud-settings').style.display = isOllama ? 'none' : '';
+                ">
+                    <option value="claude" {% if config.llm.provider == 'claude' %}selected{% endif %}>Claude (Anthropic)</option>
+                    <option value="openai" {% if config.llm.provider == 'openai' %}selected{% endif %}>OpenAI</option>
+                    <option value="ollama" {% if config.llm.provider == 'ollama' %}selected{% endif %}>Ollama (Local)</option>
+                </select>
+            </div>
+
+            <div id="cloud-settings" style="{% if config.llm.provider == 'ollama' %}display: none;{% endif %}">
+                <div class="form-group">
+                    <label>Model Name</label>
+                    <input type="text" name="model_name" value="{{ config.llm.model }}" placeholder="e.g. claude-sonnet-4-5-20250514">
+                    <small style="color: var(--ink-faded); font-size: 0.8rem;">Leave blank for provider default.</small>
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" name="api_key" value="{{ config.llm.api_key }}" placeholder="sk-ant-...">
+                </div>
+            </div>
+
+            <div id="ollama-settings" style="{% if config.llm.provider != 'ollama' %}display: none;{% endif %}">
+                <div class="form-group">
+                    <label>Ollama Model</label>
+                    <input type="text" name="ollama_model" value="{{ config.llm.ollama.model }}" placeholder="e.g. gemma3:27b">
+                    <small style="color: var(--ink-faded); font-size: 0.8rem;">Run <code style="background: var(--bg-dark); padding: 0.1rem 0.3rem; border-radius: 3px;">ollama pull modelname</code> to download.</small>
+                    <div style="margin-top: 0.5rem; font-size: 0.78rem; color: var(--ink-faded); line-height: 1.6;">
+                        <div style="margin-bottom: 0.2rem; font-weight: 600; color: var(--ink-light);">Recommended by VRAM:</div>
+                        <div><strong>4-6 GB</strong> &mdash; gemma3:4b, llama3.2:3b, phi4-mini:3.8b</div>
+                        <div><strong>8 GB</strong> &mdash; gemma3:12b, llama3.1:8b, mistral-nemo:12b</div>
+                        <div><strong>12-16 GB</strong> &mdash; mistral-small:24b, gemma3:27b</div>
+                        <div><strong>24+ GB</strong> &mdash; qwen2.5:32b, gemma3:27b, command-r:35b</div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Context Window</label>
+                    <div class="slider-group">
+                        <input type="range" name="ollama_num_ctx" min="2048" max="131072" step="1024"
+                            value="{{ config.llm.ollama.num_ctx }}"
+                            oninput="this.nextElementSibling.textContent = (this.value / 1024) + 'K'">
+                        <span class="slider-value">{{ (config.llm.ollama.num_ctx / 1024) | int }}K</span>
+                    </div>
+                    <small style="color: var(--ink-faded); font-size: 0.8rem;">How much text the model can see. Higher = better context but more VRAM.</small>
+                </div>
+                <div class="form-group">
+                    <label>Ollama URL</label>
+                    <input type="text" name="ollama_base_url" value="{{ config.llm.ollama.base_url }}" placeholder="http://localhost:11434">
+                </div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>API Key</label>
-            <input type="password" name="api_key" value="{{ config.llm.api_key }}" placeholder="sk-ant-...">
+        {# ==================== Generation Style ==================== #}
+        <div class="settings-section">
+            <h3>Generation Style</h3>
+
+            <div class="form-group">
+                <label>Narrative Style</label>
+                <select name="narrative_style">
+                    <option value="dramatic" {% if config.story.narrative_style == 'dramatic' %}selected{% endif %}>Dramatic</option>
+                    <option value="factual" {% if config.story.narrative_style == 'factual' %}selected{% endif %}>Factual</option>
+                    <option value="humorous" {% if config.story.narrative_style == 'humorous' %}selected{% endif %}>Humorous</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Temperature</label>
+                <div class="slider-group">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">Precise</span>
+                    <input type="range" name="temperature" min="0" max="1.5" step="0.05"
+                        value="{{ config.llm.temperature }}"
+                        oninput="this.parentElement.querySelector('.slider-value').textContent = parseFloat(this.value).toFixed(2)">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">Creative</span>
+                    <span class="slider-value">{{ '%.2f' % config.llm.temperature }}</span>
+                </div>
+                <small style="color: var(--ink-faded); font-size: 0.8rem;">Controls randomness. Lower = more predictable, higher = more creative. Default: 0.80</small>
+            </div>
+
+            <div class="form-group">
+                <label>Top P (Nucleus Sampling)</label>
+                <div class="slider-group">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">Focused</span>
+                    <input type="range" name="top_p" min="0.1" max="1.0" step="0.05"
+                        value="{{ config.llm.top_p }}"
+                        oninput="this.parentElement.querySelector('.slider-value').textContent = parseFloat(this.value).toFixed(2)">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">Diverse</span>
+                    <span class="slider-value">{{ '%.2f' % config.llm.top_p }}</span>
+                </div>
+                <small style="color: var(--ink-faded); font-size: 0.8rem;">Controls word choice diversity. 1.0 = consider all options (default). Lower = only most likely words.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Repetition Penalty</label>
+                <div class="slider-group">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">None</span>
+                    <input type="range" name="repetition_penalty" min="1.0" max="1.5" step="0.05"
+                        value="{{ config.llm.repetition_penalty }}"
+                        oninput="this.parentElement.querySelector('.slider-value').textContent = parseFloat(this.value).toFixed(2)">
+                    <span style="font-size: 0.75rem; color: var(--ink-faded);">Strong</span>
+                    <span class="slider-value">{{ '%.2f' % config.llm.repetition_penalty }}</span>
+                </div>
+                <small style="color: var(--ink-faded); font-size: 0.8rem;">Discourages repeated phrases. 1.0 = off (default). Increase if stories feel repetitive.</small>
+            </div>
+
+            <div class="form-group">
+                <label>Custom Author Instructions</label>
+                <textarea name="author_instructions" rows="3" placeholder="e.g. Write in the style of Tolkien. Focus on interpersonal drama. Use dark humor."
+                    style="width: 100%; font-family: 'Crimson Text', serif; padding: 0.5rem; border: 1px solid var(--border); border-radius: 3px; resize: vertical;">{{ config.story.author_instructions }}</textarea>
+                <small style="color: var(--ink-faded); font-size: 0.8rem;">Added to every story prompt. Guide the AI's tone, focus, or style.</small>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label>Narrative Style</label>
-            <select name="narrative_style">
-                <option value="dramatic" {% if config.story.narrative_style == 'dramatic' %}selected{% endif %}>Dramatic</option>
-                <option value="factual" {% if config.story.narrative_style == 'factual' %}selected{% endif %}>Factual</option>
-                <option value="humorous" {% if config.story.narrative_style == 'humorous' %}selected{% endif %}>Humorous</option>
-            </select>
-        </div>
+        {# ==================== Output Lengths ==================== #}
+        <div class="settings-section">
+            <h3>Output Lengths</h3>
+            <small style="color: var(--ink-faded); font-size: 0.8rem; display: block; margin-bottom: 0.8rem;">Control how long each type of generated text should be. ~1000 tokens = ~250 words.</small>
 
-        <div class="form-group">
-            <label>Chronicle Length (tokens)</label>
-            <input type="number" name="chronicle_max_tokens" value="{{ config.story.chronicle_max_tokens }}" min="500" max="8000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. A seasonal fortress report. ~500-1000 words.</small>
-        </div>
+            <div class="token-grid">
+                <div class="token-item">
+                    <label>Chronicle</label>
+                    <div class="slider-group">
+                        <input type="range" name="chronicle_max_tokens" min="512" max="8192" step="256"
+                            value="{{ config.story.chronicle_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.chronicle_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Biography Length (tokens)</label>
-            <input type="number" name="biography_max_tokens" value="{{ config.story.biography_max_tokens }}" min="256" max="4000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 1024. Biographies are short dated entries that stack over time. ~150-250 words each.</small>
-        </div>
+                <div class="token-item">
+                    <label>Biography</label>
+                    <div class="slider-group">
+                        <input type="range" name="biography_max_tokens" min="256" max="4096" step="128"
+                            value="{{ config.story.biography_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.biography_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Saga Length (tokens)</label>
-            <input type="number" name="saga_max_tokens" value="{{ config.story.saga_max_tokens }}" min="500" max="8000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. Epic world history narrative from legends data. ~500-1000 words.</small>
-        </div>
+                <div class="token-item">
+                    <label>Saga</label>
+                    <div class="slider-group">
+                        <input type="range" name="saga_max_tokens" min="512" max="8192" step="256"
+                            value="{{ config.story.saga_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.saga_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Chat Summary Length (tokens)</label>
-            <input type="number" name="chat_summary_max_tokens" value="{{ config.story.chat_summary_max_tokens }}" min="256" max="4000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI summary of dwarf conversations and social happenings.</small>
-        </div>
+                <div class="token-item">
+                    <label>Gazette</label>
+                    <div class="slider-group">
+                        <input type="range" name="gazette_max_tokens" min="1024" max="8192" step="256"
+                            value="{{ config.story.gazette_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.gazette_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Gazette Length (tokens)</label>
-            <input type="number" name="gazette_max_tokens" value="{{ config.story.gazette_max_tokens }}" min="1024" max="8000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 4096. The dwarven newspaper. Higher = longer articles per section.</small>
-        </div>
+                <div class="token-item">
+                    <label>Chat Summary</label>
+                    <div class="slider-group">
+                        <input type="range" name="chat_summary_max_tokens" min="256" max="4096" step="128"
+                            value="{{ config.story.chat_summary_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.chat_summary_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Quest Generation Length (tokens)</label>
-            <input type="number" name="quest_generation_max_tokens" value="{{ config.story.quest_generation_max_tokens }}" min="512" max="4000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 2048. AI-generated quest descriptions and hints.</small>
-        </div>
+                <div class="token-item">
+                    <label>Quest Generation</label>
+                    <div class="slider-group">
+                        <input type="range" name="quest_generation_max_tokens" min="512" max="4096" step="128"
+                            value="{{ config.story.quest_generation_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.quest_generation_max_tokens }}</span>
+                    </div>
+                </div>
 
-        <div class="form-group">
-            <label>Quest Completion Narrative Length (tokens)</label>
-            <input type="number" name="quest_narrative_max_tokens" value="{{ config.story.quest_narrative_max_tokens }}" min="256" max="4000">
-            <small style="color: var(--ink-faded); font-size: 0.8rem;">Default: 1024. Narrative written when completing a quest.</small>
+                <div class="token-item">
+                    <label>Quest Narrative</label>
+                    <div class="slider-group">
+                        <input type="range" name="quest_narrative_max_tokens" min="256" max="4096" step="128"
+                            value="{{ config.story.quest_narrative_max_tokens }}"
+                            oninput="this.nextElementSibling.textContent = this.value">
+                        <span class="slider-value">{{ config.story.quest_narrative_max_tokens }}</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
         </div>{# end llm-settings #}
 
-        <div class="btn-row">
+        <div class="btn-row" style="margin-top: 1.5rem;">
             <button type="submit" class="btn btn-primary">Save Settings</button>
         </div>
 
@@ -100,7 +267,7 @@
 
         {% if legends_file %}
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <label style="font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.5px;">Legends Data</label>
+            <h3 style="font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.5px;">Legends Data</h3>
             <p style="font-size: 0.9rem; color: var(--ink-faded);">{{ legends_file }}</p>
         </div>
         {% endif %}

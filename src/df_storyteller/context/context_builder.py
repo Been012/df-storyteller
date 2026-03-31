@@ -39,6 +39,7 @@ class StoryContext:
     character_text: str = ""
     lore_text: str = ""
     previous_summary: str = ""
+    author_instructions: str = ""
 
     estimated_tokens: int = 0
 

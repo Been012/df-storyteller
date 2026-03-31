@@ -261,7 +261,8 @@ Write the full gazette now with all 5 section headers (HERALD:, MILITARY:, GOSSI
     current_lines: list[str] = []
 
     for line in result.split("\n"):
-        line_upper = line.strip().upper().rstrip(":")
+        # Strip markdown bold (**), heading markers (#), dashes, and colons
+        line_upper = line.strip().strip("*#-").strip().upper().rstrip(":")
         if line_upper in ("HERALD", "THE FORTRESS HERALD"):
             if current_section:
                 sections[current_section] = "\n".join(current_lines).strip()
