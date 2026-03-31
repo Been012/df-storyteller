@@ -57,7 +57,11 @@ def _format_event(event: GameEvent) -> str:
     if hasattr(data, "victim"):
         victim_name = data.victim.name if hasattr(data.victim, "name") else "Unknown"
         cause = getattr(data, "cause", "unknown")
-        return f"{prefix} DEATH: {victim_name} died ({cause})"
+        owner = getattr(data, "owner", None)
+        owner_suffix = ""
+        if owner and hasattr(owner, "name") and owner.name:
+            owner_suffix = f" ({owner.name}'s pet)"
+        return f"{prefix} DEATH: {victim_name} died ({cause}){owner_suffix}"
 
     if hasattr(data, "attacker") and hasattr(data, "defender"):
         atk = data.attacker.name if hasattr(data.attacker, "name") else "Unknown"
@@ -113,8 +117,37 @@ def _format_event(event: GameEvent) -> str:
     if isinstance(data, MigrationWaveData):
         return f"{prefix} MIGRANTS: {data.new_arrivals} new dwarves arrived (population: {data.total_population})"
 
-    # Fallback for any remaining dict-based events
+    # Dict-based events
     if isinstance(data, dict):
+        if event.event_type == EventType.RELATIONSHIP_FORMED:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            target = data.get("target_name", "someone")
+            rel = data.get("relationship_type", "associate")
+            return f"{prefix} RELATIONSHIP: {name} formed a {rel} bond with {target}"
+
+        if event.event_type == EventType.SKILL_LEVEL_UP:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            skill = data.get("skill", "unknown")
+            level = data.get("new_level", "")
+            return f"{prefix} SKILL: {name} reached {level} in {skill}"
+
+        if event.event_type == EventType.TANTRUM:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            ttype = data.get("tantrum_type", "tantrum")
+            return f"{prefix} TANTRUM: {name} has entered a {ttype} state!"
+
+        if event.event_type == EventType.MOOD_COMPLETED:
+            unit = data.get("unit", {})
+            name = _strip_profession(unit.get("name", "Unknown") if isinstance(unit, dict) else "Unknown")
+            artifact = data.get("artifact_name", "")
+            mood = data.get("previous_mood", "unknown")
+            if artifact:
+                return f"{prefix} MOOD COMPLETED: {name} completed a {mood} mood and created {artifact}"
+            return f"{prefix} MOOD COMPLETED: {name} finished a {mood} mood"
+
         raw = data.get("raw_text", "")
         return f"{prefix} {event.event_type.value}: {raw}" if raw else f"{prefix} {event.event_type.value}"
 

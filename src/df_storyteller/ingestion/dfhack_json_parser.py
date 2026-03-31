@@ -109,6 +109,7 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                     victim=_parse_unit_ref(data.get("victim", data)),
                     cause=data.get("cause", "unknown"),
                     killer=_parse_unit_ref(data["killer"]) if data.get("killer") else None,
+                    owner=_parse_unit_ref(data["owner"]) if data.get("owner") else None,
                     location=_parse_location(data.get("location")),
                     age=data.get("age"),
                     notable_skills=data.get("notable_skills", []),
@@ -253,6 +254,34 @@ def parse_dfhack_event(raw: dict[str, Any]) -> GameEvent:
                     new_arrivals=data.get("new_arrivals", 0),
                     total_population=data.get("total_population", 0),
                 ),
+            )
+
+        case "mood_completed":
+            return GameEvent(
+                event_type=EventType.MOOD_COMPLETED,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "tantrum":
+            return GameEvent(
+                event_type=EventType.TANTRUM,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "skill_level_up":
+            return GameEvent(
+                event_type=EventType.SKILL_LEVEL_UP,
+                **base_kwargs,
+                data=data,
+            )
+
+        case "relationship_formed":
+            return GameEvent(
+                event_type=EventType.RELATIONSHIP_FORMED,
+                **base_kwargs,
+                data=data,
             )
 
         case _:

@@ -86,6 +86,28 @@ local function safe_unit_name(unit)
     return name
 end
 
+--- Get the given/translated name of a unit (e.g. "Whipwayward", "Sibrek Bomrekonul").
+--- Returns empty string if the unit has no proper name (most wild animals).
+local function get_pet_name(unit)
+    local pet_name = ''
+    pcall(function()
+        if unit.name and unit.name.has_name then
+            pcall(function()
+                pet_name = dfhack.df2utf(dfhack.translation.translateName(unit.name, true))
+            end)
+            -- Fallback: try first_name directly
+            if pet_name == '' then
+                pcall(function()
+                    if unit.name.first_name and unit.name.first_name ~= '' then
+                        pet_name = dfhack.df2utf(unit.name.first_name)
+                    end
+                end)
+            end
+        end
+    end)
+    return pet_name
+end
+
 -- ======================= Fortress Info =======================
 
 local function get_fortress_info()
@@ -204,6 +226,8 @@ local function serialize_unit(unit)
         is_alive = dfhack.units.isAlive(unit),
         stress_category = dfhack.units.getStressCategory(unit),
         age = unit_age,
+        sex = unit.sex == 0 and 'female' or (unit.sex == 1 and 'male' or 'unknown'),
+        birth_year = unit.birth_year or 0,
         civ_id = unit.civ_id,
         skills = {},
         personality = { facets = {}, beliefs = {}, goals = {} },
@@ -587,6 +611,57 @@ for _, unit in ipairs(df.global.world.units.active) do
         if ok then
             if dfhack.units.isAnimal(unit) or dfhack.units.isWildlife(unit) then
                 data.role = 'animal'
+                data.is_tame = false
+                data.is_wildlife = false
+                pcall(function() data.is_tame = dfhack.units.isTame(unit) end)
+                pcall(function() data.is_wildlife = dfhack.units.isWildlife(unit) end)
+                -- Enrich with pet/owner info
+                pcall(function()
+                    data.is_pet = false
+                    data.available_for_adoption = false
+                    data.owner_id = -1
+                    data.owner_name = ''
+                    -- Check PetOwner on the animal (most animals)
+                    if unit.relationship_ids and unit.relationship_ids.PetOwner >= 0 then
+                        data.is_pet = true
+                        data.owner_id = unit.relationship_ids.PetOwner
+                        local owner = df.unit.find(data.owner_id)
+                        if owner then data.owner_name = safe_unit_name(owner) end
+                    end
+                    -- Also check Pet on the animal (cat adoptions set this differently)
+                    if not data.is_pet then
+                        pcall(function()
+                            if unit.relationship_ids and unit.relationship_ids.Pet >= 0 then
+                                data.is_pet = true
+                                data.owner_id = unit.relationship_ids.Pet
+                                local owner = df.unit.find(data.owner_id)
+                                if owner then data.owner_name = safe_unit_name(owner) end
+                            end
+                        end)
+                    end
+                    -- Confirm via DFHack API (isPet checks actual ownership)
+                    if not data.is_pet then
+                        pcall(function()
+                            if dfhack.units.isPet(unit) then
+                                data.is_pet = true
+                            end
+                        end)
+                    end
+                    -- Check "available for adoption" flag (set in z->Animals screen)
+                    if not data.is_pet then
+                        pcall(function()
+                            if unit.flags3 and unit.flags3.available_for_adoption then
+                                data.available_for_adoption = true
+                            end
+                        end)
+                    end
+                end)
+                -- Try to get a proper pet/given name (e.g. "Whipwayward")
+                -- data.name from serialize_unit is "Cat (tame)" — override if we find a real name
+                local pet_name = get_pet_name(unit)
+                if pet_name ~= '' then
+                    data.pet_name = pet_name
+                end
                 table.insert(animals, data)
             elseif unit.race == player_race and dfhack.units.isFortControlled(unit) then
                 data.role = 'citizen'

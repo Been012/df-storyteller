@@ -59,6 +59,123 @@
     {% endfor %}
 </div>
 {% endif %}
+
+{% if total_animals > 0 %}
+<h2 class="page-header" style="margin-top: 2rem;">Animals</h2>
+<p class="page-subtitle">{{ total_animals }} creature{{ 's' if total_animals != 1 else '' }}</p>
+
+{% if pets_owned %}
+<details open style="margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+    <summary style="padding: 0.6rem 0.8rem; cursor: pointer; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark);">
+        Pets ({{ pets_owned | length }})
+    </summary>
+    <div style="padding: 0.4rem 0.8rem 0.8rem;">
+        <div class="dwarf-grid">
+            {% for a in pets_owned %}
+            <div class="dwarf-card" style="opacity: 0.85;">
+                <div class="dwarf-name">
+                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                    {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
+                </div>
+                <div class="dwarf-profession">
+                    {% if a.name %}{{ a.race }} &middot; {% endif %}
+                    {% if a.profession %}{{ a.profession }} &middot; {% endif %}
+                    Age {{ a.age | int }}
+                    {% if a.owner_name %} &middot; Owner: {{ a.owner_name }}{% endif %}
+                </div>
+                {% if a.traits %}
+                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
+{% endif %}
+
+{% if pets_adoptable %}
+<details style="margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+    <summary style="padding: 0.6rem 0.8rem; cursor: pointer; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark);">
+        Awaiting Owners ({{ pets_adoptable | length }})
+    </summary>
+    <div style="padding: 0.4rem 0.8rem 0.8rem;">
+        <div class="dwarf-grid">
+            {% for a in pets_adoptable %}
+            <div class="dwarf-card" style="opacity: 0.85;">
+                <div class="dwarf-name">
+                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                    <span class="role-badge" style="font-size: 0.7rem;">adoptable</span>
+                </div>
+                <div class="dwarf-profession">
+                    {% if a.name %}{{ a.race }} &middot; {% endif %}
+                    {% if a.profession %}{{ a.profession }} &middot; {% endif %}
+                    Age {{ a.age | int }}
+                </div>
+                {% if a.traits %}
+                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
+{% endif %}
+
+{% if livestock %}
+<details style="margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+    <summary style="padding: 0.6rem 0.8rem; cursor: pointer; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark);">
+        Livestock ({{ livestock | length }})
+    </summary>
+    <div style="padding: 0.4rem 0.8rem 0.8rem;">
+        <div class="dwarf-grid">
+            {% for a in livestock %}
+            <div class="dwarf-card" style="opacity: 0.85;">
+                <div class="dwarf-name">
+                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                    {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
+                </div>
+                <div class="dwarf-profession">
+                    {% if a.name %}{{ a.race }} &middot; {% endif %}
+                    {% if a.profession %}{{ a.profession }} &middot; {% endif %}
+                    Age {{ a.age | int }}
+                </div>
+                {% if a.traits %}
+                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
+{% endif %}
+
+{% if wild_animals %}
+<details style="margin-bottom: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+    <summary style="padding: 0.6rem 0.8rem; cursor: pointer; font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold-dark);">
+        Wild Animals ({{ wild_animals | length }})
+    </summary>
+    <div style="padding: 0.4rem 0.8rem 0.8rem;">
+        <div class="dwarf-grid">
+            {% for a in wild_animals %}
+            <div class="dwarf-card" style="opacity: 0.75;">
+                <div class="dwarf-name">
+                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                </div>
+                <div class="dwarf-profession">
+                    {% if a.name %}{{ a.race }} &middot; {% endif %}
+                    Age {{ a.age | int }}
+                </div>
+                {% if a.traits %}
+                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
+{% endif %}
+
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

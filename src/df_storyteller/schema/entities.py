@@ -46,6 +46,24 @@ class Dwarf(BaseModel):
     mental_attributes: dict[str, int] = Field(default_factory=dict)
 
 
+class Animal(BaseModel):
+    """A tracked animal in the fortress (pet, livestock, or wild)."""
+
+    unit_id: int = 0
+    name: str = ""
+    race: str = ""
+    profession: str = ""
+    age: float = 0.0
+    sex: str = "unknown"
+    is_alive: bool = True
+    is_pet: bool = False
+    available_for_adoption: bool = False
+    owner_id: int = -1
+    owner_name: str = ""
+    category: str = ""  # "pet", "war", "hunting", "adoptable", "tame", "wild"
+    traits: list[str] = Field(default_factory=list)  # e.g. "sickly", "very strong"
+
+
 class HistoricalFigure(BaseModel):
     """A figure from legends mode / world history."""
 

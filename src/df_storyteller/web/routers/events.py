@@ -367,9 +367,10 @@ async def api_battle_report(encounter_index: int):
     group = engagement_groups[encounter_index]
     is_siege = len(group) > 1
 
-    # Build combined combat text
+    # Build combined combat text and collect combatant unit_ids directly
     all_raw = []
     participants = set()
+    combatant_unit_ids: list[int] = []  # ordered — first combatant preferred as author
     any_lethal = False
     for event in group:
         d = event.data
@@ -377,8 +378,12 @@ async def api_battle_report(encounter_index: int):
             all_raw.append(d.raw_text)
         if hasattr(d, "attacker"):
             participants.add(d.attacker.name)
+            if d.attacker.unit_id and d.attacker.unit_id not in combatant_unit_ids:
+                combatant_unit_ids.append(d.attacker.unit_id)
         if hasattr(d, "defender"):
             participants.add(d.defender.name)
+            if d.defender.unit_id and d.defender.unit_id not in combatant_unit_ids:
+                combatant_unit_ids.append(d.defender.unit_id)
         if getattr(d, "is_lethal", False):
             any_lethal = True
 
@@ -390,43 +395,22 @@ async def api_battle_report(encounter_index: int):
     author_name = ""
     author_context = ""
 
-    # Build a mapping of gamelog titles/professions to actual dwarf names
-    # The gamelog uses titles like "militia commander" not actual names
     ranked = character_tracker.ranked_characters()
     name_mappings: list[str] = []
-    title_to_dwarf: dict[str, object] = {}
     for dwarf, _ in ranked:
         short_name = dwarf.name.split(",")[0].strip()
-        # Map profession to name
         if dwarf.profession:
-            prof_lower = dwarf.profession.lower()
-            title_to_dwarf[prof_lower] = dwarf
             name_mappings.append(f"'{dwarf.profession}' = {short_name}")
-        # Map noble positions
         for pos in dwarf.noble_positions:
-            title_to_dwarf[pos.lower()] = dwarf
             name_mappings.append(f"'{pos}' = {short_name}")
-        # Map military squad role
-        if dwarf.military_squad:
-            title_to_dwarf[dwarf.military_squad.lower()] = dwarf
 
-    # Check if any fortress dwarf was a combatant and survived
+    # Prefer actual combatants as author (first combatant who's alive wins)
     combatant_author = None
-    for p in participants:
-        p_lower = p.lower()
-        # Check against titles/professions
-        if p_lower in title_to_dwarf:
-            dwarf = title_to_dwarf[p_lower]
-            if dwarf.is_alive:
-                combatant_author = dwarf
-                break
-        # Check against actual names
-        for dwarf, _ in ranked:
-            if p_lower in dwarf.name.lower():
-                if dwarf.is_alive:
-                    combatant_author = dwarf
-                    break
-        if combatant_author:
+    characters = character_tracker._characters
+    for uid in combatant_unit_ids:
+        dwarf = characters.get(uid)
+        if dwarf and dwarf.is_alive:
+            combatant_author = dwarf
             break
 
     if combatant_author:

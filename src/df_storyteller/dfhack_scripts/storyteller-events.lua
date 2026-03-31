@@ -213,6 +213,16 @@ local function on_unit_death(unit_id)
         end
     end
 
+    -- If the dead unit was a pet, capture its owner for narrative context
+    pcall(function()
+        if unit.relationship_ids and unit.relationship_ids.PetOwner >= 0 then
+            local owner = df.unit.find(unit.relationship_ids.PetOwner)
+            if owner then
+                data.owner = serialize_unit(owner)
+            end
+        end
+    end)
+
     write_event('death', data)
 end
 

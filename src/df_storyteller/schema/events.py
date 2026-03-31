@@ -29,6 +29,10 @@ class EventType(str, Enum):
     STRESS_CHANGE = "stress_change"
     MIGRANT_ARRIVED = "migrant_arrived"
     MIGRATION_WAVE = "migration_wave"
+    MOOD_COMPLETED = "mood_completed"
+    TANTRUM = "tantrum"
+    SKILL_LEVEL_UP = "skill_level_up"
+    RELATIONSHIP_FORMED = "relationship_formed"
 
 
 class EventSource(str, Enum):
@@ -78,6 +82,7 @@ class DeathData(BaseModel):
     victim: UnitRef
     cause: str = "unknown"
     killer: UnitRef | None = None
+    owner: UnitRef | None = None  # Pet's owner, if the victim was a pet
     location: Location | None = None
     age: int | None = None
     notable_skills: list[dict[str, str]] = Field(default_factory=list)

@@ -77,8 +77,41 @@ async def dwarves_page(request: Request):
             "hfid": hfid if hfid and hfid > 0 else None,
         })
 
+    # Build animals grouped into accordion sections
+    def _animal_dict(a) -> dict:
+        return {
+            "name": getattr(a, "name", ""),
+            "race": getattr(a, "race", "").replace("_", " ").title(),
+            "profession": getattr(a, "profession", ""),
+            "age": getattr(a, "age", 0),
+            "sex": getattr(a, "sex", ""),
+            "owner_name": getattr(a, "owner_name", ""),
+            "category": getattr(a, "category", "wild"),
+            "traits": getattr(a, "traits", []),
+        }
+
+    pets_owned: list[dict] = []       # actual pets with owners
+    pets_adoptable: list[dict] = []   # available for adoption, no owner yet
+    livestock: list[dict] = []        # tame animals (inc. war/hunting trained)
+    wild_animals: list[dict] = []     # wild/untamed
+    for a in metadata.get("animals", []):
+        cat = getattr(a, "category", "wild")
+        if cat == "pet":
+            pets_owned.append(_animal_dict(a))
+        elif cat == "adoptable":
+            pets_adoptable.append(_animal_dict(a))
+        elif cat in ("war", "hunting", "tame"):
+            livestock.append(_animal_dict(a))
+        else:
+            wild_animals.append(_animal_dict(a))
+
+    total_animals = len(pets_owned) + len(pets_adoptable) + len(livestock) + len(wild_animals)
+
     return templates.TemplateResponse(request=request, name="dwarves.html", context={
         **ctx, "content_class": "content-wide", "dwarves": dwarves, "visitors": visitors,
+        "pets_owned": pets_owned, "pets_adoptable": pets_adoptable,
+        "livestock": livestock, "wild_animals": wild_animals,
+        "total_animals": total_animals,
     })
 
 

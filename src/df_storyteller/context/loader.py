@@ -17,7 +17,7 @@ from df_storyteller.context.context_builder import ContextBuilder
 from df_storyteller.context.event_store import EventStore
 from df_storyteller.context.world_lore import WorldLore
 from df_storyteller.ingestion.dfhack_json_parser import parse_dfhack_file
-from df_storyteller.schema.entities import Dwarf, Relationship, Skill
+from df_storyteller.schema.entities import Animal, Dwarf, Relationship, Skill
 from df_storyteller.schema.events import EventSource, EventType, GameEvent, Season
 from df_storyteller.schema.personality import Belief, Facet, Goal, Personality
 
@@ -37,6 +37,75 @@ def _load_personality(raw: dict) -> Personality:
         for g in p.get("goals", [])
     ]
     return Personality(facets=facets, beliefs=beliefs, goals=goals)
+
+
+def _describe_animal_traits(raw: dict) -> list[str]:
+    """Derive readable trait descriptions from an animal's physical attributes."""
+    phys = raw.get("physical_attributes", {})
+    traits: list[str] = []
+    _DESCRIPTIONS = {
+        "STRENGTH": {True: "very strong", False: "weak"},
+        "AGILITY": {True: "very agile", False: "clumsy"},
+        "TOUGHNESS": {True: "very tough", False: "fragile"},
+        "ENDURANCE": {True: "tireless", False: "tires easily"},
+        "RECUPERATION": {True: "heals quickly", False: "recovers slowly"},
+        "DISEASE_RESISTANCE": {True: "hardy", False: "sickly"},
+    }
+    for attr, labels in _DESCRIPTIONS.items():
+        val = phys.get(attr)
+        if val is None:
+            continue
+        if val >= 1500:
+            traits.append(labels[True])
+        elif val <= 400:
+            traits.append(labels[False])
+    return traits
+
+
+def _load_animal_from_snapshot(raw: dict) -> Animal:
+    """Create an Animal entity from a snapshot animal entry."""
+    profession = raw.get("profession", "")
+    is_pet = raw.get("is_pet", False)
+    available_for_adoption = raw.get("available_for_adoption", False)
+    is_tame = raw.get("is_tame", False)
+    is_wildlife = raw.get("is_wildlife", False)
+    prof_lower = profession.lower()
+
+    if is_pet:
+        category = "pet"
+    elif "war" in prof_lower:
+        category = "war"
+    elif "hunting" in prof_lower:
+        category = "hunting"
+    elif available_for_adoption:
+        category = "adoptable"
+    elif is_wildlife:
+        category = "wild"
+    elif is_tame:
+        category = "tame"
+    elif raw.get("civ_id", -1) >= 0:
+        category = "tame"
+    else:
+        category = "wild"
+
+    # Prefer pet_name (e.g. "Whipwayward") over generic name (e.g. "Cat (tame)")
+    name = raw.get("pet_name", "") or raw.get("name", "")
+
+    return Animal(
+        unit_id=raw.get("unit_id", 0),
+        name=name,
+        race=raw.get("race", "").replace("_", " ").lower(),
+        profession=profession,
+        age=raw.get("age", 0),
+        sex=raw.get("sex", "unknown"),
+        is_alive=raw.get("is_alive", True),
+        is_pet=is_pet,
+        available_for_adoption=available_for_adoption,
+        owner_id=raw.get("owner_id", -1),
+        owner_name=raw.get("owner_name", ""),
+        category=category,
+        traits=_describe_animal_traits(raw),
+    )
 
 
 def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
@@ -309,7 +378,9 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
 
                 # Store visitors, animals, buildings in metadata
                 metadata["visitors"] = data.get("visitors", [])
-                metadata["animals"] = data.get("animals", [])
+                metadata["animals"] = [
+                    _load_animal_from_snapshot(a) for a in data.get("animals", [])
+                ]
                 metadata["buildings"] = data.get("buildings", [])
 
                 # Register citizens
@@ -432,19 +503,23 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         # Match gamelog unit_id=0 references to known dwarves by name or title.
         # Build lookup tables: name -> unit_id, profession/title -> unit_id
         _name_to_id: dict[str, int] = {}
+        _id_to_name: dict[int, str] = {}
         _title_to_id: dict[str, int] = {}
+        _ambiguous_titles: set[str] = set()  # titles held by multiple dwarves
         for dwarf in character_tracker._characters.values():
             # Full name and short name
-            norm = dwarf.name.lower().split(",")[0].strip()
-            _name_to_id[norm] = dwarf.unit_id
+            short = dwarf.name.lower().split(",")[0].strip()
+            _name_to_id[short] = dwarf.unit_id
             _name_to_id[dwarf.name.lower()] = dwarf.unit_id
-            # Profession/title from snapshot
-            if dwarf.profession:
-                _title_to_id[dwarf.profession.lower()] = dwarf.unit_id
-            for pos in dwarf.noble_positions:
-                _title_to_id[pos.lower()] = dwarf.unit_id
-            if dwarf.military_squad:
-                _title_to_id[dwarf.military_squad.lower()] = dwarf.unit_id
+            _id_to_name[dwarf.unit_id] = short.title()
+            # Profession/title from snapshot — track collisions
+            for title in [dwarf.profession] + list(dwarf.noble_positions) + ([dwarf.military_squad] if dwarf.military_squad else []):
+                if not title:
+                    continue
+                key = title.lower()
+                if key in _title_to_id and _title_to_id[key] != dwarf.unit_id:
+                    _ambiguous_titles.add(key)
+                _title_to_id[key] = dwarf.unit_id
 
         # Also extract titles from DFHack events (noble appointments, profession
         # changes) which may be newer than the snapshot.
@@ -456,20 +531,34 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             uid = unit_ref.unit_id
             if event.event_type == EventType.NOBLE_APPOINTMENT:
                 for pos in getattr(data, "positions", []):
-                    _title_to_id[pos.lower()] = uid
+                    key = pos.lower()
+                    if key in _title_to_id and _title_to_id[key] != uid:
+                        _ambiguous_titles.add(key)
+                    _title_to_id[key] = uid
             elif event.event_type == EventType.PROFESSION_CHANGE:
                 new_prof = getattr(data, "new_profession", "")
                 if new_prof:
-                    _title_to_id[new_prof.lower()] = uid
+                    key = new_prof.lower()
+                    if key in _title_to_id and _title_to_id[key] != uid:
+                        _ambiguous_titles.add(key)
+                    _title_to_id[key] = uid
 
         def _resolve_ref(ref) -> None:
-            """Patch unit_id on a UnitRef if it's 0 and we can match by name."""
+            """Patch unit_id and name on a UnitRef if we can match by name/title."""
             if not ref or not hasattr(ref, "unit_id") or ref.unit_id != 0:
                 return
             name = ref.name.lower().strip()
-            uid = _name_to_id.get(name) or _title_to_id.get(name)
+            uid = _name_to_id.get(name)
+            if not uid:
+                # Only use title lookup if unambiguous
+                if name not in _ambiguous_titles:
+                    uid = _title_to_id.get(name)
             if uid:
                 ref.unit_id = uid
+                # Replace title/profession with the dwarf's actual name
+                real_name = _id_to_name.get(uid)
+                if real_name and name != real_name.lower():
+                    ref.name = real_name
 
         matched = 0
         for event in gamelog_events:
@@ -483,6 +572,25 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                             if hasattr(data, f) and getattr(data, f) and getattr(data, f).unit_id != 0)
                 if after > before:
                     matched += 1
+
+        # Deduplicate: skip gamelog deaths/moods that duplicate DFHack events.
+        # Build index of existing DFHack events by (type, unit_id) for fast lookup.
+        _dfhack_event_keys: set[tuple[str, int]] = set()
+        for event in event_store.recent_events(500):
+            if event.source == EventSource.DFHACK and event.event_type in (EventType.DEATH, EventType.MOOD):
+                for uid in event_store._extract_unit_ids(event):
+                    _dfhack_event_keys.add((event.event_type.value, uid))
+
+        deduped = 0
+        filtered_events = []
+        for event in gamelog_events:
+            if event.event_type in (EventType.DEATH, EventType.MOOD):
+                uids = event_store._extract_unit_ids(event)
+                if any((event.event_type.value, uid) in _dfhack_event_keys for uid in uids if uid):
+                    deduped += 1
+                    continue
+            filtered_events.append(event)
+        gamelog_events = filtered_events
 
         # Assign incrementing ticks so gamelog events sort after DFHack events
         # within the same season (DFHack ticks are real game ticks, gamelog has 0)
@@ -498,8 +606,8 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             if event.event_type == EventType.COMBAT:
                 combat_count += 1
         logger.info(
-            "Gamelog parsed: %d events (%d combat, %d matched to dwarves) from %d lines (%d saved + %d new)",
-            len(gamelog_events), combat_count, matched, len(all_lines), len(saved_lines), len(new_lines),
+            "Gamelog parsed: %d events (%d combat, %d matched, %d deduped) from %d lines (%d saved + %d new)",
+            len(gamelog_events), combat_count, matched, deduped, len(all_lines), len(saved_lines), len(new_lines),
         )
 
     # 4. Load legends if available (skip if told to — expensive for large files)
