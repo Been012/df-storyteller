@@ -33,6 +33,20 @@
             </div>
         </div>
         {% endif %}
+
+        {% if geo.events %}
+        <div class="bio-section" style="margin-top: 1.5rem;">
+            <h3>Event Timeline</h3>
+            <div style="max-height: 400px; overflow-y: auto;">
+            {% for event in geo.events %}
+                <div class="milestone-item" style="margin-bottom: 0.3rem;">
+                    <span class="milestone-when">Year {{ event.year }}</span>
+                    <span class="milestone-desc">{{ event.description | hotlink | safe }}</span>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -175,12 +175,36 @@
                 const line = L.polyline(latlngs, {
                     color: color, weight: 2, opacity: 0.7, dashArray: wc.type === 'tunnel' ? '4 4' : null,
                 });
-                line.bindPopup('<div style="font-family: \'Crimson Text\', serif;"><strong>' + wc.name + '</strong><br><span style="color: #7a6558;">' + wc.type + '</span></div>');
+                line.bindPopup('<div style="font-family: \'Crimson Text\', serif;"><strong><a href="/lore/construction/' + wc.id + '" style="color:#8a6d3b;">' + wc.name + '</a></strong><br><span style="color: #7a6558;">' + wc.type + '</span></div>');
                 constructionLayer.addLayer(line);
             }
             constructionLayer.addTo(map);
             const label = '<span style="color:#b8a078;">&#9473;</span> Roads & Tunnels (' + siteData.constructions.length + ')';
             overlays[label] = constructionLayer;
+        }
+
+        // Mountain peaks
+        if (siteData.peaks && siteData.peaks.length) {
+            const peakLayer = L.layerGroup();
+            for (const peak of siteData.peaks) {
+                const lat = worldH - peak.y - 0.5, lng = peak.x + 0.5;
+                const icon = L.divIcon({
+                    className: 'map-site-marker',
+                    html: '<span style="color:#5c3d2e;font-size:12px;text-shadow:0 0 2px #000,0 0 2px #000;">\u25B2</span>',
+                    iconSize: [14, 14], iconAnchor: [7, 7],
+                });
+                const marker = L.marker([lat, lng], { icon: icon });
+                let popup = '<div style="font-family:\'Crimson Text\',serif;">';
+                popup += '<strong><a href="/lore/peak/' + peak.id + '" style="color:#8a6d3b;">' + peak.name + '</a></strong><br>';
+                popup += '<span style="color:#7a6558;font-size:0.9em;">Mountain Peak</span>';
+                if (peak.height) popup += '<br><span style="font-size:0.85em;">Height: ' + peak.height + '</span>';
+                popup += '</div>';
+                marker.bindPopup(popup);
+                peakLayer.addLayer(marker);
+            }
+            peakLayer.addTo(map);
+            const label = '<span style="color:#5c3d2e;">\u25B2</span> Mountain Peaks (' + siteData.peaks.length + ')';
+            overlays[label] = peakLayer;
         }
 
         L.control.layers(null, overlays, { collapsed: false, position: 'topright' }).addTo(map);

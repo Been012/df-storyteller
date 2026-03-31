@@ -311,7 +311,7 @@
     {% for battle in battles %}
     <div class="lore-item" {% if battle.id %}data-entity-type="battle" data-entity-id="{{ battle.id }}"{% endif %} style="margin-bottom: 0.4rem;">
         {{ pin_btn("battle", battle.id, battle.name) }}
-        <strong>{{ battle.name }}</strong>{% if battle.year %} <span style="color: var(--ink-faded);">(year {{ battle.year }})</span>{% endif %}
+        <strong><a href="/lore/event/{{ battle.id }}" style="color: var(--ink);">{{ battle.name }}</a></strong>{% if battle.year %} <span style="color: var(--ink-faded);">(year {{ battle.year }})</span>{% endif %}
         {% if battle.details %}<br><span style="font-size: 0.9rem; color: var(--ink-light);">{{ battle.details }}</span>{% endif %}
     </div>
     {% endfor %}
@@ -529,7 +529,7 @@
     {% for work in written_works %}
     <div class="lore-item" {% if work.id is defined and work.id is not none %}data-entity-type="written_work" data-entity-id="{{ work.id }}"{% endif %} style="margin-bottom: 0.3rem;">
         {{ pin_btn("written_work", work.id, work.title) }}
-        <strong>{{ work.title }}</strong>{% if work.details %} — <span style="color: var(--ink-light);">{{ work.details }}</span>{% endif %}
+        <strong>{% if work.id %}<a href="/lore/work/{{ work.id }}" style="color: var(--ink);">{{ work.title }}</a>{% else %}{{ work.title }}{% endif %}</strong>{% if work.details %} — <span style="color: var(--ink-light);">{{ work.details }}</span>{% endif %}
     </div>
     {% endfor %}
 {% endcall %}
@@ -544,8 +544,9 @@
             {% for form in poetic_forms[:10] %}
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
+                {% set fid = form.get("id", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", fid, name) }}<strong><a href="/lore/form/poetic/{{ fid }}" style="color: var(--ink);">{{ name }}</a></strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -555,8 +556,9 @@
             {% for form in musical_forms[:10] %}
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
+                {% set fid = form.get("id", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", fid, name) }}<strong><a href="/lore/form/musical/{{ fid }}" style="color: var(--ink);">{{ name }}</a></strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -566,8 +568,9 @@
             {% for form in dance_forms[:10] %}
             <div class="lore-item" style="margin-bottom: 0.6rem;">
                 {% set name = form.get("name", "") if form is mapping else "" %}
+                {% set fid = form.get("id", "") if form is mapping else "" %}
                 {% set desc = form.get("description", "") if form is mapping else "" %}
-                {% if name %}{{ pin_btn("cultural_form", "", name) }}<strong>{{ name }}</strong>{% endif %}
+                {% if name %}{{ pin_btn("cultural_form", fid, name) }}<strong><a href="/lore/form/dance/{{ fid }}" style="color: var(--ink);">{{ name }}</a></strong>{% endif %}
                 {% if desc %}<p style="font-size: 0.85rem; color: var(--ink-light); margin: 0.2rem 0 0; font-style: italic;">{{ desc }}</p>{% endif %}
             </div>
             {% endfor %}
@@ -592,8 +595,8 @@
             <div class="lore-grid-3">
             {% for region in regions_data %}
             <div class="lore-item" style="margin-bottom: 0.3rem;">
-                {{ pin_btn("region", "", region.name) }}
-                <strong>{{ region.name }}</strong>{% if region.details %} — <span style="color: var(--ink-light);">{{ region.details }}</span>{% endif %}
+                {{ pin_btn("region", region.id, region.name) }}
+                <strong>{% if region.link %}<a href="{{ region.link }}" style="color: var(--ink);">{{ region.name }}</a>{% else %}{{ region.name }}{% endif %}</strong>{% if region.details %} — <span style="color: var(--ink-light);">{{ region.details }}</span>{% endif %}
             </div>
             {% endfor %}
             </div>
@@ -611,7 +614,7 @@
             {% for geo in geography %}
             <div class="lore-item" {% if geo.id and geo.entity_type %}data-entity-type="{{ geo.entity_type }}" data-entity-id="{{ geo.id }}"{% endif %} style="margin-bottom: 0.3rem;">
                 {{ pin_btn("geography", geo.id, geo.name) }}
-                <strong>{{ geo.name }}</strong> — <span style="color: var(--ink-light);">{{ geo.details }}</span>
+                <strong>{% if geo.link %}<a href="{{ geo.link }}" style="color: var(--ink);">{{ geo.name }}</a>{% else %}{{ geo.name }}{% endif %}</strong> — <span style="color: var(--ink-light);">{{ geo.details }}</span>
             </div>
             {% endfor %}
             </div>
@@ -720,11 +723,39 @@ function showMoreItems(sectionId) {
             marker.addTo(map);
         }
 
-        // Roads/tunnels
+        // Roads/tunnels (clickable with name)
         if (siteData.constructions) {
             for (const wc of siteData.constructions) {
                 const latlngs = wc.points.map(p => [wH - p[1] - 0.5, p[0] + 0.5]);
-                L.polyline(latlngs, { color: '#b8a078', weight: 1.5, opacity: 0.5, dashArray: wc.type === 'tunnel' ? '3 3' : null }).addTo(map);
+                const line = L.polyline(latlngs, { color: '#b8a078', weight: 2, opacity: 0.6, dashArray: wc.type === 'tunnel' ? '3 3' : null });
+                if (wc.name) {
+                    let popup = '<div style="font-family:\'Crimson Text\',serif;">';
+                    popup += '<strong><a href="/lore/construction/' + wc.id + '" style="color:#8a6d3b;">' + wc.name + '</a></strong><br>';
+                    popup += '<span style="color:#7a6558;font-size:0.9em;">' + wc.type + '</span>';
+                    popup += '</div>';
+                    line.bindPopup(popup);
+                }
+                line.addTo(map);
+            }
+        }
+
+        // Mountain peaks
+        if (siteData.peaks) {
+            for (const peak of siteData.peaks) {
+                const lat = wH - peak.y - 0.5, lng = peak.x + 0.5;
+                const icon = L.divIcon({
+                    className: 'map-site-marker',
+                    html: '<span style="color:#5c3d2e;font-size:10px;text-shadow:0 0 2px #000,0 0 2px #000;">\u25B2</span>',
+                    iconSize: [12, 12], iconAnchor: [6, 6],
+                });
+                const marker = L.marker([lat, lng], { icon: icon });
+                let popup = '<div style="font-family:\'Crimson Text\',serif;">';
+                popup += '<strong><a href="/lore/peak/' + peak.id + '" style="color:#8a6d3b;">' + peak.name + '</a></strong><br>';
+                popup += '<span style="color:#7a6558;font-size:0.9em;">Mountain Peak</span>';
+                if (peak.height) popup += '<br><span style="font-size:0.85em;">Height: ' + peak.height + '</span>';
+                popup += '</div>';
+                marker.bindPopup(popup);
+                marker.addTo(map);
             }
         }
     })

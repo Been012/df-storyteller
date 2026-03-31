@@ -472,9 +472,10 @@ async def lore_page(request: Request):
         # Regions
         for region in legends.regions:
             name = region.get("name", "")
+            rid = region.get("id", "")
             rtype = region.get("type", "").replace("_", " ").title()
             if name:
-                regions_data.append({"name": name, "details": rtype})
+                regions_data.append({"id": rid, "name": name, "details": rtype, "link": f"/lore/region/{rid}"})
 
         # Historical eras
         eras = []
@@ -672,19 +673,25 @@ async def lore_page(request: Request):
             details = "Volcano" if is_volcano == "1" else "Mountain"
             if height:
                 details += f", height {height}"
-            geography.append({"id": peak.get("id", ""), "entity_type": "geography", "name": name, "type": "peak", "details": details})
+            geography.append({"id": peak.get("id", ""), "entity_type": "geography", "name": name, "type": "peak", "details": details, "link": f"/lore/peak/{peak.get('id', '')}"})
 
         for land in legends.landmasses:
-            geography.append({"id": land.get("id", ""), "entity_type": "geography", "name": land.get("name", ""), "type": "landmass", "details": "Landmass"})
+            lid = land.get("id", "")
+            geography.append({"id": lid, "entity_type": "geography", "name": land.get("name", ""), "type": "landmass", "details": "Landmass", "link": f"/lore/landmass/{lid}"})
 
         for river in legends.rivers:
-            geography.append({"name": river.get("name", ""), "type": "river", "details": "River"})
+            from urllib.parse import quote
+            rname = river.get("name", "")
+            geography.append({"name": rname, "type": "river", "details": "River", "link": f"/lore/river/{quote(rname)}" if rname else ""})
 
         for wc in legends.world_constructions:
+            wc_id = wc.get("id", "")
             geography.append({
+                "id": wc_id,
                 "name": wc.get("name", ""),
                 "type": "construction",
                 "details": wc.get("type", "Construction"),
+                "link": f"/lore/construction/{wc_id}" if wc_id else "",
             })
 
     # Build player's civilization summary with its own figures and artifacts

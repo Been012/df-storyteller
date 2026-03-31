@@ -22,6 +22,12 @@
             </div>
         </div>
 
+        {% if not event_types and not structures and not site_properties and not events %}
+        <div class="bio-section" style="margin-top: 1rem;">
+            <p style="color: var(--ink-faded); font-style: italic;">No recorded history at this site. It may be a wilderness lair, an abandoned camp, or a location yet to see notable events.</p>
+        </div>
+        {% endif %}
+
         {% if event_types %}
         <div class="stat-section">
             <h3>Event Distribution</h3>

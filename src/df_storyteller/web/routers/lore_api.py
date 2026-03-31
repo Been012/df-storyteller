@@ -594,12 +594,32 @@ async def api_map_sites():
                     pass
         if len(points) >= 2:
             constructions.append({
+                "id": wc.get("id", ""),
                 "name": wc.get("name", ""),
                 "type": wc.get("type", "").replace("_", " "),
                 "points": points,
             })
 
-    return {"sites": sites, "world_size": [world_w, world_h], "constructions": constructions}
+    # Mountain peaks as special markers
+    peaks = []
+    for peak in getattr(legends, "mountain_peaks", []):
+        coords_str = peak.get("coords", "")
+        if not coords_str:
+            continue
+        parts = coords_str.split(",")
+        if len(parts) == 2:
+            try:
+                peaks.append({
+                    "id": peak.get("id", ""),
+                    "name": peak.get("name", "Unknown"),
+                    "height": peak.get("height", ""),
+                    "x": int(parts[0]),
+                    "y": int(parts[1]),
+                })
+            except ValueError:
+                pass
+
+    return {"sites": sites, "world_size": [world_w, world_h], "constructions": constructions, "peaks": peaks}
 
 
 # ==================== Lore Search API ====================
@@ -730,15 +750,25 @@ async def api_lore_search(q: str = ""):
             results.append({"category": "Written Work", "name": title, "detail": detail, "id": wc.get("id", ""), "entity_type": "written_work"})
             count += 1
 
-    # Search wars/battles
+    # Search event collections (wars, battles, performances, ceremonies, etc.)
     count = 0
     for ec in legends.event_collections:
         if count >= MAX_PER_CATEGORY:
             break
         name = ec.get("name", "")
+        ec_type = ec.get("type", "")
+        ec_type_display = ec_type.replace("_", " ").title() if ec_type else "Event"
+        # Match on name if present, or on type if query matches the type
+        matched = False
         if name and query in name.lower():
-            ec_type = ec.get("type", "").replace("_", " ").title()
-            results.append({"category": ec_type, "name": name, "detail": "", "id": ec.get("id", ""), "entity_type": "war"})
+            matched = True
+        elif ec_type and query in ec_type.lower().replace("_", " "):
+            matched = True
+        if matched:
+            display_name = name if name else ec_type_display
+            year = ec.get("start_year", "")
+            detail = f"Year {year}" if year else ""
+            results.append({"category": ec_type_display, "name": display_name, "detail": detail, "id": ec.get("id", ""), "entity_type": "war"})
             count += 1
 
     # Search cultural forms (poetic, musical, dance)
@@ -811,6 +841,21 @@ async def api_lore_search(q: str = ""):
             height = peak.get("height", "") if isinstance(peak, dict) else ""
             detail = f"Height: {height}" if height else ""
             results.append({"category": "Mountain Peak", "name": name, "detail": detail, "id": pid, "entity_type": "peak", "link": f"/lore/peak/{pid}"})
+            count += 1
+
+    # Search world constructions (tunnels, roads, bridges)
+    count = 0
+    for wc in getattr(legends, "world_constructions", []):
+        if count >= MAX_PER_CATEGORY:
+            break
+        name = wc.get("name", "") if isinstance(wc, dict) else ""
+        wc_type = wc.get("type", "") if isinstance(wc, dict) else ""
+        wc_id = wc.get("id", "") if isinstance(wc, dict) else ""
+        searchable = f"{name} {wc_type}".lower()
+        if query in searchable:
+            detail = wc_type.replace("_", " ").title() if wc_type else "Construction"
+            display_name = name if name else f"{detail} #{wc_id}"
+            results.append({"category": "World Construction", "name": display_name, "detail": detail, "id": wc_id, "entity_type": "construction", "link": f"/lore/construction/{wc_id}"})
             count += 1
 
     return {"results": results}

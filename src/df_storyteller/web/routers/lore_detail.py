@@ -317,20 +317,34 @@ def _build_figure_context(legends: Any, hf_id: int) -> dict | None:
         if art.creator_hf_id == hf_id and art.name:
             artifacts.append({"name": art.name, "artifact_id": art.artifact_id})
 
-    # Entity positions held
+    # Entity positions held + affiliations
     entity_positions = []
+    affiliations = []
+    seen_affiliations: set[int] = set()
     for link in hf.entity_links:
         link_type = link.get("type", "").replace("_", " ")
         ent_id = link.get("entity_id")
         ent_name = ""
+        ent_obj = None
         if ent_id:
-            ent = legends.get_civilization(ent_id)
-            if ent:
-                ent_name = ent.name
+            ent_obj = legends.get_civilization(ent_id)
+            if ent_obj:
+                ent_name = ent_obj.name
         if link_type and ent_name:
             entity_positions.append(f"{link_type} of {ent_name}")
         elif link_type:
             entity_positions.append(link_type)
+        # Build affiliations (unique entities this figure is linked to)
+        if ent_id and ent_id not in seen_affiliations and ent_name:
+            seen_affiliations.add(ent_id)
+            ent_type = getattr(ent_obj, '_entity_type', '') if ent_obj else ''
+            ent_type_display = ent_type.replace("_", " ").title() if ent_type else ""
+            affiliations.append({
+                "entity_id": ent_id,
+                "name": ent_name,
+                "link_type": link_type,
+                "entity_type": ent_type_display,
+            })
 
     # Skills (format nicely)
     # Convert total_ip to approximate skill level
@@ -461,6 +475,7 @@ def _build_figure_context(legends: Any, hf_id: int) -> dict | None:
         "event_count": len(raw_events),
         "deeds": hf.notable_deeds[:10] if hf.notable_deeds else [],
         "entity_positions": entity_positions,
+        "affiliations": affiliations,
         "active_interactions": interactions,
         "skills": skill_strs,
         "journey_pets": pets,
@@ -1513,7 +1528,8 @@ async def lore_region_page(request: Request, region_id: str):
     ctx = _base_context(config, "lore", metadata)
     if not world_lore.is_loaded or not world_lore._legends:
         return RedirectResponse("/lore")
-    for region in world_lore._legends.regions:
+    legends = world_lore._legends
+    for region in legends.regions:
         if str(region.get("id", "")) == str(region_id):
             fields = []
             if region.get("type"):
@@ -1522,9 +1538,22 @@ async def lore_region_page(request: Request, region_id: str):
                 fields.append(("Evilness", region["evilness"].replace("_", " ").title()))
             if region.get("coords"):
                 fields.append(("Coordinates", region["coords"]))
+
+            # Find events in this region via subregion_id
+            from df_storyteller.context.event_renderer import describe_event_linked as _describe_evt
+            region_events: list[dict] = []
+            for evt in legends.historical_events:
+                if str(evt.get("subregion_id", "")) == str(region_id):
+                    region_events.append({"year": evt.get("year", "?"), "description": _describe_evt(evt, legends)})
+                    if len(region_events) >= 100:
+                        break
+            region_events.sort(key=lambda e: int(e["year"]) if str(e["year"]).lstrip("-").isdigit() else 0)
+
+            desc = f"{len(region_events)} events recorded in this region." if region_events else "No recorded events in this region."
+
             return templates.TemplateResponse(request=request, name="lore_geography.html", context={
                 **ctx, "content_class": "content-wide",
-                "geo": {"name": region.get("name", "Unknown"), "geo_type": "Region", "fields": fields, "description": ""},
+                "geo": {"name": region.get("name", "Unknown"), "geo_type": "Region", "fields": fields, "description": desc, "events": region_events},
             })
     return RedirectResponse("/lore")
 
@@ -1579,16 +1608,152 @@ async def lore_peak_page(request: Request, peak_id: str):
     ctx = _base_context(config, "lore", metadata)
     if not world_lore.is_loaded or not world_lore._legends:
         return RedirectResponse("/lore")
-    for peak in getattr(world_lore._legends, "mountain_peaks", []):
+    legends = world_lore._legends
+    for peak in getattr(legends, "mountain_peaks", []):
         if str(peak.get("id", "")) == str(peak_id):
             fields = []
             if peak.get("height"):
                 fields.append(("Height", f"{peak['height']}"))
             if peak.get("coords"):
                 fields.append(("Coordinates", peak["coords"]))
+
+            # Find events at this peak's coordinates
+            from df_storyteller.context.event_renderer import describe_event_linked as _describe_evt
+            peak_events: list[dict] = []
+            peak_coords = peak.get("coords", "")
+            if peak_coords:
+                for evt in legends.historical_events:
+                    if evt.get("coords") == peak_coords:
+                        peak_events.append({"year": evt.get("year", "?"), "description": _describe_evt(evt, legends)})
+                        if len(peak_events) >= 50:
+                            break
+                # Also check event collections
+                for ec in legends.event_collections:
+                    if ec.get("coords") == peak_coords:
+                        ec_name = ec.get("name", "")
+                        ec_type = ec.get("type", "").replace("_", " ").title()
+                        label = f"{ec_type}: {ec_name}" if ec_name else ec_type
+                        peak_events.append({"year": ec.get("start_year", "?"), "description": label})
+
+            peak_events.sort(key=lambda e: int(e["year"]) if str(e["year"]).lstrip("-").isdigit() else 0)
+            desc = f"{len(peak_events)} events recorded at this peak." if peak_events else ""
+
             return templates.TemplateResponse(request=request, name="lore_geography.html", context={
                 **ctx, "content_class": "content-wide",
-                "geo": {"name": peak.get("name", "Unknown"), "geo_type": "Mountain Peak", "fields": fields, "description": ""},
+                "geo": {"name": peak.get("name", "Unknown"), "geo_type": "Mountain Peak", "fields": fields, "description": desc, "events": peak_events},
+            })
+    return RedirectResponse("/lore")
+
+
+@router.get("/lore/construction/{construction_id}", response_class=HTMLResponse)
+async def lore_construction_page(request: Request, construction_id: str):
+    """Detail page for a world construction (tunnel, road, bridge)."""
+    config = _get_config()
+    _, _, world_lore, metadata = _load_game_state_safe(config, skip_legends=False)
+    ctx = _base_context(config, "lore", metadata)
+    if not world_lore.is_loaded or not world_lore._legends:
+        return RedirectResponse("/lore")
+    for wc in getattr(world_lore._legends, "world_constructions", []):
+        if str(wc.get("id", "")) == str(construction_id):
+            fields = []
+            wc_type = wc.get("type", "")
+            if wc_type:
+                fields.append(("Type", wc_type.replace("_", " ").title()))
+            if wc.get("coords"):
+                fields.append(("Coordinates", wc["coords"]))
+            # Check for additional fields that may be present
+            if wc.get("site_id_1") or wc.get("site_id_2"):
+                legends = world_lore._legends
+                for key in ("site_id_1", "site_id_2"):
+                    sid = wc.get(key)
+                    if sid:
+                        try:
+                            site = legends.get_site(int(sid))
+                            if site:
+                                label = "From Site" if key == "site_id_1" else "To Site"
+                                fields.append((label, site.name))
+                        except (ValueError, TypeError):
+                            pass
+            # Find events that occurred on this construction's tiles
+            legends = world_lore._legends
+            coord_set: set[str] = set()
+            for pair in wc.get("coords", "").split("|"):
+                pair = pair.strip()
+                if "," in pair:
+                    coord_set.add(pair)
+
+            from df_storyteller.context.event_renderer import describe_event_linked as _describe_evt
+            road_events: list[dict] = []
+            if coord_set:
+                # Event collections (battles, beast attacks, thefts, etc.)
+                # Build event ID lookup for enriching collections
+                _evt_by_id: dict[str, dict] = {}
+                for _evt in legends.historical_events:
+                    _evt_by_id[str(_evt.get("id", ""))] = _evt
+
+                for ec in legends.event_collections:
+                    ec_coords = ec.get("coords", "")
+                    if ec_coords and ec_coords in coord_set:
+                        ec_name = ec.get("name", "")
+                        ec_type = ec.get("type", "").replace("_", " ").title()
+
+                        # Enrich: resolve participants from sub-events
+                        details: list[str] = []
+                        event_ids = ec.get("event", [])
+                        if event_ids and not ec_name:
+                            participants: set[str] = set()
+                            for eid in event_ids[:20]:
+                                sub = _evt_by_id.get(str(eid))
+                                if not sub:
+                                    continue
+                                for field in ("hfid", "slayer_hfid", "group_1_hfid", "group_2_hfid", "snatcher_hfid", "attacker_hfid"):
+                                    hfid = sub.get(field)
+                                    if hfid and str(hfid) != "-1":
+                                        hf = legends.get_figure(int(hfid))
+                                        if hf:
+                                            participants.add(f"[[{hf.name}]]")
+                            if participants:
+                                details.append(", ".join(sorted(participants)[:4]))
+                            # Site context
+                            site_id = ec.get("site_id")
+                            if site_id:
+                                site = legends.get_site(int(site_id))
+                                if site:
+                                    details.append(f"at [[{site.name}]]")
+
+                        if ec_name:
+                            label = f"{ec_type}: {ec_name}"
+                        elif details:
+                            label = f"{ec_type} involving {' '.join(details)}"
+                        else:
+                            label = ec_type
+                        road_events.append({"year": ec.get("start_year", "?"), "description": label})
+
+                # Historical events at road tiles
+                for evt in legends.historical_events:
+                    if evt.get("coords") and evt["coords"] in coord_set:
+                        road_events.append({"year": evt.get("year", "?"), "description": _describe_evt(evt, legends)})
+                        if len(road_events) >= 100:
+                            break
+
+            road_events.sort(key=lambda e: int(e["year"]) if str(e["year"]).lstrip("-").isdigit() else 0)
+
+            name = wc.get("name", "") or f"Construction #{construction_id}"
+            description = ""
+            if road_events:
+                description = f"{len(road_events)} events recorded along this route."
+            else:
+                description = "No recorded events along this route."
+
+            return templates.TemplateResponse(request=request, name="lore_geography.html", context={
+                **ctx, "content_class": "content-wide",
+                "geo": {
+                    "name": name,
+                    "geo_type": "World Construction",
+                    "fields": fields,
+                    "description": description,
+                    "events": road_events,
+                },
             })
     return RedirectResponse("/lore")
 

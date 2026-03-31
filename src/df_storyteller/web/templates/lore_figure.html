@@ -50,6 +50,19 @@
             </ul>
             {% endif %}
 
+            {% if affiliations %}
+            <h3>Affiliations</h3>
+            <ul class="stat-list">
+                {% for aff in affiliations %}
+                <li>
+                    {{ lore_link("civilization", aff.entity_id, aff.name) | safe }}
+                    {% if aff.entity_type %}<span style="color: var(--ink-faded);"> ({{ aff.entity_type }})</span>{% endif %}
+                    {% if aff.link_type %}<span style="color: var(--ink-faded);"> &mdash; {{ aff.link_type }}</span>{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
             {% if active_interactions %}
             <h3>Supernatural</h3>
             <ul class="stat-list">
