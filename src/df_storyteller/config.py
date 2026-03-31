@@ -46,6 +46,12 @@ class LLMConfig(BaseModel):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
 
 
+class WebConfig(BaseModel):
+    cache_ttl_seconds: int = 300  # Game state cache TTL
+    combat_tick_threshold: int = 500  # Ticks between events to group as one engagement
+    search_max_per_category: int = 20  # Max results per category in lore search
+
+
 class WatchConfig(BaseModel):
     poll_interval_seconds: int = 2
     process_backlog: bool = True
@@ -69,6 +75,7 @@ class StoryConfig(BaseModel):
 class AppConfig(BaseModel):
     paths: PathsConfig = Field(default_factory=PathsConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    web: WebConfig = Field(default_factory=WebConfig)
     watch: WatchConfig = Field(default_factory=WatchConfig)
     story: StoryConfig = Field(default_factory=StoryConfig)
 

@@ -159,7 +159,7 @@ async def events_page(request: Request):
             all_combat.append(event)
 
     # Group consecutive combat events by tick proximity (within 500 ticks = ~same engagement)
-    TICK_THRESHOLD = 500
+    TICK_THRESHOLD = config.web.combat_tick_threshold
     engagement_groups: list[list] = []
     current_group: list = []
     for event in all_combat:
@@ -345,7 +345,7 @@ async def api_battle_report(encounter_index: int):
 
     # Rebuild the same engagement groups as the events page
     from df_storyteller.schema.events import EventType as ET
-    TICK_THRESHOLD = 500
+    TICK_THRESHOLD = config.web.combat_tick_threshold
     all_combat = [e for e in event_store.recent_events(200) if e.event_type == ET.COMBAT]
 
     engagement_groups: list[list] = []

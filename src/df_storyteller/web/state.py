@@ -30,7 +30,7 @@ _cached_no_legends: tuple | None = None   # (event_store, char_tracker, world_lo
 _cached_with_legends: tuple | None = None
 _cache_time_no_legends: float = 0
 _cache_time_with_legends: float = 0
-_CACHE_TTL: float = 300  # 5 minutes
+_CACHE_TTL_DEFAULT: float = 300  # fallback if config not yet loaded
 
 _legends_preloaded: bool = False
 _legends_load_lock = threading.Lock()
@@ -170,14 +170,15 @@ def load_game_state_safe(config: AppConfig, skip_legends: bool = True):
 
     now = time.time()
     newest = _get_newest_snapshot_time(config)
+    cache_ttl = config.web.cache_ttl_seconds
 
     # Try to serve from the with_legends cache first (superset of no_legends)
-    if _cached_with_legends and (now - _cache_time_with_legends) < _CACHE_TTL:
+    if _cached_with_legends and (now - _cache_time_with_legends) < cache_ttl:
         if newest <= _cache_time_with_legends:
             return _cached_with_legends
 
     # If legends not needed, try the no_legends cache
-    if skip_legends and _cached_no_legends and (now - _cache_time_no_legends) < _CACHE_TTL:
+    if skip_legends and _cached_no_legends and (now - _cache_time_no_legends) < cache_ttl:
         if newest <= _cache_time_no_legends:
             return _cached_no_legends
 
@@ -185,7 +186,7 @@ def load_game_state_safe(config: AppConfig, skip_legends: bool = True):
     if not skip_legends:
         with _legends_load_lock:
             # Re-check cache inside lock
-            if _cached_with_legends and (now - _cache_time_with_legends) < _CACHE_TTL:
+            if _cached_with_legends and (now - _cache_time_with_legends) < cache_ttl:
                 if newest <= _cache_time_with_legends:
                     return _cached_with_legends
             try:

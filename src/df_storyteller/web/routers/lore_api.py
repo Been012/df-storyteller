@@ -620,7 +620,7 @@ async def api_lore_search(q: str = ""):
     legends = world_lore._legends
     query = q.lower()
     results: list[dict] = []
-    MAX_PER_CATEGORY = 20
+    MAX_PER_CATEGORY = config.web.search_max_per_category
 
     # Check if any fortress dwarves match (link to character sheet)
     event_store, character_tracker, _, _ = _load_game_state_safe(config)

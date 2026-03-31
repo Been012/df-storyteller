@@ -428,6 +428,62 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         except ValueError:
             pass
         gamelog_events = list(gamelog_parser.parse_lines(all_lines))
+
+        # Match gamelog unit_id=0 references to known dwarves by name or title.
+        # Build lookup tables: name -> unit_id, profession/title -> unit_id
+        _name_to_id: dict[str, int] = {}
+        _title_to_id: dict[str, int] = {}
+        for dwarf in character_tracker._characters.values():
+            # Full name and short name
+            norm = dwarf.name.lower().split(",")[0].strip()
+            _name_to_id[norm] = dwarf.unit_id
+            _name_to_id[dwarf.name.lower()] = dwarf.unit_id
+            # Profession/title from snapshot
+            if dwarf.profession:
+                _title_to_id[dwarf.profession.lower()] = dwarf.unit_id
+            for pos in dwarf.noble_positions:
+                _title_to_id[pos.lower()] = dwarf.unit_id
+            if dwarf.military_squad:
+                _title_to_id[dwarf.military_squad.lower()] = dwarf.unit_id
+
+        # Also extract titles from DFHack events (noble appointments, profession
+        # changes) which may be newer than the snapshot.
+        for event in event_store.recent_events(500):
+            data = event.data
+            unit_ref = getattr(data, "unit", None)
+            if not unit_ref or not hasattr(unit_ref, "unit_id") or not unit_ref.unit_id:
+                continue
+            uid = unit_ref.unit_id
+            if event.event_type == EventType.NOBLE_APPOINTMENT:
+                for pos in getattr(data, "positions", []):
+                    _title_to_id[pos.lower()] = uid
+            elif event.event_type == EventType.PROFESSION_CHANGE:
+                new_prof = getattr(data, "new_profession", "")
+                if new_prof:
+                    _title_to_id[new_prof.lower()] = uid
+
+        def _resolve_ref(ref) -> None:
+            """Patch unit_id on a UnitRef if it's 0 and we can match by name."""
+            if not ref or not hasattr(ref, "unit_id") or ref.unit_id != 0:
+                return
+            name = ref.name.lower().strip()
+            uid = _name_to_id.get(name) or _title_to_id.get(name)
+            if uid:
+                ref.unit_id = uid
+
+        matched = 0
+        for event in gamelog_events:
+            data = event.data
+            if not isinstance(data, dict):
+                before = sum(1 for f in ("victim", "attacker", "defender", "unit", "creator")
+                             if hasattr(data, f) and getattr(data, f) and getattr(data, f).unit_id != 0)
+                for field in ("victim", "attacker", "defender", "unit", "creator", "killer"):
+                    _resolve_ref(getattr(data, field, None))
+                after = sum(1 for f in ("victim", "attacker", "defender", "unit", "creator")
+                            if hasattr(data, f) and getattr(data, f) and getattr(data, f).unit_id != 0)
+                if after > before:
+                    matched += 1
+
         # Assign incrementing ticks so gamelog events sort after DFHack events
         # within the same season (DFHack ticks are real game ticks, gamelog has 0)
         max_tick = max((e.game_tick for e in event_store.recent_events(50)), default=0)
@@ -436,12 +492,14 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
                 event.game_tick = max_tick + 1 + i
         combat_count = 0
         for event in gamelog_events:
-            event_store.add(event)
+            idx = event_store.add(event)
+            for uid in event_store._extract_unit_ids(event):
+                character_tracker.add_event(uid, event)
             if event.event_type == EventType.COMBAT:
                 combat_count += 1
         logger.info(
-            "Gamelog parsed: %d events (%d combat) from %d lines (%d saved + %d new)",
-            len(gamelog_events), combat_count, len(all_lines), len(saved_lines), len(new_lines),
+            "Gamelog parsed: %d events (%d combat, %d matched to dwarves) from %d lines (%d saved + %d new)",
+            len(gamelog_events), combat_count, matched, len(all_lines), len(saved_lines), len(new_lines),
         )
 
     # 4. Load legends if available (skip if told to — expensive for large files)
