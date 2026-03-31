@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "df-storyteller"
-version = "0.6.1"
+version = "0.6.2"
 description = "Dwarf Fortress storytelling assistant — turns game events into narrative stories"
 readme = "README.md"
 license = "MIT"

@@ -361,7 +361,7 @@ async def api_battle_report(encounter_index: int):
     # Reverse to match the template order (newest first)
     engagement_groups.reverse()
 
-    if encounter_index >= len(engagement_groups):
+    if encounter_index < 0 or encounter_index >= len(engagement_groups):
         return StreamingResponse(iter(["Combat encounter not found."]), media_type="text/plain")
 
     group = engagement_groups[encounter_index]
@@ -444,6 +444,19 @@ async def api_battle_report(encounter_index: int):
             author_context = "No survivors remain to tell this tale. Written by a mysterious figure — perhaps a ghost, a passing traveler, or the fortress itself remembering."
 
     fortress_dir = _get_fortress_dir(config, metadata)
+
+    # Build title_to_dwarf lookup: title/profession -> DwarfCharacter
+    title_to_dwarf: dict[str, object] = {}
+    for dwarf, _ in ranked:
+        if dwarf.profession:
+            title_to_dwarf[dwarf.profession.lower()] = dwarf
+        for pos in dwarf.noble_positions:
+            title_to_dwarf[pos.lower()] = dwarf
+        if dwarf.military_squad:
+            title_to_dwarf[dwarf.military_squad.lower()] = dwarf
+        # Also map short name for direct lookups
+        short = dwarf.name.split(",")[0].strip().lower()
+        title_to_dwarf[short] = dwarf
 
     async def _stream() -> AsyncGenerator[str, None]:
         from df_storyteller.stories.base import create_provider

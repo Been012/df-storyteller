@@ -234,11 +234,12 @@ local function get_season(tick)
     end
 end
 
+-- DF calendar: 12 months, 28 days each, 1200 ticks per day
 local MONTH_NAMES = {
-    'Granite', 'Slate', 'Felsite',
-    'Hematite', 'Malachite', 'Galena',
-    'Limestone', 'Sandstone', 'Timber',
-    'Moonstone', 'Opal', 'Obsidian',
+    'Granite', 'Slate', 'Felsite',       -- spring
+    'Hematite', 'Malachite', 'Galena',   -- summer
+    'Limestone', 'Sandstone', 'Timber',  -- autumn
+    'Moonstone', 'Opal', 'Obsidian',     -- winter
 }
 
 local function get_date(tick)
@@ -331,6 +332,7 @@ local function serialize_unit(unit)
             profession = dfhack.units.getProfessionName(unit),
             is_citizen = dfhack.units.isCitizen(unit),
             stress_category = dfhack.units.getStressCategory(unit),
+            sex = unit.sex == 0 and 'female' or (unit.sex == 1 and 'male' or 'unknown'),
         }
     end)
 
@@ -385,11 +387,26 @@ local function on_unit_death(unit_id)
 
     if unit.death_info then
         local death = unit.death_info
-        if death.killer then
+
+        -- Try to get the death cause enum
+        pcall(function()
+            if death.death_cause and death.death_cause ~= -1 then
+                local cause_name = df.death_type[death.death_cause]
+                if cause_name then
+                    -- Convert enum like OLD_AGE, HUNGER, THIRST, MURDERED, DROWNED, etc.
+                    data.cause = cause_name:lower():gsub('_', ' ')
+                end
+            end
+        end)
+
+        -- Capture killer if present
+        if death.killer and death.killer ~= -1 then
             local killer = df.unit.find(death.killer)
             if killer then
                 data.killer = serialize_unit(killer)
-                data.cause = 'combat'
+                if data.cause == 'unknown' then
+                    data.cause = 'combat'
+                end
             end
         end
     end
@@ -433,16 +450,45 @@ local function on_building_created(building_id)
     end
 end
 
---- Handle job completion events (especially artifact creation).
+--- Handle job completion events.
+--- Only emit events for notable jobs (artifact creation via moods).
 --- Hook: eventful.onJobCompleted
 local function on_job_completed(job)
     if not event_flags.job_completed then return end
     if not job then return end
 
+    -- Only capture mood-related artifact creation jobs, not routine work.
+    -- Mood artifacts are handled via poll_moods mood_completed event instead.
+    -- This hook catches the job type for additional context.
+    local job_name = ''
+    pcall(function() job_name = df.job_type[job.job_type] or '' end)
+
+    -- Filter: only emit for strange mood artifact jobs
+    local mood_jobs = {
+        StrangeMoodCrafter = true, StrangeMoodJeweller = true,
+        StrangeMoodForge = true, StrangeMoodMagma = true,
+        StrangeMoodCarpenter = true, StrangeMoodMason = true,
+        StrangeMoodBowyer = true, StrangeMoodTanner = true,
+        StrangeMoodWeaver = true, StrangeMoodGlassmaker = true,
+        StrangeMoodMechanics = true, StrangeMoodBroker = true,
+    }
+    if not mood_jobs[job_name] then return end
+
     local ok, data = pcall(function()
+        local worker = nil
+        if job.general_refs then
+            for _, ref in ipairs(job.general_refs) do
+                pcall(function()
+                    if df.general_ref_unit_workerst:is_instance(ref) then
+                        local unit = df.unit.find(ref.unit_id)
+                        if unit then worker = serialize_unit(unit) end
+                    end
+                end)
+            end
+        end
         return {
-            job_type = df.job_type[job.job_type] or 'unknown',
-            result = '',
+            job_type = job_name,
+            worker = worker,
         }
     end)
 
@@ -451,46 +497,82 @@ local function on_job_completed(job)
     end
 end
 
---- Poll for mood events (units entering strange moods).
+--- Poll for mood events (units entering or completing strange moods).
 --- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html#units-module
 local function poll_moods()
     if not event_flags.mood then return end
 
+    if not state.prev_moods then state.prev_moods = {} end
+
+    local mood_names = {
+        [0] = 'fey',
+        [1] = 'secretive',
+        [2] = 'possessed',
+        [3] = 'macabre',
+        [4] = 'fell',
+    }
+
     for _, unit in ipairs(df.global.world.units.active) do
-        if is_our_dwarf(unit) and unit.mood >= 0 then
-            local mood_key = unit.id .. '_mood_' .. tostring(unit.mood)
-            if not state.known_unit_ids[mood_key] then
-                state.known_unit_ids[mood_key] = true
+        if is_our_dwarf(unit) then
+            local uid = unit.id
+            local prev = state.prev_moods[uid]
 
-                local mood_names = {
-                    [0] = 'fey',
-                    [1] = 'secretive',
-                    [2] = 'possessed',
-                    [3] = 'macabre',
-                    [4] = 'fell',
-                }
+            if unit.mood >= 0 then
+                -- Currently in a mood
+                local mood_key = uid .. '_mood_' .. tostring(unit.mood)
+                if not state.known_unit_ids[mood_key] then
+                    state.known_unit_ids[mood_key] = true
+                    state.prev_moods[uid] = unit.mood
 
-                -- Try to capture claimed materials from the mood job
-                local claimed = {}
-                pcall(function()
-                    if unit.job and unit.job.current_job and unit.job.current_job.items then
-                        for _, item_ref in ipairs(unit.job.current_job.items) do
-                            pcall(function()
-                                if item_ref.item then
-                                    local desc = dfhack.items.getDescription(item_ref.item, 0, true)
-                                    if desc and desc ~= '' then
-                                        table.insert(claimed, desc)
+                    -- Try to capture claimed materials from the mood job
+                    local claimed = {}
+                    pcall(function()
+                        if unit.job and unit.job.current_job and unit.job.current_job.items then
+                            for _, item_ref in ipairs(unit.job.current_job.items) do
+                                pcall(function()
+                                    if item_ref.item then
+                                        local desc = dfhack.items.getDescription(item_ref.item, 0, true)
+                                        if desc and desc ~= '' then
+                                            table.insert(claimed, desc)
+                                        end
                                     end
-                                end
-                            end)
+                                end)
+                            end
+                        end
+                    end)
+
+                    write_event('mood', {
+                        unit = serialize_unit(unit),
+                        mood_type = mood_names[unit.mood] or 'unknown',
+                        claimed_materials = claimed,
+                    })
+                end
+            elseif prev and prev >= 0 then
+                -- Was in a mood, now finished (mood == -1)
+                state.prev_moods[uid] = nil
+
+                -- Check if they created an artifact (mood_completed)
+                local artifact_name = ''
+                pcall(function()
+                    -- After a successful mood, the dwarf's job artifact can be found
+                    -- by checking recently created artifacts
+                    for i = #df.global.world.artifacts.all - 1, math.max(0, #df.global.world.artifacts.all - 5), -1 do
+                        local art = df.global.world.artifacts.all[i]
+                        if art and art.item and art.item.maker == uid then
+                            local item = art.item
+                            local item_name = dfhack.items.getDescription(item, 0, true)
+                            pcall(function() item_name = dfhack.df2utf(item_name) end)
+                            artifact_name = item_name
+                            break
                         end
                     end
                 end)
 
-                write_event('mood', {
+                write_event('mood_completed', {
                     unit = serialize_unit(unit),
-                    mood_type = mood_names[unit.mood] or 'unknown',
-                    claimed_materials = claimed,
+                    previous_mood = mood_names[prev] or 'unknown',
+                    artifact_name = artifact_name,
+                    success = dfhack.units.isAlive(unit),
                 })
             end
         end
@@ -512,6 +594,7 @@ local function poll_season()
             end
         end
 
+        -- Track peak population
         state.peak_population = math.max(state.peak_population or 0, pop)
 
         write_event('season_change', {
@@ -527,7 +610,11 @@ local function poll_season()
             peak_population = state.peak_population or 0,
         })
 
+        -- Reset death counter for next season
         state.death_count = 0
+
+        -- Save baselines on season change for persistence
+        save_baselines()
 
         -- Auto-snapshot on season change to capture current dwarf state.
         -- Schedule slightly after the season tick to avoid issues with
@@ -624,6 +711,47 @@ local function poll_changes()
             state.prev_squads[uid] = squad_id
         end)
 
+        -- Detect skill level-ups (significant tier changes only)
+        pcall(function()
+            if not state.prev_skills then state.prev_skills = {} end
+            if not state.prev_skills[uid] then state.prev_skills[uid] = {} end
+
+            -- Skill tier names by rating value
+            local tier_names = {
+                [0] = 'Dabbling', [1] = 'Novice', [2] = 'Adequate',
+                [3] = 'Competent', [4] = 'Skilled', [5] = 'Proficient',
+                [6] = 'Talented', [7] = 'Adept', [8] = 'Expert',
+                [9] = 'Professional', [10] = 'Accomplished', [11] = 'Great',
+                [12] = 'Master', [13] = 'High Master', [14] = 'Grand Master',
+                [15] = 'Legendary',
+            }
+            -- Only report these milestone tiers (skip minor gains)
+            local milestone_tiers = { [5] = true, [9] = true, [12] = true, [15] = true }
+
+            local soul = unit.status and unit.status.current_soul
+            if soul and soul.skills then
+                for _, skill in ipairs(soul.skills) do
+                    local rating = skill.rating or 0
+                    local skill_id = skill.id
+                    local prev_rating = state.prev_skills[uid][skill_id] or 0
+                    if rating > prev_rating and milestone_tiers[rating] then
+                        local skill_name = ''
+                        pcall(function()
+                            skill_name = df.job_skill.attrs[skill_id].caption or df.job_skill[skill_id] or tostring(skill_id)
+                        end)
+                        if skill_name == '' then skill_name = tostring(skill_id) end
+                        write_event('skill_level_up', {
+                            unit = udata,
+                            skill = skill_name,
+                            new_level = tier_names[rating] or tostring(rating),
+                            rating = rating,
+                        })
+                    end
+                    state.prev_skills[uid][skill_id] = rating
+                end
+            end
+        end)
+
         -- Detect stress level changes (significant shifts only)
         pcall(function()
             local stress = dfhack.units.getStressCategory(unit)
@@ -644,6 +772,86 @@ local function poll_changes()
                 end
             end
             state.prev_stress[uid] = stress
+        end)
+
+        -- Detect new relationships forming
+        pcall(function()
+            if not state.prev_relationships then state.prev_relationships = {} end
+            if not state.prev_relationships[uid] then state.prev_relationships[uid] = {} end
+
+            if unit.hist_figure_id and unit.hist_figure_id >= 0 then
+                local hf = df.historical_figure.find(unit.hist_figure_id)
+                if hf and hf.histfig_links then
+                    local link_type_names = {
+                        histfig_hf_link_spousest = 'spouse',
+                        histfig_hf_link_loverst = 'lover',
+                        histfig_hf_link_childst = 'child',
+                        histfig_hf_link_companionst = 'companion',
+                    }
+                    for _, link in ipairs(hf.histfig_links) do
+                        pcall(function()
+                            local target_hf_id = link.target_hf
+                            if not target_hf_id or target_hf_id < 0 then return end
+
+                            local class_name = tostring(link._type):match('([%w_]+)>') or ''
+                            local rel_type = link_type_names[class_name]
+                            if not rel_type then return end -- only track significant relationships
+
+                            local rel_key = tostring(target_hf_id) .. '_' .. rel_type
+                            if not state.prev_relationships[uid][rel_key] then
+                                state.prev_relationships[uid][rel_key] = true
+
+                                -- Find the target's name
+                                local target_name = 'someone'
+                                for _, u in ipairs(df.global.world.units.active) do
+                                    if u.hist_figure_id == target_hf_id then
+                                        target_name = dfhack.units.getReadableName(u)
+                                        pcall(function() target_name = dfhack.df2utf(target_name) end)
+                                        break
+                                    end
+                                end
+
+                                write_event('relationship_formed', {
+                                    unit = udata,
+                                    target_name = target_name,
+                                    target_hf_id = target_hf_id,
+                                    relationship_type = rel_type,
+                                })
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+
+        -- Detect tantrum/berserk states
+        pcall(function()
+            if not state.prev_tantrum then state.prev_tantrum = {} end
+            local tantrum_state = nil
+            -- Check for berserk (mood == -1 doesn't cover this; use flags)
+            if unit.flags3 and unit.flags3.scuttle then
+                tantrum_state = 'berserk'
+            elseif unit.mood == 3 then -- macabre/fell can turn violent
+                tantrum_state = 'fell'
+            end
+            -- Also check counters for tantrum
+            if not tantrum_state and unit.counters and unit.counters.soldier_mood > 0 then
+                tantrum_state = 'martial_tantrum'
+            end
+            -- Check stress-related tantrum via very high stress
+            if not tantrum_state then
+                local stress = dfhack.units.getStressCategory(unit)
+                if stress >= 6 and not state.prev_tantrum[uid] then
+                    tantrum_state = 'breakdown'
+                end
+            end
+            if tantrum_state and state.prev_tantrum[uid] ~= tantrum_state then
+                write_event('tantrum', {
+                    unit = udata,
+                    tantrum_type = tantrum_state,
+                })
+            end
+            state.prev_tantrum[uid] = tantrum_state
         end)
 
         -- Detect new arrivals (migrants) — units we haven't seen before who aren't babies.
@@ -689,6 +897,7 @@ local function poll_mandates()
                 local key = tostring(i) .. '_' .. tostring(mandate.mode or 0) .. '_' .. tostring(mandate.item_type or 0)
                 if state.prev_mandates[key] then return end
                 state.prev_mandates[key] = true
+
                 local data = {
                     mandate_type = 'unknown',
                     item_type = '',
@@ -796,6 +1005,7 @@ local function poll_caravans()
                 if not dfhack.units.isAlive(unit) then return end
                 local uid = unit.id
                 if state.known_caravans[uid] then return end
+
                 local caravan_type = nil
                 pcall(function()
                     if unit.flags1.merchant then caravan_type = 'merchant' end
@@ -804,6 +1014,7 @@ local function poll_caravans()
                     if unit.flags1.diplomat then caravan_type = 'diplomat' end
                 end)
                 if not caravan_type then return end
+
                 state.known_caravans[uid] = true
                 local civ_name = ''
                 pcall(function()
@@ -854,8 +1065,10 @@ local function poll_sieges()
                 end
             end)
         end
+
         local was_active = state.siege_active or false
         if invader_count > 0 and not was_active then
+            -- Siege just started
             state.siege_active = true
             write_event('siege', {
                 status = 'started',
@@ -865,6 +1078,7 @@ local function poll_sieges()
                 civ_id = invader_civ_id,
             })
         elseif invader_count == 0 and was_active then
+            -- Siege ended
             state.siege_active = false
             write_event('siege', {
                 status = 'ended',
@@ -906,6 +1120,7 @@ local function write_delta_snapshot()
                         end
                     end)
                     pcall(function() entry.mood = unit.mood end)
+                    -- Wounds (lightweight — just body part names + permanent flag)
                     local wounds = {}
                     pcall(function()
                         if unit.body and unit.body.wounds then
@@ -988,6 +1203,74 @@ end
 
 -- ======================= Commands =======================
 
+--- Save baseline state to disk for persistence across DF restarts.
+local function save_baselines()
+    pcall(function()
+        local path = output_dir .. '.baselines.json'
+        local data = {
+            prev_professions = state.prev_professions or {},
+            prev_nobles = state.prev_nobles or {},
+            prev_squads = state.prev_squads or {},
+            prev_stress = state.prev_stress or {},
+            prev_population = state.prev_population or 0,
+            last_season = state.last_season or '',
+            prev_mandates = state.prev_mandates or {},
+            prev_crimes = state.prev_crimes or {},
+            peak_population = state.peak_population or 0,
+            death_count = state.death_count or 0,
+            siege_active = state.siege_active or false,
+        }
+        -- known_unit_ids keys are numeric but JSON needs string keys
+        local known = {}
+        for k, v in pairs(state.known_unit_ids or {}) do
+            known[tostring(k)] = v
+        end
+        data.known_unit_ids = known
+
+        local tmp = path .. '.tmp'
+        local f = io.open(tmp, 'w')
+        if f then
+            f:write(json.encode(data))
+            f:close()
+            os.rename(tmp, path)
+        end
+    end)
+end
+
+--- Load saved baselines from disk if available.
+local function load_baselines()
+    local path = output_dir .. '.baselines.json'
+    local ok, data = pcall(function()
+        local f = io.open(path, 'r')
+        if not f then return nil end
+        local content = f:read('*a')
+        f:close()
+        return json.decode(content)
+    end)
+    if ok and data then
+        state.prev_professions = data.prev_professions or {}
+        state.prev_nobles = data.prev_nobles or {}
+        state.prev_squads = data.prev_squads or {}
+        state.prev_stress = data.prev_stress or {}
+        state.prev_population = data.prev_population or 0
+        state.last_season = data.last_season or ''
+        state.prev_mandates = data.prev_mandates or {}
+        state.prev_crimes = data.prev_crimes or {}
+        state.peak_population = data.peak_population or 0
+        state.death_count = data.death_count or 0
+        state.siege_active = data.siege_active or false
+        -- Restore known_unit_ids (keys were stringified for JSON)
+        state.known_unit_ids = {}
+        for k, v in pairs(data.known_unit_ids or {}) do
+            local num = tonumber(k)
+            if num then state.known_unit_ids[num] = v
+            else state.known_unit_ids[k] = v end
+        end
+        return true
+    end
+    return false
+end
+
 local function start()
     if state.enabled then
         print('[storyteller] Already running.')
@@ -996,14 +1279,17 @@ local function start()
 
     ensure_output_dir()
 
-    -- Seed baseline state so we can detect future changes.
-    -- Without this, the first poll would have nothing to compare against.
-    state.known_unit_ids = {}
-    state.prev_professions = {}
-    state.prev_nobles = {}
-    state.prev_squads = {}
-    state.prev_stress = {}
-    state.prev_population = 0
+    -- Try to load saved baselines first; if missing, seed from scratch.
+    if load_baselines() then
+        print('[storyteller] Restored baselines from disk')
+    else
+        state.known_unit_ids = {}
+        state.prev_professions = {}
+        state.prev_nobles = {}
+        state.prev_squads = {}
+        state.prev_stress = {}
+        state.prev_population = 0
+    end
 
     local player_race = df.global.plotinfo.race_id
     local pop = 0
@@ -1086,8 +1372,9 @@ local function stop()
     eventful.onBuildingCreatedDestroyed.storyteller = nil
     eventful.onJobCompleted.storyteller = nil
 
+    save_baselines()
     state.enabled = false
-    print('[storyteller] Event monitoring stopped.')
+    print('[storyteller] Event monitoring stopped. Baselines saved.')
 end
 
 local function status()

@@ -228,12 +228,12 @@ def load_game_state_safe(config: AppConfig, skip_legends: bool = True):
 
     # Try to serve from the with_legends cache first (superset of no_legends)
     if _cached_with_legends and (now - _cache_time_with_legends) < cache_ttl:
-        if newest <= _cache_time_with_legends:
+        if newest < _cache_time_with_legends:
             return _cached_with_legends
 
     # If legends not needed, try the no_legends cache
     if skip_legends and _cached_no_legends and (now - _cache_time_no_legends) < cache_ttl:
-        if newest <= _cache_time_no_legends:
+        if newest < _cache_time_no_legends:
             return _cached_no_legends
 
     # For legends loads, use a lock to prevent duplicate parsing
@@ -241,7 +241,7 @@ def load_game_state_safe(config: AppConfig, skip_legends: bool = True):
         with _legends_load_lock:
             # Re-check cache inside lock
             if _cached_with_legends and (now - _cache_time_with_legends) < cache_ttl:
-                if newest <= _cache_time_with_legends:
+                if newest < _cache_time_with_legends:
                     return _cached_with_legends
             try:
                 active_world = get_active_world(config)
@@ -268,13 +268,14 @@ def invalidate_cache() -> None:
     """Clear the cache (call when world switches or settings change)."""
     global _cached_no_legends, _cached_with_legends
     global _cache_time_no_legends, _cache_time_with_legends
-    global _map_image_cache, _hotlink_cache
+    global _map_image_cache, _hotlink_cache, _legends_preloaded
     _cached_no_legends = None
     _cached_with_legends = None
     _cache_time_no_legends = 0
     _cache_time_with_legends = 0
     _map_image_cache = None
     _hotlink_cache = None
+    _legends_preloaded = False
 
 
 def get_fortress_dir(config: AppConfig, metadata: dict | None = None) -> Path:

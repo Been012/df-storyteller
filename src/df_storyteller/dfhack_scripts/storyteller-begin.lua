@@ -243,7 +243,6 @@ local function serialize_unit(unit)
         skills = {},
         personality = { facets = {}, beliefs = {}, goals = {} },
         relationships = {},
-        pets = {},
         noble_positions = {},
         military = {},
         physical_attributes = {},
@@ -448,38 +447,6 @@ local function serialize_unit(unit)
         end
     end)
 
-    -- Pets: find animals owned by this dwarf (check both PetOwner and Pet relationship IDs)
-    pcall(function()
-        for _, animal in ipairs(df.global.world.units.active) do
-            pcall(function()
-                local is_my_pet = false
-                pcall(function()
-                    if animal.relationship_ids then
-                        if animal.relationship_ids.PetOwner == unit.id then is_my_pet = true end
-                        if animal.relationship_ids.Pet == unit.id then is_my_pet = true end
-                    end
-                end)
-                if is_my_pet then
-                    local pet_name = ''
-                    pcall(function() pet_name = dfhack.df2utf(dfhack.units.getReadableName(animal)) end)
-                    local pet_race = ''
-                    pcall(function() pet_race = df.creature_raw.find(animal.race).creature_id end)
-                    if pet_race ~= '' then
-                        local pet_prof = ''
-                        pcall(function() pet_prof = dfhack.units.getProfessionName(animal) or '' end)
-                        table.insert(data.pets, {
-                            name = pet_name ~= '' and pet_name or nil,
-                            race = pet_race:lower():gsub('_', ' '),
-                            is_alive = dfhack.units.isAlive(animal),
-                            profession = pet_prof,
-                            unit_id = animal.id,
-                        })
-                    end
-                end
-            end)
-        end
-    end)
-
     -- Noble positions
     pcall(function()
         local positions = dfhack.units.getNoblePositions(unit)
@@ -592,13 +559,11 @@ local function serialize_unit(unit)
     pcall(function()
         if unit.curse then
             pcall(function()
-                -- Check for vampire curse
                 if unit.curse.add_tags1 and unit.curse.add_tags1.BLOODSUCKER then
                     data.is_vampire = true
                 end
             end)
             pcall(function()
-                -- Check for werebeast curse (has transformation interaction)
                 if unit.curse.add_tags1 and unit.curse.add_tags1.CRAZED then
                     data.is_werebeast = true
                 end
@@ -606,7 +571,6 @@ local function serialize_unit(unit)
         end
     end)
     pcall(function()
-        -- Check for assumed identity (vampires disguise themselves)
         local identity = dfhack.units.getIdentity(unit)
         if identity and identity.name then
             local id_name = ''
@@ -909,7 +873,6 @@ for _, building in ipairs(df.global.world.buildings.all) do
             room_type = '',
             job_count = 0,
         }
-        -- Building owner
         pcall(function()
             if building.owner and building.owner >= 0 then
                 bdata.owner_id = building.owner
@@ -917,13 +880,11 @@ for _, building in ipairs(df.global.world.buildings.all) do
                 if owner_unit then bdata.owner_name = safe_unit_name(owner_unit) end
             end
         end)
-        -- Room type for zones
         pcall(function()
             if building.is_room then
                 bdata.room_type = 'room'
             end
         end)
-        -- Workshop job count
         pcall(function()
             if building.jobs then
                 bdata.job_count = #building.jobs
