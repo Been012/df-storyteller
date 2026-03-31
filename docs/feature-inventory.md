@@ -80,8 +80,9 @@ Recent fortress events with live WebSocket feed.
 | Expand combat details (blow-by-blow, color-coded) | No | Full access |
 | View grouped siege/engagement encounters | No | Full access |
 | View chat log (dwarf name, profession, message) | No | Full access |
-| Generate battle/siege report | **Yes** | Hidden |
-| Summarize chat log with AI | **Yes** | Hidden |
+| View saved chat summaries (collapsible, with season/year) | No | Full access |
+| Generate battle/siege report (true streaming) | **Yes** | Hidden |
+| Summarize chat log with AI (persisted to disk) | **Yes** | Hidden |
 
 ---
 
@@ -176,14 +177,26 @@ Epic world history narrative (accessed from chronicle page or API).
 
 ## Settings (`/settings`)
 
-App configuration page.
+App configuration page, organized into subcategories.
 
-- DF path, event directory
-- LLM provider selection (Claude / OpenAI / Ollama / None)
-- API key, model name, temperature
-- Token limits
+### Game Path
+- DF install path
 - No-LLM mode toggle
-- Active world selection
+
+### AI Provider
+- Provider selection (Claude / OpenAI / Ollama)
+- Cloud providers: model name, API key
+- Ollama: model name (with VRAM-tiered recommendations), context window slider, base URL
+
+### Generation Style
+- Narrative style (dramatic / factual / humorous)
+- Temperature slider (creativity vs precision)
+- Top P slider (word choice diversity)
+- Repetition penalty slider (reduces repetitive phrasing)
+- Custom author instructions (free-text, appended to all story prompts)
+
+### Output Lengths
+- Slider controls for: chronicle, biography, saga, gazette, chat summary, quest generation, quest narrative
 
 ---
 

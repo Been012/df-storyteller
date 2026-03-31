@@ -53,7 +53,10 @@ Shape the narrative yourself — AI is optional, not required.
 If you want AI assistance, connect an LLM provider. All generation is grounded in actual game data.
 
 - Fortress chronicles, dwarf biographies, diary entries, death eulogies, battle reports, epic sagas, gazette editions, quest narratives
+- **True streaming** — text appears token-by-token as the AI generates, not after a long wait
 - Supports Ollama (free, local), Anthropic Claude, and OpenAI
+- **Fine-tuning controls** — temperature, top P, repetition penalty sliders. Custom author instructions to guide tone and style (e.g. "Write like a drunken tavern bard")
+- VRAM-tiered model recommendations for Ollama (4GB to 24GB+)
 - AI narratives reference real dwarf personalities, events, relationships, and world history
 - No AI required — every feature works in manual mode
 
