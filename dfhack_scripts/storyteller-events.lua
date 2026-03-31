@@ -894,6 +894,90 @@ local function poll_sieges()
     end)
 end
 
+--- Lightweight delta snapshot: only fast-changing fields per citizen.
+--- Runs every ~2400 ticks (roughly 2 in-game days) to keep the web UI fresh
+--- without the cost of a full serialize_unit + pet scan + building loop.
+local DELTA_INTERVAL = 24  -- every 24 polls (24 * 100 = 2400 ticks)
+
+local function write_delta_snapshot()
+    pcall(function()
+        local player_race = df.global.plotinfo.race_id
+        local citizens = {}
+        for _, unit in ipairs(df.global.world.units.active) do
+            if dfhack.units.isAlive(unit) and unit.race == player_race and dfhack.units.isFortControlled(unit) then
+                pcall(function()
+                    local entry = {
+                        unit_id = unit.id,
+                        name = safe_unit_name(unit),
+                        profession = dfhack.units.getProfessionName(unit),
+                        stress_category = dfhack.units.getStressCategory(unit),
+                        happiness = 0,
+                        is_alive = true,
+                        current_job = '',
+                        mood = -1,
+                    }
+                    pcall(function() entry.happiness = dfhack.units.getHappiness(unit) or 0 end)
+                    pcall(function()
+                        if unit.job and unit.job.current_job then
+                            entry.current_job = df.job_type[unit.job.current_job.job_type] or ''
+                        end
+                    end)
+                    pcall(function() entry.mood = unit.mood end)
+                    -- Wounds (lightweight — just body part names + permanent flag)
+                    local wounds = {}
+                    pcall(function()
+                        if unit.body and unit.body.wounds then
+                            for _, wound in ipairs(unit.body.wounds) do
+                                pcall(function()
+                                    for _, part in ipairs(wound.parts) do
+                                        pcall(function()
+                                            local raw = df.creature_raw.find(unit.race)
+                                            local bp = raw.caste[unit.caste].body_info.body_parts[part.body_part_id].name_singular[0].value
+                                            if bp then
+                                                local is_perm = false
+                                                pcall(function()
+                                                    if (part.flags2 and (part.flags2.severed or part.flags2.missing)) or (wound.age and wound.age > 1000) then
+                                                        is_perm = true
+                                                    end
+                                                end)
+                                                table.insert(wounds, { body_part = bp, is_permanent = is_perm })
+                                            end
+                                        end)
+                                    end
+                                end)
+                            end
+                        end
+                    end)
+                    entry.wounds = wounds
+                    table.insert(citizens, entry)
+                end)
+            end
+        end
+
+        local year = df.global.cur_year
+        local tick = df.global.cur_year_tick
+        local season = get_season(tick)
+        local delta = {
+            event_type = 'delta_snapshot',
+            game_year = year,
+            game_tick = tick,
+            season = season,
+            session_id = fortress_session_id,
+            data = { citizens = citizens, population = #citizens },
+        }
+
+        local filename = string.format('delta_%d_%06d_%d', year, tick, os.time())
+        local tmp_path = output_dir .. filename .. '.tmp'
+        local json_path = output_dir .. filename .. '.json'
+        local f = io.open(tmp_path, 'w')
+        if f then
+            f:write(json.encode(delta))
+            f:close()
+            os.rename(tmp_path, json_path)
+        end
+    end)
+end
+
 --- Main tick handler.
 local function on_tick()
     if not state.enabled then return end
@@ -909,6 +993,11 @@ local function on_tick()
         poll_caravans()
         poll_sieges()
     end)
+
+    -- Delta snapshot every DELTA_INTERVAL polls
+    if state.poll_count % DELTA_INTERVAL == 0 then
+        pcall(write_delta_snapshot)
+    end
 
     if not ok then
         dfhack.printerr('[storyteller] Tick error: ' .. tostring(err))

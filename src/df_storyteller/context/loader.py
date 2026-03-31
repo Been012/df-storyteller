@@ -405,6 +405,35 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning("Failed to load snapshot %s: %s", latest_snapshot, e)
 
+        # Apply the most recent delta snapshot (lightweight updates to citizen data)
+        deltas = []
+        for ed in event_dirs:
+            deltas += list(ed.glob("delta_*.json"))
+        deltas.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        if deltas:
+            try:
+                with open(deltas[0], encoding="utf-8", errors="replace") as f:
+                    delta = json.load(f)
+                delta_data = delta.get("data", {})
+                updated = 0
+                for citizen in delta_data.get("citizens", []):
+                    uid = citizen.get("unit_id", 0)
+                    dwarf = character_tracker.get_dwarf(uid)
+                    if dwarf:
+                        dwarf.stress_category = citizen.get("stress_category", dwarf.stress_category)
+                        dwarf.happiness = citizen.get("happiness", dwarf.happiness)
+                        dwarf.current_job = citizen.get("current_job", dwarf.current_job)
+                        dwarf.profession = citizen.get("profession", dwarf.profession)
+                        dwarf.is_alive = citizen.get("is_alive", dwarf.is_alive)
+                        if citizen.get("wounds"):
+                            dwarf.wounds = citizen["wounds"]
+                        updated += 1
+                if updated:
+                    metadata["population"] = delta_data.get("population", metadata.get("population", 0))
+                    logger.info("Delta snapshot applied: %d citizens updated", updated)
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning("Failed to load delta snapshot: %s", e)
+
     # 2. Load event files from all matching folders
     # Filter by session_id if available to avoid loading events from a
     # previous fortress that shared the same save folder.
