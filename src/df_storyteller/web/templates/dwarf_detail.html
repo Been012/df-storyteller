@@ -310,6 +310,11 @@
                     <div style="margin-top: 0.5rem;">
                         <textarea id="manual-bio-text" rows="6" placeholder="Write about this dwarf... Use [[name]] to link to legends figures, sites, or civilizations."
                             class="manual-textarea"></textarea>
+                        <div class="image-upload-row">
+                            <label class="image-upload-btn" for="manual-bio-images">Attach Screenshots</label>
+                            <input type="file" id="manual-bio-images" multiple accept="image/png,image/jpeg,image/gif,image/webp" style="display: none;">
+                        </div>
+                        <div id="manual-bio-previews" class="image-previews"></div>
                         <div class="btn-row" style="margin-top: 0.5rem;">
                             <button class="btn btn-primary" onclick="saveManualBio({{ dwarf.unit_id }})">Save Entry</button>
                         </div>
@@ -322,7 +327,7 @@
                         <div class="season-header" style="font-size: 1rem;">
                             {% if entry.get('is_eulogy') %}Memorial — {% endif %}{% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
-                        <div class="story-text">{{ entry.text | hotlink | replace('\n', '<br>') | safe }}</div>
+                        <div class="story-text">{{ entry.text | inline_images | hotlink | replace('\n', '<br>') | safe }}</div>
                     </div>
                     {% if not loop.last %}
                     <div class="divider" style="margin: 1rem 0;">&loz;</div>
@@ -357,6 +362,11 @@
                     <div style="margin-top: 0.5rem;">
                         <textarea id="manual-diary-text" rows="6" placeholder="Write a diary entry in this dwarf's voice..."
                             class="manual-textarea"></textarea>
+                        <div class="image-upload-row">
+                            <label class="image-upload-btn" for="manual-diary-images">Attach Screenshots</label>
+                            <input type="file" id="manual-diary-images" multiple accept="image/png,image/jpeg,image/gif,image/webp" style="display: none;">
+                        </div>
+                        <div id="manual-diary-previews" class="image-previews"></div>
                         <div class="btn-row" style="margin-top: 0.5rem;">
                             <button class="btn btn-primary" onclick="saveManualDiary({{ dwarf.unit_id }})">Save Entry</button>
                         </div>
@@ -369,7 +379,7 @@
                         <div class="season-header" style="font-size: 1rem;">
                             {% if entry.get('is_manual') %}<span class="manual-badge">Player</span> {% endif %}{{ entry.season | default('') | title }} of Year {{ entry.year | default('?') }}
                         </div>
-                        <div class="story-text">{{ entry.text | hotlink | replace('\n', '<br>') | safe }}</div>
+                        <div class="story-text">{{ entry.text | inline_images | hotlink | replace('\n', '<br>') | safe }}</div>
                     </div>
                     {% if not loop.last %}
                     <div class="divider" style="margin: 1rem 0;">&loz;</div>
@@ -535,6 +545,8 @@ async function deleteNote(noteId) {
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('note-text');
     if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addNote(); });
+    setupImageUpload('manual-bio-images', 'manual-bio-previews', 'manual-bio-text');
+    setupImageUpload('manual-diary-images', 'manual-diary-previews', 'manual-diary-text');
 });
 
 // Shared streaming helper — handles fetch, stream, error, and button reset

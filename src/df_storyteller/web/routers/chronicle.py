@@ -125,6 +125,7 @@ async def api_chronicle_manual(request: Request):
     fortress_dir = _get_fortress_dir(config, metadata)
 
     # Mark as manual so the UI can distinguish from AI entries
+    # Image references are inline in text as {{img:uuid.ext}}
     marked_text = f"<!-- source:manual -->\n{text}"
     append_to_journal(config, marked_text, int(year), season, output_dir=fortress_dir)
 

@@ -149,3 +149,23 @@ def _hotlink_filter(text: str) -> str:
 
 
 templates.env.filters["hotlink"] = _hotlink_filter
+
+
+def _inline_images_filter(text: str) -> str:
+    """Jinja2 filter: convert {{img:uuid.ext}} to inline <img> tags."""
+    if "{{img:" not in text:
+        return text
+
+    def replace_img(m: re.Match) -> str:
+        filename = m.group(1)
+        return (
+            f'<a href="/api/images/{filename}" target="_blank" class="inline-image-link">'
+            f'<img src="/api/images/{filename}" alt="Screenshot" class="inline-image" loading="lazy">'
+            f'</a>'
+        )
+
+    result = re.sub(r'\{\{img:([0-9a-f]{32}\.\w+)\}\}', replace_img, text)
+    return Markup(result)
+
+
+templates.env.filters["inline_images"] = _inline_images_filter

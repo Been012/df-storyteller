@@ -159,3 +159,104 @@ async function pinFromList(entityType, entityId, name) {
 
 // Load pins on page load
 document.addEventListener('DOMContentLoaded', loadPinsSidebar);
+
+/* ========== Image Upload ========== */
+
+/**
+ * Set up an image upload button that uploads files and inserts {{img:id}}
+ * references at the cursor position in the associated textarea.
+ *
+ * @param {string} fileInputId   - The hidden <input type="file"> element ID
+ * @param {string} previewContainerId - Container for thumbnail previews
+ * @param {string} textareaId    - The textarea to insert references into
+ */
+function setupImageUpload(fileInputId, previewContainerId, textareaId) {
+    const input = document.getElementById(fileInputId);
+    const container = document.getElementById(previewContainerId);
+    const textarea = document.getElementById(textareaId);
+    if (!input || !container) return;
+
+    input._pendingImages = [];
+
+    input.addEventListener('change', async () => {
+        const files = input.files;
+        if (!files.length) return;
+
+        const formData = new FormData();
+        for (const file of files) {
+            if (file.size > 10 * 1024 * 1024) {
+                alert(file.name + ' is too large (max 10 MB)');
+                continue;
+            }
+            formData.append('files', file);
+        }
+
+        try {
+            const resp = await fetch('/api/images/upload', { method: 'POST', body: formData });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.error || 'Upload failed');
+            }
+            const data = await resp.json();
+
+            for (const img of data.images) {
+                input._pendingImages.push(img.id);
+
+                // Insert reference at cursor in textarea
+                if (textarea) {
+                    insertAtCursor(textarea, '{{img:' + img.id + '}}');
+                }
+
+                // Show thumbnail preview with remove button
+                const preview = document.createElement('div');
+                preview.className = 'image-preview';
+                preview.dataset.imageId = img.id;
+                preview.innerHTML = '<img src="' + img.url + '" alt="preview">' +
+                    '<button class="remove-btn" onclick="removeImageRef(this, \'' + fileInputId + '\', \'' + (textareaId || '') + '\')" title="Remove">&times;</button>';
+                container.appendChild(preview);
+            }
+        } catch (err) {
+            alert('Image upload failed: ' + err.message);
+        }
+        input.value = '';
+    });
+}
+
+/** Insert text at the current cursor position in a textarea. */
+function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = textarea.value.substring(0, start);
+    const after = textarea.value.substring(end);
+    // Add newlines around the image ref for readability
+    const prefix = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+    const suffix = after.length > 0 && !after.startsWith('\n') ? '\n' : '';
+    textarea.value = before + prefix + text + suffix + after;
+    // Move cursor after the inserted reference
+    const newPos = start + prefix.length + text.length + suffix.length;
+    textarea.selectionStart = textarea.selectionEnd = newPos;
+    textarea.focus();
+}
+
+/** Remove an image preview and its {{img:id}} reference from the textarea. */
+function removeImageRef(btn, inputId, textareaId) {
+    const preview = btn.parentElement;
+    const imageId = preview.dataset.imageId;
+    const input = document.getElementById(inputId);
+    if (input && input._pendingImages) {
+        input._pendingImages = input._pendingImages.filter(id => id !== imageId);
+    }
+    // Remove the {{img:id}} reference from the textarea
+    if (textareaId) {
+        const textarea = document.getElementById(textareaId);
+        if (textarea) {
+            textarea.value = textarea.value.replace('{{img:' + imageId + '}}', '').replace(/\n{3,}/g, '\n\n').trim();
+        }
+    }
+    preview.remove();
+}
+
+function getPendingImages(fileInputId) {
+    const input = document.getElementById(fileInputId);
+    return (input && input._pendingImages) ? [...input._pendingImages] : [];
+}

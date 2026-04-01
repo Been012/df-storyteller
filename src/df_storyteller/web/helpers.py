@@ -125,6 +125,14 @@ def markdown_to_html(text: str) -> str:
             html_lines.append("<hr>")
             continue
 
+        # Image references get their own block (not wrapped in <p>)
+        if re.match(r"^\{\{img:[0-9a-f]{32}\.\w+\}\}$", stripped):
+            if in_paragraph:
+                html_lines.append("</p>")
+                in_paragraph = False
+            html_lines.append(stripped)
+            continue
+
         if not stripped:
             if in_paragraph:
                 html_lines.append("</p>")
@@ -149,6 +157,16 @@ def markdown_to_html(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Journal parsing
 # ---------------------------------------------------------------------------
+
+
+def _extract_image_ids(text: str) -> tuple[str, list[str]]:
+    """Extract ``<!-- img:UUID.ext -->`` markers from text.
+
+    Returns (clean_text, image_ids) where image markers are stripped.
+    """
+    ids = re.findall(r"<!-- img:([0-9a-f]{32}\.\w+) -->", text)
+    clean = re.sub(r"\s*<!-- img:[0-9a-f]{32}\.\w+ -->\s*", "\n", text).strip()
+    return clean, ids
 
 
 def parse_journal(config: AppConfig, metadata: dict | None = None) -> list[dict]:
@@ -180,6 +198,9 @@ def parse_journal(config: AppConfig, metadata: dict | None = None) -> list[dict]
             if is_manual:
                 raw_body = raw_body.replace("<!-- source:manual -->", "").strip()
 
+            # Extract image attachments from markers
+            raw_body, image_ids = _extract_image_ids(raw_body)
+
             season_match = re.match(r"(\w+) of Year (\d+)", header)
             entry_season = season_match.group(1).lower() if season_match else ""
             entry_year = int(season_match.group(2)) if season_match else 0
@@ -191,6 +212,7 @@ def parse_journal(config: AppConfig, metadata: dict | None = None) -> list[dict]
                 "season": entry_season,
                 "year": entry_year,
                 "is_manual": is_manual,
+                "images": image_ids,
             })
 
     return entries

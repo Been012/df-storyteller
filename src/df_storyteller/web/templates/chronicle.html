@@ -81,6 +81,11 @@
     <div style="margin-top: 0.5rem;">
         <textarea id="manual-chronicle-text" rows="8" placeholder="Write your chronicle entry... Use [[name]] to link to legends figures, sites, or civilizations."
             class="manual-textarea"></textarea>
+        <div class="image-upload-row">
+            <label class="image-upload-btn" for="manual-chronicle-images">Attach Screenshots</label>
+            <input type="file" id="manual-chronicle-images" multiple accept="image/png,image/jpeg,image/gif,image/webp" style="display: none;">
+        </div>
+        <div id="manual-chronicle-previews" class="image-previews"></div>
         <div class="btn-row" style="justify-content: center; margin-top: 0.5rem;">
             <button class="btn btn-primary" onclick="saveManualChronicle()">Save Entry</button>
         </div>
@@ -97,12 +102,26 @@
             {% if entry.is_manual %}<span class="manual-badge">Player</span>{% endif %}
         </h2>
         {% endif %}
-        <div class="story-text" id="chronicle-text-{{ loop.index0 }}">{{ entry.text | hotlink | safe }}</div>
+        <div class="story-text" id="chronicle-text-{{ loop.index0 }}">{{ entry.text | inline_images | hotlink | safe }}</div>
+        {% if entry.images %}
+        <div class="entry-images">
+            {% for img_id in entry.images %}
+            <a href="/api/images/{{ img_id }}" target="_blank" class="entry-image-link">
+                <img src="/api/images/{{ img_id }}" alt="Screenshot" class="entry-image" loading="lazy">
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div style="text-align: right; margin-top: 0.5rem;">
             <button class="btn btn-secondary" style="font-size: 0.8rem;" onclick="editChronicle({{ loop.index0 }}, '{{ entry.season }}', {{ entry.year }})">Edit</button>
         </div>
         <div id="chronicle-edit-{{ loop.index0 }}" style="display: none; margin-top: 0.5rem;">
             <textarea id="chronicle-edit-text-{{ loop.index0 }}" rows="8" class="manual-textarea">{{ entry.raw_text }}</textarea>
+            <div class="image-upload-row">
+                <label class="image-upload-btn" for="chronicle-edit-images-{{ loop.index0 }}">Attach Screenshots</label>
+                <input type="file" id="chronicle-edit-images-{{ loop.index0 }}" multiple accept="image/png,image/jpeg,image/gif,image/webp" style="display: none;">
+            </div>
+            <div id="chronicle-edit-previews-{{ loop.index0 }}" class="image-previews"></div>
             <div class="btn-row" style="margin-top: 0.5rem; gap: 0.5rem;">
                 <button class="btn btn-primary" onclick="saveChronicleEdit({{ loop.index0 }}, '{{ entry.season }}', {{ entry.year }})">Save</button>
                 <button class="btn btn-secondary" onclick="document.getElementById('chronicle-edit-{{ loop.index0 }}').style.display='none'">Cancel</button>
@@ -149,6 +168,7 @@ async function deleteNote(noteId) {
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('fortress-note-text');
     if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') addFortressNote(); });
+    setupImageUpload('manual-chronicle-images', 'manual-chronicle-previews', 'manual-chronicle-text');
 });
 
 // Dwarf name -> unit_id map for hotlinking (injected from server)
@@ -187,6 +207,7 @@ function linkifyDwarfNames(text) {
 
 function editChronicle(index, season, year) {
     document.getElementById('chronicle-edit-' + index).style.display = 'block';
+    setupImageUpload('chronicle-edit-images-' + index, 'chronicle-edit-previews-' + index, 'chronicle-edit-text-' + index);
 }
 
 async function saveChronicleEdit(index, season, year) {

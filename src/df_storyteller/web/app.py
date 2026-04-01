@@ -53,6 +53,7 @@ from df_storyteller.web.routers import (  # noqa: E402
     dashboard, quests, chronicle, stories, gazette,
     dwarves, events, military,
     lore_index, lore_detail, lore_api,
+    images,
 )
 
 app.include_router(settings.router)
@@ -70,6 +71,7 @@ app.include_router(events.router)
 app.include_router(lore_index.router)
 app.include_router(lore_detail.router)
 app.include_router(lore_api.router)
+app.include_router(images.router)
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000):

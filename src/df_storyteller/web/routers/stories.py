@@ -112,6 +112,8 @@ async def api_bio_manual(unit_id: int, request: Request):
     }
     if data.get("is_diary"):
         entry["is_diary"] = True
+    if data.get("images"):
+        entry["images"] = data["images"]
 
     _save_biography_entry(config, unit_id, entry, output_dir=fortress_dir)
     return {"ok": True}
@@ -191,7 +193,7 @@ async def api_diary_manual(unit_id: int, request: Request):
     dwarf = character_tracker.get_dwarf(unit_id)
     fortress_dir = _get_fortress_dir(config, metadata)
 
-    _save_biography_entry(config, unit_id, {
+    entry = {
         "year": metadata.get("year", 0),
         "season": metadata.get("season", "spring"),
         "text": text,
@@ -199,7 +201,10 @@ async def api_diary_manual(unit_id: int, request: Request):
         "stress_category": dwarf.stress_category if dwarf else 0,
         "is_diary": True,
         "is_manual": True,
-    }, output_dir=fortress_dir)
+    }
+    if data.get("images"):
+        entry["images"] = data["images"]
+    _save_biography_entry(config, unit_id, entry, output_dir=fortress_dir)
     return {"ok": True}
 
 
@@ -244,11 +249,14 @@ async def api_saga_manual(request: Request):
         except (ValueError, OSError):
             pass
 
-    existing.append({
+    saga_entry: dict = {
         "text": text,
         "year": metadata.get("year", 0),
         "season": metadata.get("season", "spring"),
         "is_manual": True,
-    })
+    }
+    if data.get("images"):
+        saga_entry["images"] = data["images"]
+    existing.append(saga_entry)
     saga_path.write_text(_json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"ok": True}
