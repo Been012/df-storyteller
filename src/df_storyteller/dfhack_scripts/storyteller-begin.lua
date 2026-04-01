@@ -555,6 +555,195 @@ local function serialize_unit(unit)
         end
     end)
 
+    -- Appearance (skin color, hair color/length for portrait generation)
+    data.appearance = {
+        skin_color = '',
+        hair_color = '',
+        beard_color = '',
+        hair_length = 0,
+        hair_style = 'unkempt',
+        hair_curly = 0,
+        beard_length = 0,
+        beard_style = 'unkempt',
+    }
+    pcall(function()
+        local raw = df.creature_raw.find(unit.race)
+        if not raw then return end
+        local caste = raw.caste[unit.caste]
+        if not caste then return end
+
+        -- Extract colors from appearance.colors + caste.color_modifiers
+        -- body_part_id is a VECTOR (not single int). The modifier with the most
+        -- body parts is skin (covers whole body). Hair modifiers have fewer parts.
+        -- Eye modifiers have 2 parts. We sort by body part count to identify type.
+        pcall(function()
+            if not unit.appearance or not unit.appearance.colors then return end
+
+            -- Collect all color modifiers with their resolved color names and part counts
+            local mods = {}
+            for i, cm in ipairs(caste.color_modifiers) do
+                pcall(function()
+                    local color_idx = unit.appearance.colors[i]
+                    if not color_idx then return end
+
+                    local color_name = ''
+                    pcall(function()
+                        if cm.pattern_index and color_idx < #cm.pattern_index then
+                            local pattern_id = cm.pattern_index[color_idx]
+                            if pattern_id then
+                                local pattern = df.descriptor_pattern.find(pattern_id)
+                                if pattern and pattern.colors and #pattern.colors > 0 then
+                                    local color = df.descriptor_color.find(pattern.colors[0])
+                                    if color then color_name = color.id or '' end
+                                end
+                            end
+                        end
+                    end)
+
+                    local part_count = 0
+                    pcall(function() part_count = #cm.body_part_id end)
+
+                    if color_name ~= '' then
+                        table.insert(mods, { color = color_name, parts = part_count, idx = i })
+                    end
+                end)
+            end
+
+            -- Sort by body part count descending — most parts = skin, fewer = hair, fewest = eyes
+            table.sort(mods, function(a, b) return a.parts > b.parts end)
+
+            -- Identify skin (most body parts), then use original index order
+            -- for the rest: DF order is [0]=head hair, [1]=beard, [2]=eyebrows, [3]=skin, [4]=eyes
+            -- but the skin index varies, so find it first then assign the rest by original order
+            local skin_idx = -1
+            for _, m in ipairs(mods) do
+                if m.parts >= 20 then
+                    data.appearance.skin_color = m.color
+                    skin_idx = m.idx
+                    break
+                end
+            end
+
+            -- Remaining non-skin, non-eye modifiers in original index order = head hair, then beard
+            local hair_mods = {}
+            for _, m in ipairs(mods) do
+                if m.idx ~= skin_idx and m.parts >= 3 and m.parts < 20 then
+                    table.insert(hair_mods, m)
+                end
+            end
+            -- Sort back to original index order
+            table.sort(hair_mods, function(a, b) return a.idx < b.idx end)
+
+            if #hair_mods >= 1 then
+                data.appearance.hair_color = hair_mods[1].color
+            end
+            if #hair_mods >= 2 then
+                data.appearance.beard_color = hair_mods[2].color
+            end
+        end)
+
+        -- Extract hair/beard length from tissue_length + tissue_style
+        -- tissue_length[i] = raw growth length for tissue region i (-30000 = none)
+        -- tissue_style[i] = styling: 0 = shaved/cut, 1+ = natural/styled, -1 = N/A
+        -- tissue_style_type[i] = style ID from civ culture
+        --
+        -- For dwarves with 12 tissue regions, the typical mapping is:
+        -- [0-1] = sideburns/side hair, [2] = beard/chin, [3] = head hair top,
+        -- [4-5] = N/A, [6-7] = mustache area, [8-9] = beard sides, [10-11] = N/A
+        -- The exact mapping varies, so we use heuristics:
+        --   Head hair = the entry with the longest length that has style >= 0
+        --   Beard = other long entries on face
+        --   If style == 0, the hair is shaved/trimmed to near-zero display length
+        pcall(function()
+            if not unit.appearance or not unit.appearance.tissue_length then return end
+
+            local tl = unit.appearance.tissue_length
+            local ts = unit.appearance.tissue_style
+            local count = #tl
+
+            -- Collect valid tissue entries (length > 0, not -30000)
+            local entries = {}
+            for i = 0, count - 1 do
+                pcall(function()
+                    local length = tl[i]
+                    local style = -1
+                    pcall(function() style = ts[i] end)
+                    if length and length > 0 then
+                        table.insert(entries, { idx = i, length = length, style = style })
+                    end
+                end)
+            end
+
+            -- Tissue layout differs by sex:
+            -- Females (6 entries): [0-1]=N/A, [2-3]=head hair, [4-5]=N/A
+            -- Males (12 entries): [0-1]=sideburns, [2]=chin beard, [3]=head hair,
+            --   [4-5]=N/A, [6-7]=mustache, [8-9]=cheek beard, [10-11]=N/A
+            --
+            -- Style values: -1=N/A, 0=natural, 1+=styled, 4=trimmed/cut short
+            -- Display length = tissue_length if style != 4, near-zero if style == 4
+
+            local is_male = (count >= 12)
+
+            -- Head hair: index 3 for males, index 2 or 3 for females
+            local head_idx = 3
+            if not is_male then head_idx = 2 end
+
+            -- tissue_style values map to the tissue_style_type enum:
+            -- 0=NEATLY_COMBED, 1=BRAIDED, 2=DOUBLE_BRAIDS, 3=PONY_TAIL, 4=CLEAN_SHAVEN
+            local STYLE_NAMES = {
+                [0] = 'combed', [1] = 'braided', [2] = 'double_braids',
+                [3] = 'pony_tail', [4] = 'clean_shaven',
+            }
+            for _, e in ipairs(entries) do
+                if e.idx == head_idx or (not is_male and e.idx == 3) then
+                    local style_name = STYLE_NAMES[e.style] or 'unkempt'
+                    if style_name == 'clean_shaven' then
+                        -- Clean-shaven: no visible hair
+                        data.appearance.hair_length = 5
+                        data.appearance.hair_style = 'shaved'
+                    elseif e.length > 0 and e.style >= 0 then
+                        if e.length > data.appearance.hair_length then
+                            data.appearance.hair_length = e.length
+                            data.appearance.hair_style = style_name
+                        end
+                    end
+                end
+            end
+
+            -- Beard (males only): indices 2 (chin), 8-9 (cheeks)
+            if is_male then
+                for _, e in ipairs(entries) do
+                    if (e.idx == 2 or e.idx == 8 or e.idx == 9) then
+                        local style_name = STYLE_NAMES[e.style] or 'unkempt'
+                        if style_name ~= 'clean_shaven' and e.length > 0 then
+                            if e.length > data.appearance.beard_length then
+                                data.appearance.beard_length = e.length
+                                data.appearance.beard_style = style_name
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+
+    -- Capture body_modifiers for head shape (broadness)
+    pcall(function()
+        if unit.appearance and unit.appearance.body_modifiers and #unit.appearance.body_modifiers >= 2 then
+            data.appearance.body_broadness = unit.appearance.body_modifiers[1] or 100
+        end
+    end)
+
+    -- Age-based hair thinning for dwarves 50+
+    -- Vucar (age 55) has hair tissue data but appears bald in-game
+    -- DF applies age-based baldness that we can't detect from tissue data alone
+    pcall(function()
+        if data.appearance.hair_length > 10 and data.age >= 50 then
+            data.appearance.hair_length = 5
+            data.appearance.hair_style = 'shaved'
+        end
+    end)
+
     -- Vampire / werebeast / assumed identity detection
     data.is_vampire = false
     data.is_werebeast = false

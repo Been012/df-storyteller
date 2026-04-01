@@ -44,7 +44,7 @@
     {% for squad in military.squads %}
     <div style="margin-bottom: 1.5rem;">
         <h4 style="color: var(--gold-dark); margin-bottom: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem;">
-            {{ squad.name }} <span style="font-size: 0.8rem; color: var(--ink-faded);">({{ squad.members | length }} members)</span>
+            {{ squad.name }} <span style="font-size: 0.8rem; color: var(--ink-faded);">({{ squad.members | length }} member{{ 's' if squad.members | length != 1 else '' }})</span>
         </h4>
         <div class="dwarf-grid">
             {% for m in squad.members %}

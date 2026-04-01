@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from df_storyteller.web.state import (
     get_config as _get_config,
     load_game_state_safe as _load_game_state_safe,
+    get_fortress_dir as _get_fortress_dir,
     base_context as _base_context,
     SEASON_ORDER_MAP,
 )
@@ -196,6 +197,82 @@ async def dashboard_page(request: Request):
         if pp > peak_pop:
             peak_pop = pp
 
+    # --- New dashboard enrichment ---
+
+    # Recent events (last 8 non-equipment, non-chat)
+    from df_storyteller.context.context_builder import _format_event as _fmt_event
+    skip_types = {ET.CHAT}
+    recent_events = []
+    all_events = sorted(event_store.all_events(), key=lambda e: (e.game_year, SEASON_ORDER_MAP.get(e.season.value, 0), e.game_tick), reverse=True)
+    for e in all_events:
+        if e.event_type in skip_types:
+            continue
+        desc = re.sub(r"^\[.*?\]\s*", "", _fmt_event(e))
+        if "equipped" in desc.lower() or "unequipped" in desc.lower():
+            continue
+        recent_events.append({
+            "type": e.event_type.value if hasattr(e.event_type, "value") else str(e.event_type),
+            "season": e.season.value.title(),
+            "year": e.game_year,
+            "description": desc[:150],
+        })
+        if len(recent_events) >= 8:
+            break
+
+    # Notable citizens (highlighted dwarves)
+    from df_storyteller.context.highlights_store import load_all_highlights
+    fortress_dir = _get_fortress_dir(config, metadata)
+    highlights = load_all_highlights(config, fortress_dir)
+    notable_citizens = []
+    for h in highlights:
+        dwarf = character_tracker.get_dwarf(h.unit_id)
+        if dwarf:
+            notable_citizens.append({
+                "unit_id": h.unit_id,
+                "name": dwarf.name,
+                "profession": dwarf.profession,
+                "role": h.role.value,
+            })
+
+    # Mood distribution
+    _MOOD_LABELS = {0: "haggard", 1: "very stressed", 2: "stressed", 3: "content", 4: "pleased", 5: "very happy", 6: "ecstatic"}
+    mood_counts: dict[str, int] = {}
+    for d in character_tracker._characters.values():
+        cat = d.stress_category if isinstance(d.stress_category, int) else 3
+        label = _MOOD_LABELS.get(cat, "content")
+        mood_counts[label] = mood_counts.get(label, 0) + 1
+
+    # Top skills across all dwarves
+    top_skills = []
+    for d in character_tracker._characters.values():
+        for s in d.skills:
+            level_num = int(s.level) if str(s.level).isdigit() else 0
+            if level_num >= 4:  # Only show notable skills
+                top_skills.append({
+                    "dwarf_name": d.name.split(",")[0],  # Drop profession suffix
+                    "unit_id": d.unit_id,
+                    "skill": s.name.replace("_", " ").title(),
+                    "level_num": level_num,
+                })
+    top_skills.sort(key=lambda x: x["level_num"], reverse=True)
+    top_skills = top_skills[:6]
+
+    # Latest chronicle excerpt
+    from df_storyteller.web.helpers import parse_journal
+    journal_entries = parse_journal(config, metadata)
+    latest_chronicle = None
+    if journal_entries:
+        last = journal_entries[-1]
+        raw = last.get("raw_text", "")
+        # Strip inline image references for the excerpt
+        clean = re.sub(r"\{\{img:[0-9a-f]{32}\.\w+\}\}", "", raw).strip()
+        excerpt = clean[:200]
+        if excerpt:
+            latest_chronicle = {
+                "header": last.get("header", ""),
+                "excerpt": excerpt + ("..." if len(clean) > 200 else ""),
+            }
+
     dashboard = {
         "summary": {
             "population": metadata.get("population", 0),
@@ -217,6 +294,11 @@ async def dashboard_page(request: Request):
         "sieges": sieges,
         "caravans": caravans,
         "artifacts": artifacts,
+        "recent_events": recent_events,
+        "notable_citizens": notable_citizens,
+        "mood_counts": mood_counts,
+        "top_skills": top_skills,
+        "latest_chronicle": latest_chronicle,
     }
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context={

@@ -24,6 +24,25 @@ from df_storyteller.schema.personality import Belief, Facet, Goal, Personality
 logger = logging.getLogger(__name__)
 
 
+def _load_appearance(raw: dict) -> "DwarfAppearance":
+    """Parse appearance data from a snapshot citizen entry."""
+    from df_storyteller.schema.entities import DwarfAppearance
+    a = raw.get("appearance", {})
+    if not a:
+        return DwarfAppearance()
+    return DwarfAppearance(
+        skin_color=a.get("skin_color", ""),
+        hair_color=a.get("hair_color", ""),
+        beard_color=a.get("beard_color", ""),
+        hair_length=a.get("hair_length", 0),
+        hair_style=a.get("hair_style", ""),
+        hair_curly=a.get("hair_curly", 0),
+        beard_length=a.get("beard_length", 0),
+        beard_style=a.get("beard_style", ""),
+        body_broadness=a.get("body_broadness", 100),
+    )
+
+
 def _load_personality(raw: dict) -> Personality:
     """Parse personality data from a snapshot citizen entry."""
     p = raw.get("personality", {})
@@ -166,6 +185,7 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
         is_vampire=citizen.get("is_vampire", False),
         is_werebeast=citizen.get("is_werebeast", False),
         assumed_identity=citizen.get("assumed_identity", ""),
+        appearance=_load_appearance(citizen),
     )
 
 

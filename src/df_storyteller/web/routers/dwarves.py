@@ -571,5 +571,5 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     ]
 
     return templates.TemplateResponse(request=request, name="dwarf_detail.html", context={
-        **ctx, "dwarf": dwarf_data, "notes": all_dwarf_notes, "tag_descriptions": TAG_DESCRIPTIONS,
+        **ctx, "content_class": "content-wide", "dwarf": dwarf_data, "notes": all_dwarf_notes, "tag_descriptions": TAG_DESCRIPTIONS,
     })

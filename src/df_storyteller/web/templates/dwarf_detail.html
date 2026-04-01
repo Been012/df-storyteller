@@ -6,14 +6,16 @@
     <a href="/dwarves" style="color: var(--parchment-dark); text-decoration: none;">&larr; Back to Citizens</a>
 </div>
 
-<div class="parchment">
-    <div class="char-sheet">
+<div class="parchment" style="padding: 0; overflow: hidden;">
+    <div class="char-sheet" style="display: grid !important; grid-template-columns: 1fr 1fr !important;">
         <div class="char-header">
+            <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait" loading="lazy">
             <div class="char-name">{{ dwarf.name }}</div>
             <div class="char-title">
                 {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
+                {% set unique_positions = dwarf.noble_positions | reject('equalto', dwarf.profession) | list %}
                 {{ dwarf.profession }}
-                {% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
+                {% if unique_positions %} &mdash; {{ unique_positions | join(', ') }}{% endif %}
                 {% if dwarf.military_squad %} &mdash; {{ dwarf.military_squad }}{% endif %}
                 &middot; Age {{ dwarf.age | int }}
                 {% if not dwarf.is_alive %}
@@ -48,152 +50,191 @@
         </div>
 
         <!-- Left Column: Personality -->
-        <div class="stat-section">
+        <div class="stat-section" style="grid-column: 1; grid-row: 2;">
             {% if dwarf.personality_traits %}
-            <h3>Personality</h3>
-            <ul class="stat-list">
-                {% for trait in dwarf.personality_traits %}
-                <li>{{ trait }}</li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Personality</h3>
+                <ul class="stat-list">
+                    {% for trait in dwarf.personality_traits %}
+                    <li>{{ trait }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.beliefs %}
-            <h3>Values &amp; Beliefs</h3>
-            <ul class="stat-list">
-                {% for belief in dwarf.beliefs %}
-                <li>{{ belief }}</li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Values &amp; Beliefs</h3>
+                <ul class="stat-list">
+                    {% for belief in dwarf.beliefs %}
+                    <li>{{ belief }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.goals %}
-            <h3>Dreams</h3>
-            <ul class="stat-list">
-                {% for goal in dwarf.goals %}
-                <li>{{ goal }}</li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Dreams</h3>
+                <ul class="stat-list">
+                    {% for goal in dwarf.goals %}
+                    <li>{{ goal }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.relationships %}
-            <h3>Relationships</h3>
-            <ul class="stat-list">
-                {% for rel in dwarf.relationships %}
-                <li><strong>{{ rel.type }}:</strong> {{ rel.name }}</li>
-                {% endfor %}
-            </ul>
-            <a href="/dwarves/relationships" style="font-size: 0.85rem; color: var(--gold-dark);">View Relationship Web &rarr;</a>
+            <div class="stat-block">
+                <h3>Relationships</h3>
+                <ul class="stat-list">
+                    {% for rel in dwarf.relationships %}
+                    <li><strong>{{ rel.type }}:</strong> {{ rel.name }}</li>
+                    {% endfor %}
+                </ul>
+                <a href="/dwarves/relationships" style="font-size: 0.85rem; color: var(--gold-dark);">View Relationship Web &rarr;</a>
+            </div>
             {% endif %}
         </div>
 
         <!-- Right Column: Attributes & Skills -->
-        <div class="stat-section">
+        <div class="stat-section" style="grid-column: 2; grid-row: 2;">
             {% if dwarf.physical_attrs %}
-            <h3>Physical</h3>
-            <ul class="stat-list">
-                {% for attr in dwarf.physical_attrs %}
-                <li>{{ attr }}</li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Physical</h3>
+                <ul class="stat-list">
+                    {% for attr in dwarf.physical_attrs %}
+                    <li>{{ attr }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.mental_attrs %}
-            <h3>Mind</h3>
-            <ul class="stat-list">
-                {% for attr in dwarf.mental_attrs %}
-                <li>{{ attr }}</li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Mind</h3>
+                <ul class="stat-list">
+                    {% for attr in dwarf.mental_attrs %}
+                    <li>{{ attr }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.skills %}
-            <h3>Skills ({{ dwarf.skills | length }})</h3>
-            <ul class="stat-list">
-                {% for skill in dwarf.skills %}
-                <li style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>{{ skill.name }}</span>
-                    <span class="skill-level skill-level-{{ skill.level_num }}" style="font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
-                        {% if skill.level_num >= 15 %}background: rgba(201,168,76,0.25); color: #c9a84c; font-weight: 700;
-                        {% elif skill.level_num >= 12 %}background: rgba(139,37,0,0.15); color: #c98b8b;
-                        {% elif skill.level_num >= 8 %}background: rgba(45,90,39,0.15); color: #8bc98b;
-                        {% elif skill.level_num >= 4 %}background: rgba(74,111,165,0.15); color: #8b9cc9;
-                        {% else %}background: rgba(122,101,88,0.1); color: var(--ink-faded);
-                        {% endif %}">{{ skill.level }}</span>
-                </li>
-                {% endfor %}
-            </ul>
+            <div class="stat-block">
+                <h3>Skills ({{ dwarf.skills | length }})</h3>
+                <ul class="stat-list">
+                    {% for skill in dwarf.skills %}
+                    <li style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>{{ skill.name }}</span>
+                        <span class="skill-level skill-level-{{ skill.level_num }}" style="font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
+                            {% if skill.level_num >= 15 %}background: rgba(201,168,76,0.25); color: #c9a84c; font-weight: 700;
+                            {% elif skill.level_num >= 12 %}background: rgba(139,37,0,0.15); color: #c98b8b;
+                            {% elif skill.level_num >= 8 %}background: rgba(45,90,39,0.15); color: #8bc98b;
+                            {% elif skill.level_num >= 4 %}background: rgba(74,111,165,0.15); color: #8b9cc9;
+                            {% else %}background: rgba(122,101,88,0.1); color: var(--ink-faded);
+                            {% endif %}">{{ skill.level }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
 
             {% if dwarf.pets %}
-            <h3>Pets</h3>
-            <ul class="stat-list">
-                {% for pet in dwarf.pets %}
-                <li>
-                    {% if pet.name %}{{ pet.name }} — {% endif %}{{ pet.race }}
-                    {% if not pet.is_alive %}<span class="deceased-badge" style="font-size: 0.75rem;">Deceased</span>{% endif %}
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-
-            {% if dwarf.equipment %}
-            <h3>Equipment</h3>
-            {% set weapons = dwarf.equipment | selectattr('mode', 'equalto', 'Weapon') | list if dwarf.equipment[0] is mapping else [] %}
-            {% set strapped = dwarf.equipment | selectattr('mode', 'equalto', 'Strapped') | list if dwarf.equipment[0] is mapping else [] %}
-            {% set worn = dwarf.equipment | selectattr('mode', 'equalto', 'Worn') | list if dwarf.equipment[0] is mapping else [] %}
-            {% if weapons %}
-            <div style="margin-bottom: 0.4rem;">
-                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Weapons</span>
-                <ul class="stat-list" style="margin-top: 0.2rem;">
-                {% for item in weapons %}
-                    <li>{{ item.description }}</li>
-                {% endfor %}
+            <div class="stat-block">
+                <h3>Pets</h3>
+                <ul class="stat-list">
+                    {% for pet in dwarf.pets %}
+                    <li>
+                        {% if pet.name %}{{ pet.name }} — {% endif %}{{ pet.race }}
+                        {% if not pet.is_alive %}<span class="deceased-badge" style="font-size: 0.75rem;">Deceased</span>{% endif %}
+                    </li>
+                    {% endfor %}
                 </ul>
             </div>
-            {% endif %}
-            {% if strapped %}
-            <div style="margin-bottom: 0.4rem;">
-                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Armor</span>
-                <ul class="stat-list" style="margin-top: 0.2rem;">
-                {% for item in strapped %}
-                    <li>{{ item.description }}</li>
-                {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-            {% if worn %}
-            <div style="margin-bottom: 0.4rem;">
-                <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Clothing</span>
-                <ul class="stat-list" style="margin-top: 0.2rem;">
-                {% for item in worn %}
-                    <li>{{ item.description }}</li>
-                {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-            {% endif %}
-
-            {% if dwarf.wounds %}
-            <h3>Wounds</h3>
-            <ul class="stat-list">
-                {% for wound in dwarf.wounds %}
-                {% if wound is mapping %}
-                <li style="color: {% if wound.is_permanent %}#c98b8b{% else %}var(--ink-faded){% endif %};">
-                    {{ wound.body_part }}{% if wound.is_permanent %} <span style="font-size: 0.8rem; font-weight: bold;">({{ wound.wound_type }})</span>{% endif %}
-                </li>
-                {% else %}
-                <li style="color: var(--danger);">{{ wound }}</li>
-                {% endif %}
-                {% endfor %}
-            </ul>
             {% endif %}
         </div>
 
-        <!-- Combat Highlights -->
+        <!-- Equipment & Wounds — full-width side-by-side row -->
+        {% if dwarf.equipment or dwarf.wounds %}
+        <div class="equip-wounds-row">
+            <div>
+                {% if dwarf.equipment %}
+                <div class="stat-block">
+                <h3>Equipment</h3>
+                {% set weapons = dwarf.equipment | selectattr('mode', 'equalto', 'Weapon') | list if dwarf.equipment[0] is mapping else [] %}
+                {% set strapped = dwarf.equipment | selectattr('mode', 'equalto', 'Strapped') | list if dwarf.equipment[0] is mapping else [] %}
+                {% set worn = dwarf.equipment | selectattr('mode', 'equalto', 'Worn') | list if dwarf.equipment[0] is mapping else [] %}
+                {% if weapons %}
+                <div style="margin-bottom: 0.4rem;">
+                    <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Weapons</span>
+                    <ul class="stat-list" style="margin-top: 0.2rem;">
+                    {% for item in weapons %}
+                        <li>{{ item.description }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% if strapped %}
+                <div style="margin-bottom: 0.4rem;">
+                    <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Armor</span>
+                    <ul class="stat-list" style="margin-top: 0.2rem;">
+                    {% for item in strapped %}
+                        <li>{{ item.description }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% if worn %}
+                <div style="margin-bottom: 0.4rem;">
+                    <span style="font-weight: bold; color: var(--gold-dark); font-size: 0.85rem;">Clothing</span>
+                    <ul class="stat-list" style="margin-top: 0.2rem;">
+                    {% for item in worn %}
+                        <li>{{ item.description }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div>
+                {% if dwarf.wounds %}
+                {% set permanent_wounds = [] %}
+                {% for wound in dwarf.wounds %}
+                    {% if wound is mapping and wound.is_permanent %}
+                        {% if permanent_wounds.append(wound) %}{% endif %}
+                    {% elif wound is not mapping %}
+                        {% if permanent_wounds.append(wound) %}{% endif %}
+                    {% endif %}
+                {% endfor %}
+                {% if permanent_wounds %}
+                <div class="stat-block">
+                    <h3>Wounds</h3>
+                    <ul class="stat-list">
+                        {% for wound in permanent_wounds %}
+                        {% if wound is mapping %}
+                        <li style="color: #c98b8b;">
+                            {{ wound.body_part }} <span style="font-size: 0.8rem; font-weight: bold;">({{ wound.wound_type }})</span>
+                        </li>
+                        {% else %}
+                        <li style="color: var(--danger);">{{ wound }}</li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Combat Record (collapsible) -->
         {% if dwarf.combat_highlights %}
-        <div class="bio-section">
-            <h3>Combat Record</h3>
+        <details class="sheet-collapsible" open>
+            <summary>Combat Record ({{ dwarf.combat_highlights | length }})</summary>
+            <div class="collapsible-body">
             {% for fight in dwarf.combat_highlights %}
             <div style="margin-bottom: 0.8rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: 4px; {% if fight.is_lethal %}border-left: 3px solid #c98b8b;{% endif %}">
                 <div style="display: flex; justify-content: space-between; align-items: baseline;">
@@ -214,20 +255,23 @@
                 </div>
             </div>
             {% endfor %}
-        </div>
+            </div>
+        </details>
         {% endif %}
 
-        <!-- Event History -->
+        <!-- Event History (collapsible, starts collapsed) -->
         {% if dwarf.events %}
-        <div class="bio-section">
-            <h3>Event History</h3>
+        <details class="sheet-collapsible">
+            <summary>Event History ({{ dwarf.events | length }})</summary>
+            <div class="collapsible-body">
             {% for evt in dwarf.events %}
             <div class="event-card {{ evt.type | lower | replace(' ', '_') }}" style="margin-bottom: 0.4rem;">
                 <div class="event-time">{{ evt.season }} {{ evt.year }} &middot; {{ evt.type }}</div>
                 <div class="event-text">{{ evt.description }}</div>
             </div>
             {% endfor %}
-        </div>
+            </div>
+        </details>
         {% endif %}
 
         <!-- Tabbed sections: Notes | Biography | Diary -->

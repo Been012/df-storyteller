@@ -268,9 +268,9 @@
 
     <div style="max-height: 500px; overflow-y: auto;">
         {% for chat in chat_lines %}
-        <div style="margin-bottom: 0.3rem; font-size: 0.88rem; line-height: 1.5;">
-            <strong style="color: var(--parchment);">{{ chat.name }}</strong><span style="color: var(--ink-faded);">, {{ chat.profession }}:</span>
-            <span style="color: var(--ink-light);">{{ chat.message }}</span>
+        <div class="chat-line {% if loop.index is odd %}chat-odd{% endif %}">
+            <a href="/dwarves/{{ chat.unit_id }}" class="chat-name">{{ chat.name }}</a><span class="chat-prof">, {{ chat.profession }}:</span>
+            <span class="chat-msg">{{ chat.message }}</span>
         </div>
         {% endfor %}
     </div>

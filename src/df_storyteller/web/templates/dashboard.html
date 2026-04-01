@@ -37,6 +37,90 @@
     {% endif %}
 </div>
 
+<!-- Dashboard Hub Grid -->
+<div class="dashboard-grid" style="margin-bottom: 1.5rem;">
+    <!-- Recent Activity -->
+    {% if dashboard.recent_events %}
+    <div class="parchment">
+        <h3 class="chart-title">Recent Activity</h3>
+        {% for evt in dashboard.recent_events %}
+        <div class="event-card {{ evt.type | lower | replace(' ', '_') }}" style="margin-bottom: 0.3rem;">
+            <div class="event-time">{{ evt.season }} Y{{ evt.year }} &middot; {{ evt.type }}</div>
+            <div class="event-text">{{ evt.description }}</div>
+        </div>
+        {% endfor %}
+        <div style="text-align: right; margin-top: 0.5rem;">
+            <a href="/events" style="color: var(--gold-dark); font-size: 0.85rem;">View all events &rarr;</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Right column: Notable Citizens + Mood + Skills -->
+    <div>
+        <!-- Notable Citizens -->
+        {% if dashboard.notable_citizens %}
+        <div class="parchment" style="margin-bottom: 1rem;">
+            <h3 class="chart-title">Notable Citizens</h3>
+            {% for citizen in dashboard.notable_citizens %}
+            <div style="margin-bottom: 0.4rem;">
+                <a href="/dwarves/{{ citizen.unit_id }}" style="color: var(--gold-dark); text-decoration: none; font-weight: 600;">{{ citizen.name }}</a>
+                <span style="color: var(--ink-faded); font-size: 0.85rem;"> &middot; {{ citizen.profession }}</span>
+                <span class="role-badge role-{{ citizen.role }}" style="font-size: 0.7rem;">{{ citizen.role }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Fortress Mood -->
+        {% if dashboard.mood_counts %}
+        <div class="parchment" style="margin-bottom: 1rem;">
+            <h3 class="chart-title">Fortress Mood</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                {% for mood, count in dashboard.mood_counts.items() %}
+                <div style="text-align: center; padding: 0.3rem 0.6rem; border: 1px solid var(--border); border-radius: 3px; font-size: 0.85rem;">
+                    <div style="font-weight: 700; color: var(--gold-dark);">{{ count }}</div>
+                    <div style="color: var(--ink-faded);">{{ mood }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Top Skills -->
+        {% if dashboard.top_skills %}
+        <div class="parchment">
+            <h3 class="chart-title">Master Craftsdwarves</h3>
+            {% for s in dashboard.top_skills %}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; font-size: 0.9rem;">
+                <span>
+                    <a href="/dwarves/{{ s.unit_id }}" style="color: var(--gold-dark); text-decoration: none;">{{ s.dwarf_name }}</a>
+                    <span style="color: var(--ink-faded);"> &middot; {{ s.skill }}</span>
+                </span>
+                <span style="font-size: 0.75rem; padding: 0.1rem 0.4rem; border-radius: 3px;
+                    {% if s.level_num >= 15 %}background: rgba(201,168,76,0.25); color: #c9a84c; font-weight: 700;
+                    {% elif s.level_num >= 12 %}background: rgba(139,37,0,0.15); color: #c98b8b;
+                    {% elif s.level_num >= 8 %}background: rgba(45,90,39,0.15); color: #8bc98b;
+                    {% else %}background: rgba(74,111,165,0.15); color: #8b9cc9;
+                    {% endif %}">Lv{{ s.level_num }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Latest Chronicle -->
+{% if dashboard.latest_chronicle %}
+<div class="parchment" style="margin-bottom: 1.5rem;">
+    <h3 class="chart-title">Latest Chronicle</h3>
+    <div style="font-size: 0.85rem; color: var(--ink-faded); margin-bottom: 0.3rem;">{{ dashboard.latest_chronicle.header }}</div>
+    <div style="font-style: italic; color: var(--ink-light); line-height: 1.6;">{{ dashboard.latest_chronicle.excerpt }}</div>
+    <div style="text-align: right; margin-top: 0.5rem;">
+        <a href="/" style="color: var(--gold-dark); font-size: 0.85rem;">Read more &rarr;</a>
+    </div>
+</div>
+{% endif %}
+
 <!-- Charts Grid -->
 <div class="dashboard-grid">
     {% if dashboard.population_series %}

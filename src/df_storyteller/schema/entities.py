@@ -19,6 +19,20 @@ class Relationship(BaseModel):
     relationship_type: str  # friend, grudge, lover, spouse, parent, child, etc.
 
 
+class DwarfAppearance(BaseModel):
+    """Appearance data for portrait generation."""
+
+    skin_color: str = ""     # DF color name (e.g. "PEACH", "DARK_BROWN")
+    hair_color: str = ""     # DF color name (e.g. "BLACK", "AUBURN")
+    beard_color: str = ""    # DF color name for beard (may differ from hair)
+    hair_length: int = 0     # DF tissue length units
+    hair_style: str = ""     # "unkempt" / "shaped"
+    hair_curly: int = 0      # Curliness value (0-200+)
+    beard_length: int = 0    # Facial hair length
+    beard_style: str = ""    # "unkempt" / "shaped"
+    body_broadness: int = 100  # Head broadness (0-200, <100=thin, >=100=broad)
+
+
 class Dwarf(BaseModel):
     """A living fortress citizen tracked for narrative purposes."""
 
@@ -49,6 +63,7 @@ class Dwarf(BaseModel):
     is_vampire: bool = False
     is_werebeast: bool = False
     assumed_identity: str = ""  # Non-empty if unit is using a fake name
+    appearance: DwarfAppearance = Field(default_factory=DwarfAppearance)
 
 
 class Animal(BaseModel):

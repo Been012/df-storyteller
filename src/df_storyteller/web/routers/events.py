@@ -45,7 +45,8 @@ def _extract_chat_lines(event_store) -> list[dict[str, str]]:
                 if "," in prefix or prefix.endswith(prof):
                     msg = msg[prefix_end + 2:]
             if msg:
-                chat_lines.append({"name": name, "profession": prof, "message": msg})
+                unit_id = unit.get("unit_id", 0) if isinstance(unit, dict) else 0
+                chat_lines.append({"name": name, "profession": prof, "message": msg, "unit_id": unit_id})
     return chat_lines
 
 

@@ -534,20 +534,42 @@ a.lore-link:hover {
     border-bottom-style: solid;
 }
 
+/* ========== Dwarf Portraits ========== */
+
+.dwarf-portrait {
+    width: 96px;
+    height: 96px;
+    border: 2px solid var(--gold-dark);
+    border-radius: 4px;
+    image-rendering: pixelated;
+    background: rgba(44, 24, 16, 0.3);
+    margin-bottom: 0.5rem;
+}
+
+.dwarf-portrait-sm {
+    width: 56px;
+    height: 56px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    image-rendering: pixelated;
+    background: rgba(44, 24, 16, 0.3);
+    flex-shrink: 0;
+}
+
 /* ========== Character Sheet ========== */
 
 .char-sheet {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
+    gap: 0;
 }
 
 .char-header {
     grid-column: 1 / -1;
     text-align: center;
     border-bottom: 2px solid var(--gold-dark);
-    padding-bottom: 1rem;
-    margin-bottom: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: rgba(201, 168, 76, 0.04);
 }
 
 .char-header .char-name {
@@ -561,6 +583,32 @@ a.lore-link:hover {
     color: var(--ink-light);
     font-style: italic;
     font-size: 1.1rem;
+}
+
+/* Bordered panel sections — each column is a stack of distinct boxes */
+.stat-section {
+    padding: 0.8rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.stat-block {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.8rem;
+    background: rgba(244, 232, 193, 0.3);
+}
+
+.stat-block h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--gold-dark);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.25rem;
 }
 
 .stat-section h3 {
@@ -594,11 +642,56 @@ a.lore-link:hover {
     color: var(--ink);
 }
 
+/* Full-width sections spanning both columns */
 .bio-section {
     grid-column: 1 / -1;
-    margin-top: 1rem;
+    padding: 1rem 1.2rem;
     border-top: 2px solid var(--gold-dark);
-    padding-top: 1rem;
+}
+
+/* Collapsible sections */
+.sheet-collapsible {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+}
+
+.sheet-collapsible summary {
+    font-family: 'Cinzel', serif;
+    color: var(--gold-dark);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0.8rem 1.2rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.sheet-collapsible summary::before {
+    content: '▸ ';
+}
+
+.sheet-collapsible[open] summary::before {
+    content: '▾ ';
+}
+
+.sheet-collapsible .collapsible-body {
+    padding: 0 1.2rem 1rem;
+}
+
+/* Equipment & Wounds side-by-side row */
+.equip-wounds-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--border);
+}
+
+.equip-wounds-row > div {
+    padding: 1rem 1.2rem;
+}
+
+.equip-wounds-row > div:first-child {
+    border-right: 1px solid var(--border);
 }
 
 /* ========== Event Feed ========== */
@@ -649,6 +742,38 @@ a.lore-link:hover {
 .event-card.stress_change { border-left-color: #5a4d8b; background: rgba(90, 77, 139, 0.04); }
 .event-card.migrant_arrived { border-left-color: var(--success); background: rgba(45, 90, 39, 0.04); }
 .event-card.migration_wave { border-left-color: var(--success); background: rgba(45, 90, 39, 0.04); }
+
+/* ========== Chat Log ========== */
+
+.chat-line {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    border-radius: 3px;
+}
+
+.chat-odd {
+    background: rgba(184, 160, 120, 0.06);
+}
+
+.chat-name {
+    font-weight: 700;
+    color: var(--gold-dark);
+    text-decoration: none;
+}
+
+.chat-name:hover {
+    color: var(--gold);
+    text-decoration: underline;
+}
+
+.chat-prof {
+    color: var(--ink-faded);
+}
+
+.chat-msg {
+    color: var(--ink-light);
+}
 
 /* ========== Lore Multi-Column ========== */
 

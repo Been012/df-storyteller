@@ -100,26 +100,30 @@ class Facet(BaseModel):
 
     @property
     def description(self) -> str:
-        """Human-readable description based on the value."""
+        """Human-readable description based on the value.
+
+        Uses DF-accurate intensity prefixes: "very" for extreme values
+        (0-9 / 91-100), plain text for moderate deviations, empty for neutral.
+        """
         descs = FACET_DESCRIPTIONS.get(self.name)
         if not descs:
             return f"{self.name}: {self.value}"
         low_desc, high_desc = descs
-        if self.value < 25:
-            return f"strongly {low_desc}"
+        if self.value < 10:
+            return f"very {low_desc}"
         elif self.value < 40:
             return low_desc
         elif self.value <= 60:
             return ""  # Neutral — no notable trait
-        elif self.value <= 75:
+        elif self.value <= 90:
             return high_desc
         else:
-            return f"strongly {high_desc}"
+            return f"very {high_desc}"
 
     @property
     def is_notable(self) -> bool:
         """Whether this facet is far enough from neutral to be worth mentioning."""
-        return self.value < 25 or self.value > 75
+        return self.value < 40 or self.value > 60
 
 
 class Belief(BaseModel):

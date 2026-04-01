@@ -18,6 +18,9 @@
 <div class="dwarf-grid">
     {% for dwarf in dwarves %}
     <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;">
+        <div style="display: flex; gap: 0.8rem; align-items: flex-start;">
+        <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait-sm" loading="lazy">
+        <div style="flex: 1;">
         <div class="dwarf-name">
             {{ dwarf.name }}
             {% if dwarf.highlight_role %}<span class="role-badge role-{{ dwarf.highlight_role }}">{{ dwarf.highlight_role }}</span>{% endif %}
@@ -25,7 +28,8 @@
         </div>
         <div class="dwarf-profession">
             {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
-            {{ dwarf.profession }}{% if dwarf.noble_positions %} &mdash; {{ dwarf.noble_positions | join(', ') }}{% endif %}
+            {% set unique_positions = dwarf.noble_positions | reject('equalto', dwarf.profession) | list %}
+            {{ dwarf.profession }}{% if unique_positions %} &mdash; {{ unique_positions | join(', ') }}{% endif %}
             &middot; Age {{ dwarf.age | int }}
             <span class="mood-indicator mood-{{ dwarf.happiness_desc }}" title="{{ dwarf.happiness_desc }}">&#9679;</span>
         </div>
@@ -34,6 +38,8 @@
         {% elif dwarf.notable_traits %}
         <div class="dwarf-traits">{{ dwarf.notable_traits }}</div>
         {% endif %}
+        </div>
+        </div>
     </a>
     {% endfor %}
 </div>
