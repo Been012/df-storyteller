@@ -112,6 +112,26 @@ async def api_portrait(unit_id: int):
     return Response(status_code=404)
 
 
+@router.get("/api/creature-sprite/{creature_id}")
+async def api_creature_sprite(creature_id: str, caste: str = ""):
+    """Serve a creature's portrait sprite from DF's sprite sheets."""
+    config = _get_config()
+    df_install = config.paths.df_install
+    if not df_install:
+        return Response(status_code=404)
+
+    from df_storyteller.portraits.creature_sprites import get_creature_portrait
+    img = get_creature_portrait(df_install, creature_id.upper(), caste.upper() if caste else "", scale=2)
+    if not img:
+        return Response(status_code=404)
+
+    import io
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
 @router.get("/api/portraits/{unit_id}/debug")
 async def api_portrait_debug(unit_id: int):
     """Debug: show appearance data and selected layers for a dwarf."""

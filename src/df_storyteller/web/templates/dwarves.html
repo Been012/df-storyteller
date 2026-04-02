@@ -175,20 +175,25 @@
     <div style="padding: 0.4rem 0.8rem 0.8rem;">
         <div class="dwarf-grid">
             {% for a in livestock %}
-            <div class="dwarf-card" style="opacity: 0.85;">
-                <div class="dwarf-name">
-                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
-                    {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
+            <div class="dwarf-card" style="opacity: 0.85; display: flex; align-items: center; gap: 0.5rem;">
+                <img src="/api/creature-sprite/{{ a.race | upper | replace(' ', '_') }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
+                     alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0;"
+                     onerror="this.style.display='none'">
+                <div>
+                    <div class="dwarf-name">
+                        {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                        {% if a.category in ('war', 'hunting') %}<span class="role-badge" style="font-size: 0.7rem;">{{ a.category }}</span>{% endif %}
+                    </div>
+                    <div class="dwarf-profession">
+                        {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
+                        {% if a.name %}{{ a.race }} &middot; {% endif %}
+                        {% if a.profession %}{{ a.profession }} &middot; {% endif %}
+                        Age {{ a.age | int }}
+                    </div>
+                    {% if a.traits %}
+                    <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                    {% endif %}
                 </div>
-                <div class="dwarf-profession">
-                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
-                    {% if a.name %}{{ a.race }} &middot; {% endif %}
-                    {% if a.profession %}{{ a.profession }} &middot; {% endif %}
-                    Age {{ a.age | int }}
-                </div>
-                {% if a.traits %}
-                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
-                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -204,18 +209,23 @@
     <div style="padding: 0.4rem 0.8rem 0.8rem;">
         <div class="dwarf-grid">
             {% for a in wild_animals %}
-            <div class="dwarf-card" style="opacity: 0.75;">
-                <div class="dwarf-name">
-                    {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+            <div class="dwarf-card" style="opacity: 0.75; display: flex; align-items: center; gap: 0.5rem;">
+                <img src="/api/creature-sprite/{{ a.race | upper | replace(' ', '_') }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
+                     alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0;"
+                     onerror="this.style.display='none'">
+                <div>
+                    <div class="dwarf-name">
+                        {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
+                    </div>
+                    <div class="dwarf-profession">
+                        {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
+                        {% if a.name %}{{ a.race }} &middot; {% endif %}
+                        Age {{ a.age | int }}
+                    </div>
+                    {% if a.traits %}
+                    <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
+                    {% endif %}
                 </div>
-                <div class="dwarf-profession">
-                    {% if a.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif a.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
-                    {% if a.name %}{{ a.race }} &middot; {% endif %}
-                    Age {{ a.age | int }}
-                </div>
-                {% if a.traits %}
-                <div class="dwarf-traits">{{ a.traits | join(', ') }}</div>
-                {% endif %}
             </div>
             {% endfor %}
         </div>
