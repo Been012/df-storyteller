@@ -122,9 +122,19 @@ def compose_portrait(
     """
     canvas = Image.new("RGBA", (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
 
-    rules = _load_rules(df_install)
-    if not rules:
+    all_rules = _load_rules(df_install)
+    if not all_rules:
         return canvas
+
+    # Select the correct layer set based on age
+    # DF: babies (0-1), children (1-12), adults (12+)
+    if appearance.age < 1:
+        target_set = "BABY"
+    elif appearance.age < 12:
+        target_set = "CHILD"
+    else:
+        target_set = "PORTRAIT"
+    rules = [r for r in all_rules if r.layer_set == target_set]
 
     try:
         body_palette = load_palette(df_install, "dwarf_portrait_body_palette.png")

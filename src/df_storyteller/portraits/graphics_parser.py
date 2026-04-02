@@ -144,7 +144,9 @@ def _parse_tag(line: str) -> list[str] | None:
 def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
     """Parse a portrait graphics definition file into LayerRule objects.
 
-    Only parses the adult ``[LAYER_SET:PORTRAIT]`` section.
+    Parses all three age layer sets: BABY, CHILD, and PORTRAIT (adult).
+    Each rule is tagged with its layer_set so the compositor can select
+    the correct set based on the dwarf's age.
     """
     path = Path(filepath)
     if not path.exists():
@@ -164,6 +166,9 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
     current_bp: BPCondition | None = None
     in_target_set = False
 
+    # Valid portrait layer sets: BABY, CHILD, PORTRAIT (adult)
+    PORTRAIT_SETS = {"BABY", "CHILD", "PORTRAIT"}
+
     for line in lines:
         tag = _parse_tag(line)
         if not tag:
@@ -171,13 +176,13 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
 
         cmd = tag[0]
 
-        # Track LAYER_SET
+        # Track LAYER_SET — format: [LAYER_SET:BABY:PORTRAIT], [LAYER_SET:CHILD:PORTRAIT], [LAYER_SET:PORTRAIT]
         if cmd == "LAYER_SET":
             current_layer_set = tag[1] if len(tag) > 1 else ""
-            in_target_set = current_layer_set == "PORTRAIT"
+            in_target_set = current_layer_set in PORTRAIT_SETS
             continue
 
-        # Only parse the adult PORTRAIT set
+        # Only parse portrait-related layer sets
         if not in_target_set:
             continue
 
