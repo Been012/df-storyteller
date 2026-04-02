@@ -117,6 +117,27 @@ def _find_visitor(config, unit_id: int):
     return None
 
 
+def _find_beast_data(config, unit_id: int) -> dict | None:
+    """Find beast_data for a procedurally generated creature in snapshot data."""
+    import json
+    from pathlib import Path
+
+    base = Path(config.paths.event_dir) if config.paths.event_dir else None
+    if not base or not base.exists():
+        return None
+
+    snapshots = sorted(base.rglob("snapshot_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for snap_path in snapshots[:3]:
+        try:
+            data = json.loads(snap_path.read_text(encoding="utf-8", errors="replace"))
+            for animal in data.get("data", {}).get("animals", []):
+                if animal.get("unit_id") == unit_id and animal.get("beast_data"):
+                    return animal["beast_data"]
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
 @router.get("/api/portraits/{unit_id}")
 async def api_portrait(unit_id: int):
     """Generate or serve a cached portrait for any unit (citizen, visitor, trader)."""
@@ -130,28 +151,34 @@ async def api_portrait(unit_id: int):
     fortress_dir = _get_fortress_dir(config, metadata)
     cache_dir = fortress_dir / "portraits"
 
-    # Try fortress citizens first, then visitors/traders
-    dwarf = character_tracker.get_dwarf(unit_id)
-    if not dwarf:
-        dwarf = _find_visitor(config, unit_id)
-    if not dwarf:
-        return Response(status_code=404)
-
     # Check cache first
+    cache_dir.mkdir(parents=True, exist_ok=True)
     portrait_path = cache_dir / f"portrait_{unit_id}.png"
     if portrait_path.exists():
         return FileResponse(portrait_path, media_type="image/png")
 
-    appearance = _build_appearance_dict(dwarf)
+    # Try fortress citizens first, then visitors/traders
+    dwarf = character_tracker.get_dwarf(unit_id)
+    if not dwarf:
+        dwarf = _find_visitor(config, unit_id)
 
-    from df_storyteller.portraits.compositor import generate_portrait, PORTRAIT_RACES
-    # Only generate condition-based portraits for supported races
-    if appearance.get("race", "DWARF").upper() not in PORTRAIT_RACES:
-        return Response(status_code=404)
-    result = generate_portrait(df_install, unit_id, appearance, cache_dir)
+    if dwarf:
+        appearance = _build_appearance_dict(dwarf)
+        from df_storyteller.portraits.compositor import generate_portrait, PORTRAIT_RACES
+        race = appearance.get("race", "DWARF").upper()
+        if race in PORTRAIT_RACES:
+            result = generate_portrait(df_install, unit_id, appearance, cache_dir)
+            if result and result.exists():
+                return FileResponse(result, media_type="image/png")
 
-    if result and result.exists():
-        return FileResponse(result, media_type="image/png")
+    # Fallback: beast compositor for procedurally generated creatures (demons, forgotten beasts)
+    beast_data = _find_beast_data(config, unit_id)
+    if beast_data:
+        from df_storyteller.portraits.beast_compositor import compose_beast_portrait
+        img = compose_beast_portrait(df_install, beast_data, scale=2)
+        if img:
+            img.save(portrait_path, "PNG")
+            return FileResponse(portrait_path, media_type="image/png")
 
     return Response(status_code=404)
 
@@ -165,7 +192,8 @@ async def api_creature_sprite(creature_id: str, caste: str = ""):
         return Response(status_code=404)
 
     from df_storyteller.portraits.creature_sprites import get_creature_portrait
-    img = get_creature_portrait(df_install, creature_id.upper(), caste.upper() if caste else "", scale=2)
+    normalized_id = creature_id.upper().replace(" ", "_")
+    img = get_creature_portrait(df_install, normalized_id, caste.upper() if caste else "", scale=2)
     if not img:
         return Response(status_code=404)
 

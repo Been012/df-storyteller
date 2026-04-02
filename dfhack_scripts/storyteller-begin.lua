@@ -1202,6 +1202,75 @@ for _, unit in ipairs(df.global.world.units.active) do
                 if pet_name ~= '' then
                     data.pet_name = pet_name
                 end
+                -- For procedurally generated creatures (demons, forgotten beasts),
+                -- capture body plan and graphics layer colors for portrait compositing
+                pcall(function()
+                    local raw = df.creature_raw.find(unit.race)
+                    if not raw or not raw.flags.GENERATED then return end
+                    local caste = raw.caste[unit.caste]
+                    local body = caste.body_info
+
+                    -- Count body parts by type
+                    local legs, arms, wings, eyes = 0, 0, 0, 0
+                    local features = {}
+                    for i = 0, #body.body_parts - 1 do
+                        local bp = body.body_parts[i]
+                        local cat = bp.category:upper()
+                        local token = bp.token:upper()
+                        if string.find(cat, 'LEG') then legs = legs + 1 end
+                        if string.find(cat, 'ARM') or string.find(token, 'ARM') then arms = arms + 1 end
+                        if string.find(cat, 'WING') or string.find(token, 'WING') then wings = wings + 1 end
+                        if string.find(cat, 'EYE') or string.find(token, 'EYE') then eyes = eyes + 1 end
+                        -- Detect notable features
+                        for _, feat in ipairs({'HORN', 'SHELL', 'MANDIBLE', 'TRUNK', 'TAIL',
+                            'STINGER', 'ANTENNA', 'BEAK', 'PROBOSCIS', 'TUSK', 'PINCER'}) do
+                            if string.find(token, feat) then
+                                features[feat] = true
+                            end
+                        end
+                    end
+
+                    -- Get graphics layer colors
+                    local layer_colors = {}
+                    pcall(function()
+                        local gls = raw.graphics.graphics_layer_set
+                        if #gls > 0 then
+                            local layers = gls[0].graphics_layer
+                            for i = 0, #layers - 1 do
+                                pcall(function()
+                                    local color = layers[i].use_color_palette_token
+                                    if color and color ~= '' then
+                                        table.insert(layer_colors, color)
+                                    end
+                                end)
+                            end
+                        end
+                    end)
+
+                    -- Get base creature color from raw.color (DF 16-color palette)
+                    -- [0]=foreground (0-7), [1]=background, [2]=bright flag
+                    local base_color_fg = 7  -- default: light gray
+                    local base_color_bright = 0
+                    pcall(function()
+                        base_color_fg = raw.color[0]
+                        base_color_bright = raw.color[2]
+                    end)
+
+                    data.beast_data = {
+                        legs = legs,
+                        arms = arms,
+                        wings = wings,
+                        eyes = eyes,
+                        features = {},
+                        layer_colors = layer_colors,
+                        base_color_fg = base_color_fg,
+                        base_color_bright = base_color_bright,
+                    }
+                    for feat, _ in pairs(features) do
+                        table.insert(data.beast_data.features, feat)
+                    end
+                end)
+
                 table.insert(animals, data)
             elseif unit.race == player_race and dfhack.units.isFortControlled(unit) then
                 data.role = 'citizen'
@@ -1210,8 +1279,66 @@ for _, unit in ipairs(df.global.world.units.active) do
                 -- Visitors: merchants, diplomats, travelers, or same-race non-fort units
                 data.role = 'visitor'
                 table.insert(visitors, data)
+            else
+                -- Capture other notable creatures (demons, forgotten beasts, underworld denizens)
+                pcall(function()
+                    local raw = df.creature_raw.find(unit.race)
+                    if raw and raw.flags.GENERATED then
+                        data.role = 'creature'
+                        -- Capture beast data for portrait generation
+                        pcall(function()
+                            local caste = raw.caste[unit.caste]
+                            local body = caste.body_info
+                            local legs, arms, wings, eyes = 0, 0, 0, 0
+                            local features = {}
+                            for i = 0, #body.body_parts - 1 do
+                                local bp = body.body_parts[i]
+                                local cat = bp.category:upper()
+                                local token = bp.token:upper()
+                                if string.find(cat, 'LEG') then legs = legs + 1 end
+                                if string.find(cat, 'ARM') or string.find(token, 'ARM') then arms = arms + 1 end
+                                if string.find(cat, 'WING') or string.find(token, 'WING') then wings = wings + 1 end
+                                if string.find(cat, 'EYE') or string.find(token, 'EYE') then eyes = eyes + 1 end
+                                for _, feat in ipairs({'HORN', 'SHELL', 'MANDIBLE', 'TRUNK', 'TAIL',
+                                    'STINGER', 'ANTENNA', 'BEAK', 'PROBOSCIS', 'TUSK', 'PINCER'}) do
+                                    if string.find(token, feat) then features[feat] = true end
+                                end
+                            end
+                            local layer_colors = {}
+                            pcall(function()
+                                local gls = raw.graphics.graphics_layer_set
+                                if #gls > 0 then
+                                    local layers = gls[0].graphics_layer
+                                    for i = 0, #layers - 1 do
+                                        pcall(function()
+                                            local color = layers[i].use_color_palette_token
+                                            if color and color ~= '' then
+                                                table.insert(layer_colors, color)
+                                            end
+                                        end)
+                                    end
+                                end
+                            end)
+                            local base_color_fg = 7
+                            local base_color_bright = 0
+                            pcall(function()
+                                base_color_fg = raw.color[0]
+                                base_color_bright = raw.color[2]
+                            end)
+                            data.beast_data = {
+                                legs = legs, arms = arms, wings = wings, eyes = eyes,
+                                features = {}, layer_colors = layer_colors,
+                                base_color_fg = base_color_fg,
+                                base_color_bright = base_color_bright,
+                            }
+                            for feat, _ in pairs(features) do
+                                table.insert(data.beast_data.features, feat)
+                            end
+                        end)
+                        table.insert(animals, data)
+                    end
+                end)
             end
-            -- Everything else (underground creatures, etc.) is silently skipped
         end
     end
 end

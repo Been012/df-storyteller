@@ -190,9 +190,9 @@
         <div class="dwarf-grid">
             {% for a in livestock %}
             <div class="dwarf-card" style="opacity: 0.85; display: flex; align-items: center; gap: 0.5rem;">
-                <img src="/api/creature-sprite/{{ a.race | upper | replace(' ', '_') }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
+                <img src="/api/creature-sprite/{{ a.race_raw | default(a.race | upper | replace(' ', '_')) }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
                      alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0;"
-                     onerror="this.style.display='none'">
+                     onerror="{% if a.unit_id %}this.src='/api/portraits/{{ a.unit_id }}'; this.onerror=function(){this.style.display='none'};{% else %}this.style.display='none';{% endif %}">
                 <div>
                     <div class="dwarf-name">
                         {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}
@@ -224,9 +224,9 @@
         <div class="dwarf-grid">
             {% for a in wild_animals %}
             <div class="dwarf-card" style="opacity: 0.75; display: flex; align-items: center; gap: 0.5rem;">
-                <img src="/api/creature-sprite/{{ a.race | upper | replace(' ', '_') }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
+                <img src="/api/creature-sprite/{{ a.race_raw | default(a.race | upper | replace(' ', '_')) }}{% if a.sex %}?caste={{ a.sex | upper }}{% endif %}"
                      alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0;"
-                     onerror="this.style.display='none'">
+                     onerror="{% if a.unit_id %}this.src='/api/portraits/{{ a.unit_id }}'; this.onerror=function(){this.style.display='none'};{% else %}this.style.display='none';{% endif %}">
                 <div>
                     <div class="dwarf-name">
                         {% if a.name %}{{ a.name }}{% else %}{{ a.race }}{% endif %}

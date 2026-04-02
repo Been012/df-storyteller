@@ -126,6 +126,8 @@ async def dwarves_page(request: Request):
         return {
             "name": getattr(a, "name", ""),
             "race": getattr(a, "race", "").replace("_", " ").title(),
+            "race_raw": getattr(a, "race", ""),
+            "unit_id": getattr(a, "unit_id", None),
             "profession": getattr(a, "profession", ""),
             "age": getattr(a, "age", 0),
             "sex": getattr(a, "sex", ""),
