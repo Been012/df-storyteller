@@ -110,12 +110,20 @@ async def events_page(request: Request):
     for event in event_store.all_events():
         if event.event_type.value in SKIP_TYPES:
             continue
+        # Filter false "breakdown" tantrums (from old stress_category >= 6 detection).
+        # Real tantrums (berserk, fell, martial_tantrum) still show.
+        if event.event_type.value == "tantrum":
+            ttype = event.data.get("tantrum_type", "") if isinstance(event.data, dict) else getattr(event.data, "tantrum_type", "")
+            if ttype == "breakdown":
+                continue
         desc = _format_event(event)
         # Strip the [Season Year] prefix and type label — the UI shows those separately
         desc = re.sub(r"^\[.*?\]\s*", "", desc)
         desc = re.sub(r"^[A-Za-z_ ]+:\s", "", desc)
         # Skip empty and session markers
         if not desc.strip():
+            continue
+        if "You have struck" in desc:
             continue
         if "Loading Fortress" in desc or "Starting New Outpost" in desc or "STARTING NEW GAME" in desc:
             continue
@@ -219,7 +227,26 @@ async def events_page(request: Request):
     # Build combat_encounters: grouped engagements (newest first)
     combat_encounters = []
     for group in reversed(engagement_groups):
-        fights = [_build_encounter(e) for e in group]
+        fights_raw = [_build_encounter(e) for e in group]
+
+        # Merge fights between the same pair of combatants (A vs B + B vs A = one fight).
+        # DF fires onUnitAttack for both sides, creating duplicate events.
+        merged: dict[tuple[str, str], dict] = {}
+        for f in fights_raw:
+            pair = tuple(sorted([f["attacker"], f["defender"]]))
+            if pair in merged:
+                existing = merged[pair]
+                existing["blow_count"] += f["blow_count"]
+                existing["raw_lines"].extend(f["raw_lines"])
+                existing["blows"].extend(f["blows"])
+                if f["is_lethal"]:
+                    existing["is_lethal"] = True
+                if f["outcome"] and not existing["outcome"]:
+                    existing["outcome"] = f["outcome"]
+            else:
+                merged[pair] = f
+        fights = list(merged.values())
+
         if len(fights) == 1:
             # Solo fight — render as before
             combat_encounters.append(fights[0])

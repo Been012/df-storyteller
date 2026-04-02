@@ -358,6 +358,10 @@ end
 if not state.last_combat_key then
     state.last_combat_key = nil  -- tracks which pending_combat entry gets report text
 end
+-- Buffer for combat reports that arrive BEFORE onUnitAttack (hook firing order is not guaranteed)
+if not state.orphan_combat_reports then
+    state.orphan_combat_reports = {}  -- list of {text=string, tick=number}
+end
 
 local function on_unit_attack(attacker_id, defender_id, wound_id)
     if not event_flags.combat then return end
@@ -402,6 +406,17 @@ local function on_unit_attack(attacker_id, defender_id, wound_id)
         entry.blows = entry.blows + 1
         entry.last_tick = tick
         state.last_combat_key = key
+
+        -- Attach any orphaned combat reports that arrived before this onUnitAttack
+        -- (onReport can fire before onUnitAttack for the same blow)
+        if #state.orphan_combat_reports > 0 then
+            for _, orphan in ipairs(state.orphan_combat_reports) do
+                if #entry.report_lines < 50 then
+                    table.insert(entry.report_lines, orphan.text)
+                end
+            end
+            state.orphan_combat_reports = {}
+        end
 
         -- Check if defender died from this blow
         pcall(function()
@@ -467,14 +482,22 @@ local function on_report(report_id)
             or (report_type >= 111 and report_type <= 134)
             or report_type == 166 or report_type == 167
             or report_type == 239 or report_type == 171
-        if is_combat_type and state.last_combat_key then
-            local entry = state.pending_combat[state.last_combat_key]
-            if entry then
-                if #entry.report_lines < 50 then
-                    table.insert(entry.report_lines, text)
+        if is_combat_type then
+            if state.last_combat_key then
+                local entry = state.pending_combat[state.last_combat_key]
+                if entry then
+                    if #entry.report_lines < 50 then
+                        table.insert(entry.report_lines, text)
+                    end
+                    return
                 end
-                return
             end
+            -- No pending combat entry yet — onReport fired before onUnitAttack.
+            -- Buffer the report so onUnitAttack can pick it up.
+            if #state.orphan_combat_reports < 20 then
+                table.insert(state.orphan_combat_reports, { text = text })
+            end
+            return
         end
 
         -- 2. Dramatic events: threats, megabeasts, transformations, discoveries
@@ -667,6 +690,12 @@ local function flush_combat()
 
     for _, key in ipairs(stale_keys) do
         state.pending_combat[key] = nil
+    end
+
+    -- Clear orphaned combat reports that weren't claimed by any onUnitAttack.
+    -- These can accumulate from trap damage, cave-ins, or other non-attack combat.
+    if #state.orphan_combat_reports > 0 and not next(state.pending_combat) then
+        state.orphan_combat_reports = {}
     end
 end
 
@@ -1232,6 +1261,37 @@ local function poll_changes()
         local uid = unit.id
         local udata = serialize_unit(unit)
 
+        -- Pre-seed state for newly seen dwarves BEFORE any detection runs.
+        -- This prevents migrants' existing bonds, professions, etc. from triggering
+        -- as "new" events on the first poll cycle they're seen.
+        if not state.known_unit_ids[uid] then
+            state.known_unit_ids[uid] = true
+            -- Seed profession so it doesn't trigger a "profession change" event
+            state.prev_professions[uid] = dfhack.units.getProfessionName(unit)
+            -- Seed stress so it doesn't trigger a "stress change" event
+            pcall(function() state.prev_stress[uid] = dfhack.units.getStressCategory(unit) end)
+            -- Pre-seed existing relationships to avoid false "relationship_formed" events
+            pcall(function()
+                if not state.prev_relationships then state.prev_relationships = {} end
+                if not state.prev_relationships[uid] then state.prev_relationships[uid] = {} end
+                if unit.hist_figure_id and unit.hist_figure_id >= 0 then
+                    local hf = df.historical_figure.find(unit.hist_figure_id)
+                    if hf and hf.histfig_links then
+                        for _, link in ipairs(hf.histfig_links) do
+                            pcall(function()
+                                local target_hf_id = link.target_hf
+                                if not target_hf_id or target_hf_id < 0 then return end
+                                local class_name = tostring(link._type):match('([%w_]+)>') or ''
+                                local rel_key = tostring(target_hf_id) .. '_' .. class_name
+                                state.prev_relationships[uid][rel_key] = true
+                            end)
+                        end
+                    end
+                end
+            end)
+            goto continue  -- Skip all detection for this unit's first poll
+        end
+
         -- Detect profession change (e.g. became militia commander)
         local prof = dfhack.units.getProfessionName(unit)
         if state.prev_professions[uid] and state.prev_professions[uid] ~= prof then
@@ -1425,32 +1485,7 @@ local function poll_changes()
             state.prev_tantrum[uid] = tantrum_state
         end)
 
-        -- Track known unit IDs (individual migrant_arrived events handled by onUnitNewActive hook)
-        -- For newly seen dwarves, pre-seed their relationship state so existing bonds
-        -- (spouse, children brought with migrants) don't trigger as "new" relationships
-        if not state.known_unit_ids[uid] then
-            state.known_unit_ids[uid] = true
-            -- Pre-seed existing relationships to avoid false "relationship_formed" events
-            pcall(function()
-                if not state.prev_relationships then state.prev_relationships = {} end
-                if not state.prev_relationships[uid] then state.prev_relationships[uid] = {} end
-                if unit.hist_figure_id and unit.hist_figure_id >= 0 then
-                    local hf = df.historical_figure.find(unit.hist_figure_id)
-                    if hf and hf.histfig_links then
-                        for _, link in ipairs(hf.histfig_links) do
-                            pcall(function()
-                                local target_hf_id = link.target_hf
-                                if not target_hf_id or target_hf_id < 0 then return end
-                                local class_name = tostring(link._type):match('([%w_]+)>') or ''
-                                local rel_type = class_name  -- don't need to resolve, just mark as known
-                                local rel_key = tostring(target_hf_id) .. '_' .. rel_type
-                                state.prev_relationships[uid][rel_key] = true
-                            end)
-                        end
-                    end
-                end
-            end)
-        end
+        -- (known_unit_ids tracking and pre-seeding moved to top of loop)
 
         ::continue::
     end
