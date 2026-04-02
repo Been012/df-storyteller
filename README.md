@@ -111,6 +111,11 @@ python -m df_storyteller serve
 storyteller-begin
 ```
 
+**Update to the latest version:**
+```bash
+pip install --upgrade df-storyteller
+```
+
 **Or install from source:**
 ```bash
 git clone https://github.com/Been012/df-storyteller.git
