@@ -67,33 +67,70 @@ If you want AI assistance, connect an LLM provider. All generation is grounded i
 
 ## Screenshots
 
-### Legends Mode
-Tabbed world history browser with dedicated detail pages for figures, civilizations, sites, artifacts, and wars. Interactive world map, festival calendar, intrigue plots, emotional bonds, family trees, warfare graphs.
-![Legends](docs/screenshots/legends.png)
+### Dwarf Portraits
+Pixel-accurate portraits generated from DF's own sprite sheets. Matches in-game appearance including hair, eyes, nose, clothing with dye colors. Supports all 5 races (Dwarf, Elf, Human, Goblin, Kobold), children, and babies.
 
-### Dwarves
-Character sheets with personality, skills with level badges, relationships, combat record, equipment. Tabbed Notes, Biography, and Diary sections. Link to full legends data via "View in Legends".
-![Dwarves](docs/screenshots/dwarves.png)
+![Portrait comparison — generated vs in-game](docs/screenshots/comparison.png)
+
+### Character Sheets
+Full character sheets with generated portrait, personality traits, beliefs, skills with level badges, relationships, combat record, and equipment.
+
+![Character sheet](docs/screenshots/character-sheet.png)
+
+### Visitors & Traders
+Race-specific portraits for visitors, traders, and diplomats. 504 creature sprites for livestock and wild animals.
+
+![Visitors with portraits](docs/screenshots/visitors.png)
+
+### Animals
+Livestock and wild animals with creature portrait sprites from DF's sprite sheets.
+
+![Animals with sprites](docs/screenshots/animals.png)
+
+### Event Feed
+Real-time events captured via DFHack hooks — combat, migrations, caravans, skill milestones, noble appointments. Dwarven calendar dates.
+
+![Event feed](docs/screenshots/event_feed.png)
+
+### Combat Log
+Blow-by-blow combat narratives with grouped fights, participant summaries, and fatal blow highlights.
+
+![Combat logs](docs/screenshots/combat-logs.png)
 
 ### Chronicle
-Seasonal fortress narratives — write your own or generate with AI. Use `[[name]]` to hotlink any legends entity. Player notes influence AI generation.
+Seasonal fortress narratives — write your own or generate with AI. Use `[[name]]` to hotlink any legends entity.
+
 ![Chronicle](docs/screenshots/Chronicle.png)
 
+### Military Dashboard
+Squad roster, top warriors leaderboard, combat activity charts, and recent engagements.
+
+![Military dashboard](docs/screenshots/military_dashboard.png)
+
+### Fortress Dashboard
+Population timeline, migration waves, milestone events, and recent activity with portraits.
+
+![Fortress dashboard](docs/screenshots/fort_dashboard.png)
+
+### Legends Figure
+Historical figure detail pages with family trees, intrigue plots, emotional bonds, kill lists, and cross-linked references.
+
+![Legends figure](docs/screenshots/legends_figure.png)
+
 ### World Map
-Terrain generated from region data. Site markers by type (fortresses, towns, caves, towers) and owner race. Roads and tunnels as toggleable polylines.
-![Map](docs/screenshots/legends.png)
+Terrain map generated from region data with Leaflet.js. Site markers by type and owner race. Roads and tunnels as toggleable polylines.
 
-### Relationship Web
-Interactive force-directed graph of fortress connections with a family tree view from legends data. Click nodes to navigate to dwarf pages.
-![Relationship Web](docs/screenshots/relationship_web.png)
+![World map](docs/screenshots/world_map.png)
 
-### Events
-Live event feed, collapsible combat log with blow-by-blow details, battle reports, and dwarf chat log.
-![Events](docs/screenshots/events.png)
+### Lore Pins
+Bookmark any legends entity and access from a global sidebar on every page. Reference pinned items in stories with `[[wiki links]]`.
 
-### Gazette
-A dwarven newspaper with five sections. Newspaper-style two-column layout with personality-driven writing.
-![Gazette](docs/screenshots/gazette.png)
+![Lore pins](docs/screenshots/pins.png)
+
+### DFHack Integration
+One command to capture fortress data. Real-time event monitoring runs automatically.
+
+![DFHack console](docs/screenshots/dfhack.png)
 
 ## Quick Start
 
