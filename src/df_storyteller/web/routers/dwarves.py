@@ -158,6 +158,7 @@ async def dwarves_page(request: Request):
         "pets_owned": pets_owned, "pets_adoptable": pets_adoptable,
         "livestock": livestock, "wild_animals": wild_animals,
         "total_animals": total_animals,
+        "lore_loaded": world_lore.is_loaded,
     })
 
 

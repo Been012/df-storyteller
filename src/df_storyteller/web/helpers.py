@@ -130,12 +130,14 @@ def resolve_wiki_links(text: str, world_lore=None, fortress_dir=None) -> str:
                     if site_name and search_lower in site_name.lower():
                         return f'<a href="/lore/site/{site.site_id}" class="dwarf-link">{display}</a>'
 
-            # Search entities/civilizations (id field: entity_id)
-            if hasattr(legends, "entities"):
-                for ent in legends.entities.values():
+            # Search civilizations/entities (id field: entity_id)
+            if hasattr(legends, "civilizations"):
+                civs = legends.civilizations
+                civ_iter = civs.values() if isinstance(civs, dict) else civs
+                for ent in civ_iter:
                     ent_name = getattr(ent, "name", "")
                     if ent_name and search_lower in ent_name.lower():
-                        return f'<a href="/lore/entity/{ent.entity_id}" class="dwarf-link">{display}</a>'
+                        return f'<a href="/lore/civ/{ent.entity_id}" class="dwarf-link">{display}</a>'
 
             # Search artifacts (id field: artifact_id)
             if hasattr(legends, "artifacts"):
@@ -180,9 +182,15 @@ def resolve_wiki_links(text: str, world_lore=None, fortress_dir=None) -> str:
                         url_map = {
                             "figure": f"/lore/figure/{eid}",
                             "site": f"/lore/site/{eid}",
-                            "entity": f"/lore/entity/{eid}",
+                            "entity": f"/lore/civ/{eid}",
+                            "civilization": f"/lore/civ/{eid}",
                             "artifact": f"/lore/artifact/{eid}",
                             "war": f"/lore/war/{eid}",
+                            "region": f"/lore/region/{eid}",
+                            "written_work": f"/lore/work/{eid}",
+                            "landmass": f"/lore/landmass/{eid}",
+                            "peak": f"/lore/peak/{eid}",
+                            "construction": f"/lore/construction/{eid}",
                         }
                         url = url_map.get(etype, f"/lore/event/{eid}")
                         return f'<a href="{url}" class="dwarf-link">{display}</a>'
