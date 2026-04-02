@@ -25,13 +25,16 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 # ---------------------------------------------------------------------------
 
 _URL_MAP = {
-    "figure": "figure", "civilization": "civ", "site": "site",
+    "figure": "figure", "civilization": "civ", "entity": "civ", "site": "site",
     "artifact": "artifact", "war": "war", "battle": "war",
     "duel": "event", "purge": "event", "beast_attack": "event",
     "abduction": "event", "theft": "event", "persecution": "event",
-    "site_conquest": "event", "overthrow": "event",
+    "site_conquest": "event", "overthrow": "event", "insurrection": "event",
     "written_work": "work", "festival": "festival",
-    "form_poetic": "form", "form_musical": "form", "form_dance": "form",
+    "form_poetic": "form/poetic", "form_musical": "form/musical", "form_dance": "form/dance",
+    "cultural_form": "form/poetic",
+    "region": "region", "geography": "region",
+    "landmass": "landmass", "peak": "peak", "construction": "construction",
 }
 
 
