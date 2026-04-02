@@ -190,6 +190,11 @@ def _match_tissue(tc: TissueCondition, appearance: DwarfAppearanceData) -> bool:
 
 def _match_bp(bp: BPCondition, appearance: DwarfAppearanceData) -> bool:
     """Check if a body part condition matches."""
+    # BP_MISSING: only matches if the body part is actually missing (injuries).
+    # Assume all parts are present for healthy dwarves — reject BP_MISSING conditions.
+    if bp.bp_missing:
+        return False
+
     if bp.bp_present:
         if bp.body_part_category and bp.body_part_category not in appearance.body_parts_present:
             # Check by category name (HEAD -> HD token might differ)

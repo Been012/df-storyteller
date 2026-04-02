@@ -70,6 +70,7 @@ class BPCondition:
 
     body_part_category: str = ""    # e.g. "HEAD"
     bp_present: bool = False
+    bp_missing: bool = False
     modifier_type: str = ""         # e.g. "BROADNESS"
     modifier_min: int | None = None
     modifier_max: int | None = None
@@ -335,6 +336,9 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
         if current_bp is not None:
             if cmd == "BP_PRESENT":
                 current_bp.bp_present = True
+                continue
+            if cmd == "BP_MISSING":
+                current_bp.bp_missing = True
                 continue
             if cmd == "BP_APPEARANCE_MODIFIER_RANGE":
                 # BP_APPEARANCE_MODIFIER_RANGE:BROADNESS:0:99
