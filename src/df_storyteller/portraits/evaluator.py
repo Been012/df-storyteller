@@ -49,6 +49,12 @@ class DwarfAppearanceData:
     mustache_length: int = 0
     mustache_shaping: str = ""
     head_broadness: int = 100           # 0-200, affects thin vs broad head
+    eye_round_vs_narrow: int = 100      # 0-99=narrow, 100+=round
+    eye_deep_set: int = 100             # 101-200=deep-set
+    eyebrow_density: int = 100          # 50-90=sparse, 110-150=dense
+    nose_upturned: int = 100            # 101-200=upturned
+    nose_length: int = 100              # 101-200=long
+    nose_broadness: int = 100           # 0-99=narrow, 101-200=wide
     is_vampire: bool = False
     is_zombie: bool = False
     is_necromancer: bool = False
@@ -115,12 +121,22 @@ def _get_tissue_data(appearance: DwarfAppearanceData, body_part: str, tissue_typ
             "curly": 0,
         }
 
+    # Beard/chin whiskers — same data as facial hair
+    if tissue in ("CHIN_WHISKERS", "CHEEK_WHISKERS", "MOUSTACHE_WHISKERS"):
+        return {
+            "color": appearance.beard_color or appearance.hair_color,
+            "length": appearance.beard_length,
+            "shaping": appearance.beard_shaping,
+            "curly": appearance.beard_curly,
+        }
+
     if tissue == "EYEBROW":
         return {
             "color": appearance.eyebrow_color or appearance.hair_color,
             "length": 0,
             "shaping": "",
             "curly": 0,
+            "density": appearance.eyebrow_density,
         }
 
     if tissue == "MOUSTACHE":
@@ -160,7 +176,13 @@ def _match_tissue(tc: TissueCondition, appearance: DwarfAppearanceData) -> bool:
         if tissue_data["shaping"] != tc.may_have_shaping:
             return False
 
-    # Density checks (skip if we don't have density data)
+    # Density checks
+    density = tissue_data.get("density")
+    if density is not None:
+        if tc.min_density is not None and density < tc.min_density:
+            return False
+        if tc.max_density is not None and density > tc.max_density:
+            return False
 
     return True
 
@@ -173,12 +195,29 @@ def _match_bp(bp: BPCondition, appearance: DwarfAppearanceData) -> bool:
             pass  # Be permissive — assume present unless we know it's missing
 
     if bp.modifier_type:
-        if bp.modifier_type == "BROADNESS":
+        # Map body_part_category + modifier_type to the correct appearance value
+        cat = bp.body_part_category.upper() if bp.body_part_category else ""
+        mod = bp.modifier_type.upper()
+
+        if mod == "BROADNESS" and cat in ("HEAD", ""):
             val = appearance.head_broadness
-            if bp.modifier_min is not None and val < bp.modifier_min:
-                return False
-            if bp.modifier_max is not None and val > bp.modifier_max:
-                return False
+        elif mod == "ROUND_VS_NARROW" and cat == "EYE":
+            val = appearance.eye_round_vs_narrow
+        elif mod == "DEEP_SET" and cat == "EYE":
+            val = appearance.eye_deep_set
+        elif mod == "UPTURNED" and cat == "NOSE":
+            val = appearance.nose_upturned
+        elif mod == "LENGTH" and cat == "NOSE":
+            val = appearance.nose_length
+        elif mod == "BROADNESS" and cat == "NOSE":
+            val = appearance.nose_broadness
+        else:
+            return True  # Unknown modifier — be permissive
+
+        if bp.modifier_min is not None and val < bp.modifier_min:
+            return False
+        if bp.modifier_max is not None and val > bp.modifier_max:
+            return False
 
     return True
 
@@ -290,15 +329,23 @@ def evaluate_layers(
 ) -> list[SelectedLayer]:
     """Evaluate all layer rules and return matching layers in render order.
 
-    DF renders layers in file order. Within each LAYER_GROUP, all matching
-    layers are rendered (not just the first). The first matching layer
-    per "slot" (same name) wins for mutually exclusive variants (e.g.
-    skin color variants — only one DARK_BODY or LIGHT_BODY will match).
+    DF uses "first match wins" within each LAYER_GROUP — layers in the
+    same group are mutually exclusive alternatives (e.g. different skin
+    tones, head shapes). Only the first matching layer per group is selected.
+    Different groups can each contribute a layer (e.g. body group + arm group).
     """
     selected: list[SelectedLayer] = []
+    matched_groups: set[int] = set()
 
     for rule in rules:
+        # Skip if we already matched a layer in this group
+        if rule.group_id in matched_groups:
+            continue
+
         if _matches(rule, appearance):
+            # Mark this group as matched
+            matched_groups.add(rule.group_id)
+
             # Check for curly swap on tissue conditions
             tile_page = rule.tile_page
             tile_x = rule.tile_x

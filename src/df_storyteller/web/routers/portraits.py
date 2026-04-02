@@ -5,7 +5,7 @@ import hashlib
 import logging
 
 from fastapi import APIRouter
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from df_storyteller.web.state import (
     get_config as _get_config,
@@ -64,16 +64,36 @@ async def api_portrait(unit_id: int):
 
     # Build appearance dict — use real data if available, else deterministic fallback
     if dwarf.appearance.skin_color:
+        # Map hair_style names to evaluator shaping names
+        # Map Lua style names to DF graphics condition shaping names
+        # Note: DF tissue enum uses PONY_TAIL but graphics file checks PONY_TAILS
+        _STYLE_MAP = {
+            "combed": "NEATLY_COMBED", "braided": "BRAIDED",
+            "double_braids": "DOUBLE_BRAIDS", "pony_tail": "PONY_TAILS",
+            "shaved": "", "thinning": "", "unkempt": "",
+        }
+        hair_shaping = _STYLE_MAP.get(dwarf.appearance.hair_style, "")
+        beard_shaping = _STYLE_MAP.get(dwarf.appearance.beard_style, "")
+
         appearance = {
             "sex": dwarf.sex,
             "skin_color": dwarf.appearance.skin_color,
             "hair_color": dwarf.appearance.hair_color or "BROWN",
-            "beard_color": dwarf.appearance.beard_color if dwarf.age >= 50 else (dwarf.appearance.hair_color or "BROWN"),
-            "hair_length": dwarf.appearance.hair_length or 100,
-            "hair_style": dwarf.appearance.hair_style or "unkempt",
+            "beard_color": dwarf.appearance.beard_color or (dwarf.appearance.hair_color or "BROWN"),
+            "eyebrow_color": dwarf.appearance.eyebrow_color or dwarf.appearance.hair_color or "BROWN",
+            "hair_length": dwarf.appearance.hair_length,
+            "hair_shaping": hair_shaping,
+            "hair_curly": dwarf.appearance.hair_curly,
             "beard_length": dwarf.appearance.beard_length if dwarf.sex == "male" else 0,
-            "beard_style": dwarf.appearance.beard_style or "unkempt",
+            "beard_shaping": beard_shaping,
             "head_broadness": dwarf.appearance.body_broadness,
+            "eye_round_vs_narrow": dwarf.appearance.eye_round_vs_narrow,
+            "eye_deep_set": dwarf.appearance.eye_deep_set,
+            "eyebrow_density": dwarf.appearance.eyebrow_density,
+            "nose_upturned": dwarf.appearance.nose_upturned,
+            "nose_length": dwarf.appearance.nose_length,
+            "nose_broadness": dwarf.appearance.nose_broadness,
+            "is_vampire": dwarf.is_vampire,
             "age": dwarf.age,
         }
     else:
@@ -86,3 +106,134 @@ async def api_portrait(unit_id: int):
         return FileResponse(result, media_type="image/png")
 
     return Response(status_code=404)
+
+
+@router.get("/api/portraits/{unit_id}/debug")
+async def api_portrait_debug(unit_id: int):
+    """Debug: show appearance data and selected layers for a dwarf."""
+    config = _get_config()
+    df_install = config.paths.df_install
+    if not df_install:
+        return JSONResponse({"error": "no df_install"})
+
+    _, character_tracker, _, metadata = _load_game_state_safe(config)
+    dwarf = character_tracker.get_dwarf(unit_id)
+    if not dwarf:
+        return JSONResponse({"error": "dwarf not found"})
+
+    _STYLE_MAP = {
+        "combed": "NEATLY_COMBED", "braided": "BRAIDED",
+        "double_braids": "DOUBLE_BRAIDS", "pony_tail": "PONY_TAILS",
+        "shaved": "", "thinning": "", "unkempt": "",
+    }
+
+    if dwarf.appearance.skin_color:
+        hair_shaping = _STYLE_MAP.get(dwarf.appearance.hair_style, "")
+        beard_shaping = _STYLE_MAP.get(dwarf.appearance.beard_style, "")
+        appearance = {
+            "sex": dwarf.sex,
+            "skin_color": dwarf.appearance.skin_color,
+            "hair_color": dwarf.appearance.hair_color or "BROWN",
+            "beard_color": dwarf.appearance.beard_color or (dwarf.appearance.hair_color or "BROWN"),
+            "eyebrow_color": dwarf.appearance.eyebrow_color or dwarf.appearance.hair_color or "BROWN",
+            "hair_length": dwarf.appearance.hair_length,
+            "hair_shaping": hair_shaping,
+            "hair_curly": dwarf.appearance.hair_curly,
+            "beard_length": dwarf.appearance.beard_length if dwarf.sex == "male" else 0,
+            "beard_shaping": beard_shaping,
+            "head_broadness": dwarf.appearance.body_broadness,
+            "eye_round_vs_narrow": dwarf.appearance.eye_round_vs_narrow,
+            "eye_deep_set": dwarf.appearance.eye_deep_set,
+            "eyebrow_density": dwarf.appearance.eyebrow_density,
+            "nose_upturned": dwarf.appearance.nose_upturned,
+            "nose_length": dwarf.appearance.nose_length,
+            "nose_broadness": dwarf.appearance.nose_broadness,
+            "is_vampire": dwarf.is_vampire,
+            "age": dwarf.age,
+        }
+    else:
+        appearance = _deterministic_appearance(unit_id, dwarf.sex)
+
+    from df_storyteller.portraits.compositor import _load_rules
+    from df_storyteller.portraits.evaluator import DwarfAppearanceData, evaluate_layers, _matches
+
+    app_data = DwarfAppearanceData(
+        sex=appearance.get("sex", "male"),
+        skin_color=appearance.get("skin_color", ""),
+        hair_color=appearance.get("hair_color", ""),
+        beard_color=appearance.get("beard_color", ""),
+        eyebrow_color=appearance.get("eyebrow_color", ""),
+        hair_length=appearance.get("hair_length", 0),
+        hair_shaping=appearance.get("hair_shaping", ""),
+        hair_curly=appearance.get("hair_curly", 0),
+        beard_length=appearance.get("beard_length", 0),
+        beard_shaping=appearance.get("beard_shaping", ""),
+        head_broadness=appearance.get("head_broadness", 100),
+        eye_round_vs_narrow=appearance.get("eye_round_vs_narrow", 100),
+        eye_deep_set=appearance.get("eye_deep_set", 100),
+        eyebrow_density=appearance.get("eyebrow_density", 100),
+        nose_upturned=appearance.get("nose_upturned", 100),
+        nose_length=appearance.get("nose_length", 100),
+        is_vampire=appearance.get("is_vampire", False),
+        random_seed=unit_id,
+        age=appearance.get("age", 0),
+    )
+
+    rules = _load_rules(df_install)
+
+    # Replay evaluator logic to get matched rules with names
+    matched_rules = []
+    matched_groups: set[int] = set()
+    for rule in rules:
+        if rule.group_id in matched_groups:
+            continue
+        if _matches(rule, app_data):
+            matched_groups.add(rule.group_id)
+            matched_rules.append(rule)
+
+    layer_info = []
+    for rule in matched_rules:
+        info: dict = {
+            "name": rule.name,
+            "tile_page": rule.tile_page,
+            "tile_xy": [rule.tile_x, rule.tile_y],
+            "group_id": rule.group_id,
+        }
+        if rule.caste:
+            info["caste"] = rule.caste
+        if rule.palette_name:
+            info["palette"] = f"{rule.palette_name}:{rule.palette_index}"
+        conditions = []
+        for tc in rule.tissue_conditions:
+            tc_info = f"{tc.body_part_category}:{tc.tissue_type}"
+            if tc.may_have_colors:
+                tc_info += f" colors={tc.may_have_colors}"
+            if tc.min_length is not None:
+                tc_info += f" min_len={tc.min_length}"
+            if tc.max_length is not None:
+                tc_info += f" max_len={tc.max_length}"
+            if tc.not_shaped:
+                tc_info += " NOT_SHAPED"
+            if tc.may_have_shaping:
+                tc_info += f" shaping={tc.may_have_shaping}"
+            if tc.min_density is not None:
+                tc_info += f" min_dens={tc.min_density}"
+            if tc.max_density is not None:
+                tc_info += f" max_dens={tc.max_density}"
+            conditions.append(tc_info)
+        for bp in rule.bp_conditions:
+            bp_info = f"BP:{bp.body_part_category}"
+            if bp.modifier_type:
+                bp_info += f" {bp.modifier_type}={bp.modifier_min}-{bp.modifier_max}"
+            conditions.append(bp_info)
+        if rule.random_part_name:
+            conditions.append(f"RANDOM:{rule.random_part_name}:{rule.random_part_index}/{rule.random_part_total}")
+        if conditions:
+            info["conditions"] = conditions
+        layer_info.append(info)
+
+    return JSONResponse({
+        "dwarf": dwarf.name,
+        "appearance_input": appearance,
+        "selected_layers": layer_info,
+    })

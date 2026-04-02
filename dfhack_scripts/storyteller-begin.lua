@@ -560,11 +560,18 @@ local function serialize_unit(unit)
         skin_color = '',
         hair_color = '',
         beard_color = '',
+        eyebrow_color = '',
         hair_length = 0,
         hair_style = 'unkempt',
         hair_curly = 0,
         beard_length = 0,
         beard_style = 'unkempt',
+        eye_round_vs_narrow = 100,
+        eye_deep_set = 100,
+        eyebrow_density = 100,
+        nose_upturned = 100,
+        nose_length = 100,
+        nose_broadness = 100,
     }
     pcall(function()
         local raw = df.creature_raw.find(unit.race)
@@ -624,21 +631,24 @@ local function serialize_unit(unit)
                 end
             end
 
-            -- Remaining non-skin, non-eye modifiers in original index order = head hair, then beard
+            -- Remaining non-skin modifiers in original index order
+            -- DF order: [0]=head hair, [1]=facial hair, [2]=eyebrows, [3]=skin, [4]=eyes
+            -- All three hair-type modifiers have 6+ body parts each (same first_cat=EYELID).
+            -- DF Premium doesn't randomize beard/eyebrow colors separately — modifiers [1]
+            -- and [2] always return default GRAY/WHITE. Use head hair color for all.
             local hair_mods = {}
             for _, m in ipairs(mods) do
                 if m.idx ~= skin_idx and m.parts >= 3 and m.parts < 20 then
                     table.insert(hair_mods, m)
                 end
             end
-            -- Sort back to original index order
             table.sort(hair_mods, function(a, b) return a.idx < b.idx end)
 
             if #hair_mods >= 1 then
                 data.appearance.hair_color = hair_mods[1].color
-            end
-            if #hair_mods >= 2 then
-                data.appearance.beard_color = hair_mods[2].color
+                -- Beard and eyebrow share head hair color in DF Premium
+                data.appearance.beard_color = hair_mods[1].color
+                data.appearance.eyebrow_color = hair_mods[1].color
             end
         end)
 
@@ -684,9 +694,22 @@ local function serialize_unit(unit)
 
             local is_male = (count >= 12)
 
-            -- Head hair: index 3 for males, index 2 or 3 for females
-            local head_idx = 3
-            if not is_male then head_idx = 2 end
+            -- Tissue layout confirmed via body detail plan + DFHack debug:
+            -- Males (12 entries):
+            --   [0,1]=SIDEBURNS [2]=CHIN_WHISKERS [3]=MOUSTACHE
+            --   [4,5]=EYEBROW   [6,7]=HAIR (scalp) [8,9]=CHEEK_WHISKERS
+            --   [10,11]=N/A
+            -- Females (6 entries):
+            --   [0,1]=EYEBROW   [2,3]=HAIR (scalp) [4,5]=N/A
+            local head_hair_indices
+            local beard_indices
+            if is_male then
+                head_hair_indices = {6, 7}
+                beard_indices = {2, 8, 9}  -- chin + cheeks
+            else
+                head_hair_indices = {2, 3}
+                beard_indices = {}
+            end
 
             -- tissue_style values map to the tissue_style_type enum:
             -- 0=NEATLY_COMBED, 1=BRAIDED, 2=DOUBLE_BRAIDS, 3=PONY_TAIL, 4=CLEAN_SHAVEN
@@ -694,26 +717,29 @@ local function serialize_unit(unit)
                 [0] = 'combed', [1] = 'braided', [2] = 'double_braids',
                 [3] = 'pony_tail', [4] = 'clean_shaven',
             }
+
+            -- Head hair
             for _, e in ipairs(entries) do
-                if e.idx == head_idx or (not is_male and e.idx == 3) then
-                    local style_name = STYLE_NAMES[e.style] or 'unkempt'
-                    if style_name == 'clean_shaven' then
-                        -- Clean-shaven: no visible hair
-                        data.appearance.hair_length = 5
-                        data.appearance.hair_style = 'shaved'
-                    elseif e.length > 0 and e.style >= 0 then
-                        if e.length > data.appearance.hair_length then
-                            data.appearance.hair_length = e.length
-                            data.appearance.hair_style = style_name
+                for _, hi in ipairs(head_hair_indices) do
+                    if e.idx == hi then
+                        local style_name = STYLE_NAMES[e.style] or 'unkempt'
+                        if style_name == 'clean_shaven' then
+                            data.appearance.hair_length = 0
+                            data.appearance.hair_style = 'shaved'
+                        elseif e.length > 0 and e.style >= 0 then
+                            if e.length > data.appearance.hair_length then
+                                data.appearance.hair_length = e.length
+                                data.appearance.hair_style = style_name
+                            end
                         end
                     end
                 end
             end
 
-            -- Beard (males only): indices 2 (chin), 8-9 (cheeks)
-            if is_male then
-                for _, e in ipairs(entries) do
-                    if (e.idx == 2 or e.idx == 8 or e.idx == 9) then
+            -- Beard (males only): chin whiskers + cheek whiskers
+            for _, e in ipairs(entries) do
+                for _, bi in ipairs(beard_indices) do
+                    if e.idx == bi then
                         local style_name = STYLE_NAMES[e.style] or 'unkempt'
                         if style_name ~= 'clean_shaven' and e.length > 0 then
                             if e.length > data.appearance.beard_length then
@@ -734,13 +760,58 @@ local function serialize_unit(unit)
         end
     end)
 
-    -- Age-based hair thinning for dwarves 50+
-    -- Vucar (age 55) has hair tissue data but appears bald in-game
-    -- DF applies age-based baldness that we can't detect from tissue data alone
+    -- Capture bp_modifiers for eye shape, eyebrow density, nose shape, hair curly.
+    -- Structure: caste.bp_appearance has .modifiers[] (definitions), .modifier_idx[]
+    -- (maps bp_modifier slot → definition), .part_idx[] (→ body part), .layer_idx[]
+    -- (→ tissue layer on body part). HEAD layers: 0-1=SIDEBURNS, 2=CHIN_WHISKERS,
+    -- 3=MOUSTACHE, 4-5=EYEBROW, 6-7=HAIR, 8=SKIN.
+    -- unit.appearance.bp_modifiers[] holds the actual per-dwarf values (0-200).
     pcall(function()
-        if data.appearance.hair_length > 10 and data.age >= 50 then
-            data.appearance.hair_length = 5
-            data.appearance.hair_style = 'shaved'
+        local raw = df.creature_raw.find(unit.race)
+        if not raw then return end
+        local caste = raw.caste[unit.caste]
+        if not caste then return end
+        if not unit.appearance or not unit.appearance.bp_modifiers then return end
+
+        local bpa = caste.bp_appearance
+        local body = caste.body_info
+        -- Resolve enum IDs once
+        local ROUND_VS_NARROW = df.appearance_modifier_type.ROUND_VS_NARROW
+        local DEEP_SET = df.appearance_modifier_type.DEEP_SET
+        local DENSE = df.appearance_modifier_type.DENSE
+        local UPTURNED = df.appearance_modifier_type.UPTURNED
+        local LENGTH = df.appearance_modifier_type.LENGTH
+        local BROADNESS = df.appearance_modifier_type.BROADNESS
+        local CURLY = df.appearance_modifier_type.CURLY
+
+        for i = 0, #unit.appearance.bp_modifiers - 1 do
+            pcall(function()
+                local mod_idx = bpa.modifier_idx[i]
+                local part_idx = bpa.part_idx[i]
+                local layer_idx = bpa.layer_idx[i]
+                local mod_def = bpa.modifiers[mod_idx]
+                local type_int = mod_def.modifier.type
+                local part_cat = string.upper(body.body_parts[part_idx].category)
+                local value = unit.appearance.bp_modifiers[i]
+
+                if type_int == ROUND_VS_NARROW and part_cat == 'EYE' then
+                    data.appearance.eye_round_vs_narrow = value
+                elseif type_int == DEEP_SET and part_cat == 'EYE' then
+                    data.appearance.eye_deep_set = value
+                elseif type_int == DENSE and part_cat == 'HEAD' and (layer_idx == 4 or layer_idx == 5) then
+                    -- layer 4-5 = eyebrow tissue on HEAD
+                    data.appearance.eyebrow_density = value
+                elseif type_int == UPTURNED and part_cat == 'NOSE' then
+                    data.appearance.nose_upturned = value
+                elseif type_int == LENGTH and part_cat == 'NOSE' then
+                    data.appearance.nose_length = value
+                elseif type_int == BROADNESS and part_cat == 'NOSE' then
+                    data.appearance.nose_broadness = value
+                elseif type_int == CURLY and part_cat == 'HEAD' and (layer_idx == 6 or layer_idx == 7) then
+                    -- layer 6-7 = HAIR tissue on HEAD
+                    data.appearance.hair_curly = value
+                end
+            end)
         end
     end)
 

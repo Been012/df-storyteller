@@ -34,12 +34,19 @@ def _load_appearance(raw: dict) -> "DwarfAppearance":
         skin_color=a.get("skin_color", ""),
         hair_color=a.get("hair_color", ""),
         beard_color=a.get("beard_color", ""),
+        eyebrow_color=a.get("eyebrow_color", ""),
         hair_length=a.get("hair_length", 0),
         hair_style=a.get("hair_style", ""),
         hair_curly=a.get("hair_curly", 0),
         beard_length=a.get("beard_length", 0),
         beard_style=a.get("beard_style", ""),
         body_broadness=a.get("body_broadness", 100),
+        eye_round_vs_narrow=a.get("eye_round_vs_narrow", 100),
+        eye_deep_set=a.get("eye_deep_set", 100),
+        eyebrow_density=a.get("eyebrow_density", 100),
+        nose_upturned=a.get("nose_upturned", 100),
+        nose_length=a.get("nose_length", 100),
+        nose_broadness=a.get("nose_broadness", 100),
     )
 
 

@@ -95,6 +95,7 @@ class LayerRule:
 
     # Layer set context
     layer_set: str = ""     # "BABY", "CHILD", "PORTRAIT"
+    group_id: int = 0       # Unique group ID for mutual exclusivity
 
     # Group-level conditions (from LAYER_GROUP / LG_CONDITION_BP)
     group_bp_token: str = ""
@@ -154,6 +155,7 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
     current_layer_set = ""
     current_group_bp_token = ""
     current_group_bp_present = False
+    current_group_id = 0
     current_layer: LayerRule | None = None
     current_tissue: TissueCondition | None = None
     current_bp: BPCondition | None = None
@@ -178,6 +180,7 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
 
         # LAYER_GROUP management
         if cmd == "LAYER_GROUP":
+            current_group_id += 1
             current_group_bp_token = ""
             current_group_bp_present = False
             _flush_layer(current_layer, rules)
@@ -218,6 +221,7 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
                 tile_x=int(tag[3]) if len(tag) > 3 else 0,
                 tile_y=int(tag[4]) if len(tag) > 4 else 0,
                 layer_set=current_layer_set,
+                group_id=current_group_id,
                 group_bp_token=current_group_bp_token,
                 group_bp_present=current_group_bp_present,
             )

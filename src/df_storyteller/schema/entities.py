@@ -25,12 +25,19 @@ class DwarfAppearance(BaseModel):
     skin_color: str = ""     # DF color name (e.g. "PEACH", "DARK_BROWN")
     hair_color: str = ""     # DF color name (e.g. "BLACK", "AUBURN")
     beard_color: str = ""    # DF color name for beard (may differ from hair)
+    eyebrow_color: str = ""  # DF color name for eyebrows (may differ from hair)
     hair_length: int = 0     # DF tissue length units
     hair_style: str = ""     # "unkempt" / "shaped"
     hair_curly: int = 0      # Curliness value (0-200+)
     beard_length: int = 0    # Facial hair length
     beard_style: str = ""    # "unkempt" / "shaped"
-    body_broadness: int = 100  # Head broadness (0-200, <100=thin, >=100=broad)
+    body_broadness: int = 100   # Head broadness (0-200, <100=thin, >=100=broad)
+    eye_round_vs_narrow: int = 100  # Eye shape (0-99=narrow, 100+=round)
+    eye_deep_set: int = 100         # Eye depth (101-200=deep-set)
+    eyebrow_density: int = 100      # Eyebrow thickness (50-90=sparse, 110-150=dense)
+    nose_upturned: int = 100        # Nose shape (101-200=upturned)
+    nose_length: int = 100          # Nose length (101-200=long)
+    nose_broadness: int = 100       # Nose width (0-99=narrow, 101-200=wide)
 
 
 class Dwarf(BaseModel):
