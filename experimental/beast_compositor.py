@@ -155,32 +155,78 @@ def _tint_sprite(sprite: Image.Image, color_name: str) -> Image.Image:
     return result
 
 
-# Body type mapping: (legs, arms) → base sprite name
-_BODY_TYPE_MAP = [
-    # (legs, arms, has_stinger, has_mandibles) → type
-    # Order matters — first match wins
-    (lambda l, a, f: l == 0 and a == 0 and "MANDIBLE" not in f, "AMORPHOUS"),
-    (lambda l, a, f: l == 0 and a == 0, "SNAKE"),
-    (lambda l, a, f: l == 2 and a == 2, "HUMANOID"),
-    (lambda l, a, f: l == 2 and a == 0, "BIPEDAL_DINOSAUR"),
-    (lambda l, a, f: l >= 8 and "STINGER" in f, "SCORPION"),
-    (lambda l, a, f: l == 8, "SPIDER"),
-    (lambda l, a, f: l == 6, "INSECT"),
-    (lambda l, a, f: l == 4 and "STINGER" in f, "SCORPION"),
-    (lambda l, a, f: l == 4, "QUADRUPED_BULKY"),
-    (lambda l, a, f: l > 0, "QUADRUPED_BULKY"),
-]
-
-
 def _determine_body_type(beast_data: dict) -> str:
-    """Determine the beast sprite body type from body part counts."""
+    """Determine the beast sprite body type from body part categories.
+
+    Uses the full set of body part categories (not just leg/arm counts)
+    for accurate mapping. Key discriminators:
+    - ANTENNA → INSECT
+    - MANDIBLE + STINGER → SCORPION
+    - ARM_UPPER/ARM_LOWER → HUMANOID
+    - Single BODY (not BODY_UPPER/BODY_LOWER) with few parts → AMORPHOUS/WORM
+    - LEG_FRONT/LEG_REAR → natural QUADRUPED
+    """
+    categories = set(beast_data.get("categories", {}).keys()) if isinstance(beast_data.get("categories"), dict) else set()
+    features = set(beast_data.get("features", []))
     legs = beast_data.get("legs", 0)
     arms = beast_data.get("arms", 0)
-    features = set(beast_data.get("features", []))
+    wings = beast_data.get("wings", 0)
+    total_parts = beast_data.get("total_parts", 0)
 
-    for check, body_type in _BODY_TYPE_MAP:
-        if check(legs, arms, features):
-            return body_type
+    # 1. ANTENNA → INSECT (unique identifier)
+    if "ANTENNA" in categories or "ANTENNA" in features:
+        return "INSECT"
+
+    # 2. MANDIBLE + STINGER → SCORPION
+    if ("MANDIBLE" in categories or "MANDIBLE" in features) and \
+       ("STINGER" in categories or "STINGER" in features):
+        return "SCORPION"
+
+    # 3. Has arms → HUMANOID (or HUMANOID_ARMLESS variant)
+    if "ARM_UPPER" in categories or "ARM_LOWER" in categories:
+        return "HUMANOID"
+
+    # 4. Single BODY (not split upper/lower) with few parts → AMORPHOUS or WORM
+    has_split_body = "BODY_UPPER" in categories or "BODY_LOWER" in categories
+    if not has_split_body:
+        if total_parts <= 7:
+            if wings > 0:
+                return "WORM_LONG"  # Worm with wings (like Leech Monster)
+            return "AMORPHOUS"
+        if total_parts <= 12:
+            return "WORM_SHORT"
+
+    # 5. MANDIBLE without stinger → INSECT
+    if "MANDIBLE" in categories or "MANDIBLE" in features:
+        return "INSECT"
+
+    # 6. 8+ legs → SPIDER
+    if legs >= 8:
+        return "SPIDER"
+
+    # 7. 6 legs → INSECT
+    if legs == 6:
+        return "INSECT"
+
+    # 8. 4 legs with STINGER → SCORPION
+    if legs == 4 and ("STINGER" in categories or "STINGER" in features):
+        return "SCORPION"
+
+    # 9. 4 legs → QUADRUPED (bulky vs slinky based on body size)
+    if legs >= 4:
+        body_size = beast_data.get("body_size", 100000)
+        if body_size < 50000:
+            return "QUADRUPED_SLINKY"
+        return "QUADRUPED_BULKY"
+
+    # 10. 2 legs, no arms → BIPEDAL_DINOSAUR
+    if legs == 2:
+        return "BIPEDAL_DINOSAUR"
+
+    # 11. No legs, has body → WORM or AMORPHOUS
+    if "TAIL" in features or "TAIL" in categories:
+        return "SNAKE"
+
     return "AMORPHOUS"
 
 

@@ -117,27 +117,6 @@ def _find_visitor(config, unit_id: int):
     return None
 
 
-def _find_beast_data(config, unit_id: int) -> dict | None:
-    """Find beast_data for a procedurally generated creature in snapshot data."""
-    import json
-    from pathlib import Path
-
-    base = Path(config.paths.event_dir) if config.paths.event_dir else None
-    if not base or not base.exists():
-        return None
-
-    snapshots = sorted(base.rglob("snapshot_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for snap_path in snapshots[:3]:
-        try:
-            data = json.loads(snap_path.read_text(encoding="utf-8", errors="replace"))
-            for animal in data.get("data", {}).get("animals", []):
-                if animal.get("unit_id") == unit_id and animal.get("beast_data"):
-                    return animal["beast_data"]
-        except (json.JSONDecodeError, OSError):
-            continue
-    return None
-
-
 @router.get("/api/portraits/{unit_id}")
 async def api_portrait(unit_id: int):
     """Generate or serve a cached portrait for any unit (citizen, visitor, trader)."""
@@ -170,15 +149,6 @@ async def api_portrait(unit_id: int):
             result = generate_portrait(df_install, unit_id, appearance, cache_dir)
             if result and result.exists():
                 return FileResponse(result, media_type="image/png")
-
-    # Fallback: beast compositor for procedurally generated creatures (demons, forgotten beasts)
-    beast_data = _find_beast_data(config, unit_id)
-    if beast_data:
-        from df_storyteller.portraits.beast_compositor import compose_beast_portrait
-        img = compose_beast_portrait(df_install, beast_data, scale=2)
-        if img:
-            img.save(portrait_path, "PNG")
-            return FileResponse(portrait_path, media_type="image/png")
 
     return Response(status_code=404)
 
