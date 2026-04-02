@@ -50,3 +50,10 @@ storyteller_events/
 # Temporary files
 *.tmp
 *.bak
+
+# Playwright MCP
+.playwright-mcp/
+
+# Test/debug images (generated during portrait development)
+*.png
+!src/df_storyteller/web/static/*.png

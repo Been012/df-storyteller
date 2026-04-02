@@ -1210,13 +1210,18 @@ for _, unit in ipairs(df.global.world.units.active) do
                     local caste = raw.caste[unit.caste]
                     local body = caste.body_info
 
-                    -- Count body parts by type
+                    -- Count body parts by type and collect categories
                     local legs, arms, wings, eyes = 0, 0, 0, 0
                     local features = {}
-                    for i = 0, #body.body_parts - 1 do
+                    local categories = {}
+                    local total_parts = #body.body_parts
+                    for i = 0, total_parts - 1 do
                         local bp = body.body_parts[i]
                         local cat = bp.category:upper()
                         local token = bp.token:upper()
+                        if cat ~= '' then
+                            categories[cat] = (categories[cat] or 0) + 1
+                        end
                         if string.find(cat, 'LEG') then legs = legs + 1 end
                         if string.find(cat, 'ARM') or string.find(token, 'ARM') then arms = arms + 1 end
                         if string.find(cat, 'WING') or string.find(token, 'WING') then wings = wings + 1 end
@@ -1224,7 +1229,7 @@ for _, unit in ipairs(df.global.world.units.active) do
                         -- Detect notable features
                         for _, feat in ipairs({'HORN', 'SHELL', 'MANDIBLE', 'TRUNK', 'TAIL',
                             'STINGER', 'ANTENNA', 'BEAK', 'PROBOSCIS', 'TUSK', 'PINCER'}) do
-                            if string.find(token, feat) then
+                            if string.find(token, feat) or string.find(cat, feat) then
                                 features[feat] = true
                             end
                         end
@@ -1256,12 +1261,20 @@ for _, unit in ipairs(df.global.world.units.active) do
                         base_color_bright = raw.color[2]
                     end)
 
+                    local body_size = 100000
+                    pcall(function()
+                        body_size = caste.body_size[#caste.body_size - 1]
+                    end)
+
                     data.beast_data = {
                         legs = legs,
                         arms = arms,
                         wings = wings,
                         eyes = eyes,
                         features = {},
+                        categories = categories,
+                        total_parts = total_parts,
+                        body_size = body_size,
                         layer_colors = layer_colors,
                         base_color_fg = base_color_fg,
                         base_color_bright = base_color_bright,
@@ -1291,17 +1304,20 @@ for _, unit in ipairs(df.global.world.units.active) do
                             local body = caste.body_info
                             local legs, arms, wings, eyes = 0, 0, 0, 0
                             local features = {}
-                            for i = 0, #body.body_parts - 1 do
+                            local categories = {}
+                            local total_parts = #body.body_parts
+                            for i = 0, total_parts - 1 do
                                 local bp = body.body_parts[i]
                                 local cat = bp.category:upper()
                                 local token = bp.token:upper()
+                                if cat ~= '' then categories[cat] = (categories[cat] or 0) + 1 end
                                 if string.find(cat, 'LEG') then legs = legs + 1 end
                                 if string.find(cat, 'ARM') or string.find(token, 'ARM') then arms = arms + 1 end
                                 if string.find(cat, 'WING') or string.find(token, 'WING') then wings = wings + 1 end
                                 if string.find(cat, 'EYE') or string.find(token, 'EYE') then eyes = eyes + 1 end
                                 for _, feat in ipairs({'HORN', 'SHELL', 'MANDIBLE', 'TRUNK', 'TAIL',
                                     'STINGER', 'ANTENNA', 'BEAK', 'PROBOSCIS', 'TUSK', 'PINCER'}) do
-                                    if string.find(token, feat) then features[feat] = true end
+                                    if string.find(token, feat) or string.find(cat, feat) then features[feat] = true end
                                 end
                             end
                             local layer_colors = {}
@@ -1325,9 +1341,13 @@ for _, unit in ipairs(df.global.world.units.active) do
                                 base_color_fg = raw.color[0]
                                 base_color_bright = raw.color[2]
                             end)
+                            local body_size = 100000
+                            pcall(function() body_size = caste.body_size[#caste.body_size - 1] end)
                             data.beast_data = {
                                 legs = legs, arms = arms, wings = wings, eyes = eyes,
-                                features = {}, layer_colors = layer_colors,
+                                features = {}, categories = categories,
+                                total_parts = total_parts, body_size = body_size,
+                                layer_colors = layer_colors,
                                 base_color_fg = base_color_fg,
                                 base_color_bright = base_color_bright,
                             }

@@ -13,6 +13,7 @@ A companion journal and legends browser for [Dwarf Fortress](https://store.steam
 Explore your world's complete history through an interactive legends viewer — every figure, civilization, site, artifact, war, and event, all cross-linked and searchable.
 
 - **Detail Pages** — Dedicated pages for historical figures (with family trees, intrigue plots, emotional bonds, skills, kill lists), civilizations (festivals, honors, wars, population), sites (structures, properties, events), artifacts (contents, creator), and wars/battles (factions, casualties, combatants)
+- **Geography Pages** — Searchable regions, rivers, mountain peaks, and constructions with event timelines and clickable cross-references
 - **World Map** — Terrain map generated from region data with Leaflet.js. Site markers by type and owner race. Roads and tunnels as toggleable polylines
 - **Festival Calendar** — Named festivals with full schedules (processions, ceremonies, competitions, dances, poetry, wrestling). Dwarven calendar grid (Granite–Obsidian). Competition winners with event types
 - **Intrigue & Schemes** — 7,900+ figures with active plots: assassinations, corruption networks, undead world conquest, infiltration. Actor roles, strategies, promised immortality
@@ -20,17 +21,21 @@ Explore your world's complete history through an interactive legends viewer — 
 - **Family Trees** — Interactive hierarchical graphs showing parents, children, spouses, and siblings across generations
 - **Charts & Statistics** — Race distribution, event timeline, per-entity activity charts, warfare networks
 - **97 Event Types** — Every DF historical event rendered with human-readable descriptions and clickable entity names
-- **Cultural Forms** — Full descriptions of poetic, musical, and dance forms with meter, rhythm, instruments, and scales
+- **Cultural Forms** — Searchable poetic, musical, and dance forms with full descriptions, meter, rhythm, instruments, and scales
+- **Clickable Everything** — All entity references across legends pages are clickable links to their detail pages
 
 ### Fortress Journal
 Track what's happening in your fortress with character sheets, event feeds, and seasonal chronicles.
 
-- **Character Sheets** — Every dwarf with personality traits, beliefs, skills (with level badges), relationships, combat record, equipment, wounds, and pets
+- **Character Sheets** — Every dwarf with personality traits, beliefs, skills (with level badges), relationships, combat record, equipment (grouped by Weapons/Armor/Clothing), wounds, stress mood from DFHack, and pets
 - **Fortress Chronicles** — Seasonal entries tracking migrations, conflicts, deaths, and changes. Write your own or generate with AI
 - **Dwarf Biographies & Diaries** — Dated entries that build over time. Write in your own voice or let AI draft from personality data
 - **Relationship Web** — Interactive force-directed graph of fortress connections, plus a family tree view from legends data
-- **Live Event Feed** — Real-time game events with color-coded cards by type (combat, death, mood, migration)
+- **Live Event Feed** — Real-time game events captured via DFHack hooks (not gamelog parsing). Combat with full dwarf names, chat with unit IDs, 50+ report types (megabeast arrivals, marriages, masterpieces, cave collapses, deity curses)
+- **Military Dashboard** — Squad roster with combat skills, top warriors leaderboard (kills, attacks, defenses), recent engagements grouped by target, combat activity charts, military event timeline
 - **Fortress Dashboard** — Population over time, migration waves, milestone timeline
+- **World Switcher** — Switch between fortresses showing fortress names (not folder names). Same fortress across multiple save slots appears as one entry. Retire/reclaim preserves event history via session_ids_by_site
+- **In-Game Calendar** — Events display with proper dwarven calendar dates (day/month/year)
 - **Fortress Gazette** — A dwarven newspaper with five sections. Newspaper-style two-column layout
 
 ### Cross-Referencing
@@ -132,7 +137,7 @@ python -m df_storyteller serve
 - **Backend**: Python 3.11+, FastAPI, Pydantic v2
 - **Frontend**: Jinja2 templates, vanilla CSS/JS (no build step), Chart.js, Leaflet.js, vis-network (CDN)
 - **Legends**: Pillow (terrain map generation), dwarven calendar mapping, 97 event type renderer
-- **Game integration**: DFHack Lua scripts (event monitoring, snapshots, legends export)
+- **Game integration**: DFHack Lua scripts with eventful hooks (onReport, onUnitAttack, onInventoryChange, etc.), snapshots, legends export
 - **LLM** (optional): Anthropic SDK, OpenAI SDK, Ollama REST API
 
 ## Documentation
