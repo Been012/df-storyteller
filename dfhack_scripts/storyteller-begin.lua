@@ -1,12 +1,20 @@
---- One-command setup for a new fortress in df-storyteller.
---- Run this once after embarking to set up everything the storyteller needs.
+--- Captures a fortress snapshot for df-storyteller and starts event monitoring.
+--- Run once after embarking, or again any time to refresh the snapshot.
+---
+--- Captures all citizen data (appearance, skills, equipment, relationships),
+--- visitors, animals, buildings, and fortress info. Starts real-time event
+--- monitoring via DFHack hooks (combat, deaths, moods, migrations, etc.).
 ---
 --- Usage:
----   storyteller-begin          -- Set up (skips legends by default)
----   storyteller-begin --yes    -- Set up + export legends
----   storyteller-begin --no     -- Set up, skip legends
+---   storyteller-begin          -- Snapshot + start events (recommended)
+---   storyteller-begin --yes    -- Same + export legends XML
+---   storyteller-begin --no     -- Same, explicitly skip legends
 ---
---- Reference: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
+--- For world history (legends lore browser), run separately:
+---   open-legends               -- Opens legends mode to export XML
+---
+--- Web UI: df-storyteller serve (or python -m df_storyteller serve)
+--- Docs: https://github.com/Been012/df-storyteller
 
 -- Guard: fortress mode only (gamemode 0 = DWARF, 1 = ADVENTURE)
 if df.global.gamemode ~= 0 then
@@ -1122,11 +1130,8 @@ elseif args[1] == '--snapshot-only' then
     snapshot_only = true
     do_legends = false
 else
-    print('Export world history for richer stories?')
-    print('  Run: storyteller-begin --yes   (export legends)')
-    print('  Run: storyteller-begin --no    (skip legends)')
-    print('')
-    print('Defaulting to: skip legends')
+    print('Skipping world history export (use --yes to include it).')
+    print('For the full Legends lore browser, run open-legends separately.')
     print('')
 end
 
@@ -1537,10 +1542,11 @@ if not snapshot_only then
     print('')
     print('=== Setup complete! ===')
     print('')
-    print('Play the game, then in your terminal:')
-    print('  python -m df_storyteller chronicle')
-    print('  python -m df_storyteller bio "name"')
-    print('  python -m df_storyteller dwarves')
+    print('Open the web UI in your terminal:')
+    print('  df-storyteller serve')
+    print('')
+    print('For world history & legends lore browser:')
+    print('  open-legends            (in DFHack, exports legends XML)')
     print('')
 else
     print('')
