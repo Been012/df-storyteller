@@ -27,43 +27,43 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _load_clothes_palette(df_install: str) -> list[list[tuple[int, int, int, int]]]:
-    """Load the clothes palette and extract portrait-relevant color rows.
+def _load_clothes_source_row(df_install: str) -> list[tuple[int, int, int, int]]:
+    """Load the source palette row for clothing tiles.
 
-    The clothes palette has 18 columns x N rows. Columns 9-17 are the portrait
-    source/target colors (matching the colors used in portrait clothing tiles).
-    Returns RGBA tuples to match tile pixel format.
+    Clothing tiles are drawn using cols 9-17 of row 0 from the clothes palette.
+    This is the neutral gray source that gets recolored to the item's color.
     """
     palette_path = (
         Path(df_install) / "data/vanilla/vanilla_creatures_graphics/graphics/images"
         / "dwarf" / "dwarf_clothes_palettes.png"
     )
     img = Image.open(palette_path).convert("RGB")
-    rows = []
-    for y in range(img.height):
-        row = [(*img.getpixel((x, y))[:3], 255) for x in range(9, min(18, img.width))]
-        rows.append(row)
-    return rows
+    return [(*img.getpixel((x, 0))[:3], 255) for x in range(9, min(18, img.width))]
 
 
-def _find_best_palette_row(
-    palette_rows: list[list[tuple[int, int, int, int]]],
+def _generate_clothes_target_row(
+    source_row: list[tuple[int, int, int, int]],
     target_color: tuple[int, int, int],
-) -> int:
-    """Find the palette row whose midtone colors best match the target RGB."""
-    best_idx = 0
-    best_dist = float("inf")
+) -> list[tuple[int, int, int, int]]:
+    """Generate a target palette row by tinting the source row with the item color.
+
+    Uses HSV: applies the target color's hue with scaled-down saturation to the
+    source row's brightness structure. This produces naturally muted portrait
+    tones matching DF's subdued clothing aesthetic.
+    """
+    from colorsys import rgb_to_hsv, hsv_to_rgb
+
     tr, tg, tb = target_color
-    for i, row in enumerate(palette_rows):
-        # Compare against the middle columns (indices 3-5 of the 9-color row)
-        dist = 0.0
-        for col in range(3, min(6, len(row))):
-            pr, pg, pb = row[col][:3]
-            dist += (tr - pr) ** 2 + (tg - pg) ** 2 + (tb - pb) ** 2
-        if dist < best_dist:
-            best_dist = dist
-            best_idx = i
-    return best_idx
+    th, ts, _ = rgb_to_hsv(tr / 255, tg / 255, tb / 255)
+    # Scale saturation down for the muted portrait look
+    target_sat = ts * 0.4
+
+    result = []
+    for sr, sg, sb, sa in source_row:
+        _, _, sv = rgb_to_hsv(sr / 255, sg / 255, sb / 255)
+        r, g, b = hsv_to_rgb(th, target_sat, sv)
+        result.append((int(r * 255), int(g * 255), int(b * 255), sa))
+    return result
 
 # Tile page name → sprite sheet filename
 TILE_PAGE_FILES: dict[str, str] = {
@@ -136,12 +136,10 @@ def compose_portrait(
     source_body_row = body_palette[0]
     source_hair_row = hair_palette[0]
 
-    # Load clothes palette for item recoloring
+    # Load clothes source palette for item recoloring
     try:
-        clothes_palette = _load_clothes_palette(df_install)
-        source_clothes_row = clothes_palette[0]
+        source_clothes_row = _load_clothes_source_row(df_install)
     except FileNotFoundError:
-        clothes_palette = []
         source_clothes_row = []
 
     # Evaluate conditions to get matching layers
@@ -157,10 +155,10 @@ def compose_portrait(
             tile = crop_tile(sheet, layer.tile_x, layer.tile_y)
 
             # Apply palette recoloring
-            if layer.use_item_palette and layer.item_color and clothes_palette:
-                # Recolor clothing tile using the clothes palette
-                row_idx = _find_best_palette_row(clothes_palette, layer.item_color)
-                tile = recolor_tile(tile, source_clothes_row, clothes_palette[row_idx])
+            if layer.use_item_palette and layer.item_color and source_clothes_row:
+                # Generate a tinted palette row from the item's material/dye color
+                target_row = _generate_clothes_target_row(source_clothes_row, layer.item_color)
+                tile = recolor_tile(tile, source_clothes_row, target_row)
             elif layer.palette_name == "BODY" and layer.palette_index < len(body_palette):
                 tile = recolor_tile(tile, source_body_row, body_palette[layer.palette_index])
             elif layer.palette_name == "HAIR" and layer.palette_index < len(hair_palette):
