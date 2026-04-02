@@ -25,6 +25,46 @@ from df_storyteller.portraits.tile_loader import (
 
 logger = logging.getLogger(__name__)
 
+
+@lru_cache(maxsize=1)
+def _load_clothes_palette(df_install: str) -> list[list[tuple[int, int, int, int]]]:
+    """Load the clothes palette and extract portrait-relevant color rows.
+
+    The clothes palette has 18 columns x N rows. Columns 9-17 are the portrait
+    source/target colors (matching the colors used in portrait clothing tiles).
+    Returns RGBA tuples to match tile pixel format.
+    """
+    palette_path = (
+        Path(df_install) / "data/vanilla/vanilla_creatures_graphics/graphics/images"
+        / "dwarf" / "dwarf_clothes_palettes.png"
+    )
+    img = Image.open(palette_path).convert("RGB")
+    rows = []
+    for y in range(img.height):
+        row = [(*img.getpixel((x, y))[:3], 255) for x in range(9, min(18, img.width))]
+        rows.append(row)
+    return rows
+
+
+def _find_best_palette_row(
+    palette_rows: list[list[tuple[int, int, int, int]]],
+    target_color: tuple[int, int, int],
+) -> int:
+    """Find the palette row whose midtone colors best match the target RGB."""
+    best_idx = 0
+    best_dist = float("inf")
+    tr, tg, tb = target_color
+    for i, row in enumerate(palette_rows):
+        # Compare against the middle columns (indices 3-5 of the 9-color row)
+        dist = 0.0
+        for col in range(3, min(6, len(row))):
+            pr, pg, pb = row[col][:3]
+            dist += (tr - pr) ** 2 + (tg - pg) ** 2 + (tb - pb) ** 2
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = i
+    return best_idx
+
 # Tile page name → sprite sheet filename
 TILE_PAGE_FILES: dict[str, str] = {
     "PORTRAIT_DWARF_BODY": "dwarf_portrait_body.png",
@@ -96,6 +136,14 @@ def compose_portrait(
     source_body_row = body_palette[0]
     source_hair_row = hair_palette[0]
 
+    # Load clothes palette for item recoloring
+    try:
+        clothes_palette = _load_clothes_palette(df_install)
+        source_clothes_row = clothes_palette[0]
+    except FileNotFoundError:
+        clothes_palette = []
+        source_clothes_row = []
+
     # Evaluate conditions to get matching layers
     layers = evaluate_layers(rules, appearance)
 
@@ -109,11 +157,14 @@ def compose_portrait(
             tile = crop_tile(sheet, layer.tile_x, layer.tile_y)
 
             # Apply palette recoloring
-            if layer.palette_name == "BODY" and layer.palette_index < len(body_palette):
+            if layer.use_item_palette and layer.item_color and clothes_palette:
+                # Recolor clothing tile using the clothes palette
+                row_idx = _find_best_palette_row(clothes_palette, layer.item_color)
+                tile = recolor_tile(tile, source_clothes_row, clothes_palette[row_idx])
+            elif layer.palette_name == "BODY" and layer.palette_index < len(body_palette):
                 tile = recolor_tile(tile, source_body_row, body_palette[layer.palette_index])
             elif layer.palette_name == "HAIR" and layer.palette_index < len(hair_palette):
                 tile = recolor_tile(tile, source_hair_row, hair_palette[layer.palette_index])
-            # USE_STANDARD_PALETTE_FROM_ITEM: would need item material color — skip for now
 
             canvas = Image.alpha_composite(canvas, tile)
         except Exception:
@@ -179,6 +230,7 @@ def generate_portrait(
             nose_length=appearance.get("nose_length", 100),
             nose_broadness=appearance.get("nose_broadness", 100),
             is_vampire=appearance.get("is_vampire", False),
+            equipment=appearance.get("equipment", []),
             random_seed=unit_id,
             age=appearance.get("age", 0),
         )

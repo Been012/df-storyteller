@@ -80,6 +80,7 @@ class SelectedLayer:
     palette_name: str = ""
     palette_index: int = 0
     use_item_palette: bool = False
+    item_color: tuple[int, int, int] | None = None  # RGB from material for item palette
 
 
 def _get_tissue_data(appearance: DwarfAppearanceData, body_part: str, tissue_type: str) -> dict:
@@ -237,6 +238,21 @@ def _match_item_worn(ic: ItemCondition, equipment: list[dict]) -> bool:
     return False
 
 
+def _find_matching_item(rule: LayerRule, equipment: list[dict]) -> dict | None:
+    """Find the first equipment item matching any of the rule's item conditions."""
+    for ic in rule.item_conditions:
+        for item in equipment:
+            if ic.slot and item.get("slot", "") != ic.slot:
+                continue
+            if ic.item_type and item.get("item_type", "") != ic.item_type:
+                continue
+            if ic.item_subtypes:
+                if item.get("item_subtype", "") not in ic.item_subtypes:
+                    continue
+            return item
+    return None
+
+
 def _match_random(rule: LayerRule, seed: int) -> bool:
     """Check CONDITION_RANDOM_PART_INDEX."""
     if not rule.random_part_name:
@@ -312,6 +328,31 @@ def _matches(rule: LayerRule, appearance: DwarfAppearanceData) -> bool:
         if not _match_item_worn(ic, appearance.equipment):
             return False
 
+    # Material conditions (apply to the worn item that matched item_conditions)
+    if rule.material_flag or rule.material_type:
+        matched_item = _find_matching_item(rule, appearance.equipment)
+        if matched_item:
+            if rule.material_flag:
+                item_flags = matched_item.get("material_flags", [])
+                # material_flag can be "FLAG1:FLAG2" (colon-separated, ALL must match)
+                for flag in rule.material_flag.split(":"):
+                    if flag not in item_flags:
+                        return False
+            if rule.material_type:
+                if matched_item.get("material_type", "") != rule.material_type:
+                    return False
+        else:
+            return False  # Material condition but no matching item
+
+    # Item quality check (0=ordinary through 5=masterwork, -1=any)
+    if rule.item_quality >= 0:
+        matched_item = matched_item if (rule.material_flag or rule.material_type) else _find_matching_item(rule, appearance.equipment)
+        if matched_item:
+            if matched_item.get("quality", 0) != rule.item_quality:
+                return False
+        else:
+            return False
+
     # Random part index
     if not _match_random(rule, appearance.random_seed):
         return False
@@ -361,6 +402,14 @@ def evaluate_layers(
                         tile_x = tc.swap_tile_x
                         tile_y = tc.swap_tile_y
 
+            # Get material color for item palette recoloring
+            item_color = None
+            if rule.use_standard_palette_from_item:
+                matched_item = _find_matching_item(rule, appearance.equipment)
+                if matched_item and matched_item.get("material_color"):
+                    mc = matched_item["material_color"]
+                    item_color = (mc[0], mc[1], mc[2])
+
             selected.append(SelectedLayer(
                 tile_page=tile_page,
                 tile_x=tile_x,
@@ -368,6 +417,7 @@ def evaluate_layers(
                 palette_name=rule.palette_name,
                 palette_index=rule.palette_index,
                 use_item_palette=rule.use_standard_palette_from_item,
+                item_color=item_color,
             ))
 
     return selected

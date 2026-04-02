@@ -95,6 +95,10 @@ async def api_portrait(unit_id: int):
             "nose_broadness": dwarf.appearance.nose_broadness,
             "is_vampire": dwarf.is_vampire,
             "age": dwarf.age,
+            "equipment": [
+                item for item in dwarf.equipment
+                if isinstance(item, dict) and item.get("slot")
+            ],
         }
     else:
         appearance = _deterministic_appearance(unit_id, dwarf.sex)
@@ -150,6 +154,10 @@ async def api_portrait_debug(unit_id: int):
             "nose_broadness": dwarf.appearance.nose_broadness,
             "is_vampire": dwarf.is_vampire,
             "age": dwarf.age,
+            "equipment": [
+                item for item in dwarf.equipment
+                if isinstance(item, dict) and item.get("slot")
+            ],
         }
     else:
         appearance = _deterministic_appearance(unit_id, dwarf.sex)
@@ -174,7 +182,9 @@ async def api_portrait_debug(unit_id: int):
         eyebrow_density=appearance.get("eyebrow_density", 100),
         nose_upturned=appearance.get("nose_upturned", 100),
         nose_length=appearance.get("nose_length", 100),
+        nose_broadness=appearance.get("nose_broadness", 100),
         is_vampire=appearance.get("is_vampire", False),
+        equipment=appearance.get("equipment", []),
         random_seed=unit_id,
         age=appearance.get("age", 0),
     )

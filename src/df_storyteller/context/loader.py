@@ -159,10 +159,11 @@ def _load_dwarf_from_snapshot(citizen: dict) -> Dwarf:
     mil = citizen.get("military", {})
     military_squad = mil.get("squad_name", "") if isinstance(mil, dict) else ""
 
-    # Parse equipment — preserve description and mode (Worn, Weapon, Strapped)
+    # Parse equipment — preserve all fields for portrait rendering
+    # Legacy format: {description, mode}
+    # New format adds: {item_type, item_subtype, slot, material_flags, material_color, material_type}
     equipment = [
-        {"description": e.get("description", ""), "mode": e.get("mode", "Worn")}
-        for e in citizen.get("equipment", [])
+        e for e in citizen.get("equipment", [])
         if isinstance(e, dict) and e.get("description")
     ]
 

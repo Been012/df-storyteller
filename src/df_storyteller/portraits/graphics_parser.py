@@ -117,6 +117,9 @@ class LayerRule:
     # Shut-off conditions (if item is present, hide this layer)
     shut_off_items: list[ItemCondition] = field(default_factory=list)
 
+    # Quality requirement (-1 = any quality)
+    item_quality: int = -1
+
     # Palette
     palette_name: str = ""      # "BODY" or "HAIR"
     palette_index: int = 0
@@ -277,6 +280,10 @@ def parse_portrait_graphics(filepath: str | Path) -> list[LayerRule]:
             current_layer.random_part_name = tag[1] if len(tag) > 1 else ""
             current_layer.random_part_index = int(tag[2]) if len(tag) > 2 else 0
             current_layer.random_part_total = int(tag[3]) if len(tag) > 3 else 0
+            continue
+
+        if cmd == "ITEM_QUALITY":
+            current_layer.item_quality = int(tag[1]) if len(tag) > 1 else 0
             continue
 
         if cmd == "CONDITION_MATERIAL_FLAG":

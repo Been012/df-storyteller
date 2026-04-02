@@ -501,17 +501,110 @@ local function serialize_unit(unit)
     -- Equipment (mode: 0=Hauled, 1=Weapon, 2=Worn, 3=Piercing, 4=Flask, 5=Strapped)
     -- In DF Premium, df.unit_inventory_item.T_mode[inv.mode] may return nil,
     -- so we match on the raw numeric value instead.
+    -- Portrait slot mapping: ARMOR→BODY_UPPER, HELM→HEAD (the only slots portrait graphics check)
     local mode_names = { [1] = 'Weapon', [2] = 'Worn', [5] = 'Strapped' }
+    local portrait_slot_map = { ARMOR = 'BODY_UPPER', HELM = 'HEAD' }
     pcall(function()
         if unit.inventory then
             for _, inv in ipairs(unit.inventory) do
                 local mode_name = mode_names[inv.mode]
                 if mode_name then
                     pcall(function()
-                        local desc = dfhack.items.getDescription(inv.item, 0, true)
-                        if desc and desc ~= '' then
-                            table.insert(data.equipment, { description = desc, mode = mode_name })
-                        end
+                        local item = inv.item
+                        local desc = dfhack.items.getDescription(item, 0, true)
+                        if not desc or desc == '' then return end
+
+                        local entry = { description = desc, mode = mode_name }
+
+                        -- Extract structured data for portrait rendering
+                        pcall(function()
+                            local item_type_id = item:getType()
+                            local item_type = tostring(df.item_type[item_type_id])
+                            entry.item_type = item_type
+
+                            -- Subtype (e.g. ITEM_ARMOR_DRESS, ITEM_HELM_HOOD)
+                            local sub_id = item:getSubtype()
+                            if sub_id >= 0 then
+                                local def = dfhack.items.getSubtypeDef(item_type_id, sub_id)
+                                if def then entry.item_subtype = def.id end
+                            end
+
+                            -- Portrait body slot (BODY_UPPER or HEAD)
+                            entry.slot = portrait_slot_map[item_type] or ''
+
+                            -- Item quality (0=ordinary, 1-4=fine..exceptional, 5=masterwork)
+                            pcall(function() entry.quality = item.quality end)
+
+                            -- Material info for palette recoloring + condition matching
+                            pcall(function()
+                                local mi = dfhack.matinfo.decode(item)
+                                if mi and mi.material then
+                                    local m = mi.material
+                                    -- Material flags for CONDITION_MATERIAL_FLAG
+                                    local flags = {}
+                                    if m.flags.IS_METAL then table.insert(flags, 'IS_METAL') end
+                                    if m.flags.ITEMS_LEATHER then table.insert(flags, 'ITEMS_LEATHER') end
+                                    if m.flags.SILK then table.insert(flags, 'SILK') end
+                                    if m.flags.THREAD_PLANT then table.insert(flags, 'THREAD_PLANT') end
+                                    if m.flags.YARN then table.insert(flags, 'YARN') end
+                                    if m.flags.IS_STONE then table.insert(flags, 'IS_STONE') end
+                                    entry.material_flags = flags
+
+                                    -- CONDITION_MATERIAL_TYPE:INORGANIC
+                                    if mi.type == 0 then entry.material_type = 'INORGANIC' end
+
+                                    -- Display color for USE_STANDARD_PALETTE_FROM_ITEM
+                                    -- Priority: dye_profile color > base material color
+                                    local found_dye = false
+                                    pcall(function()
+                                        if item.improvements then
+                                            for _, imp in ipairs(item.improvements) do
+                                                pcall(function()
+                                                    if imp.dye_profile and imp.dye_profile.color_index >= 0 then
+                                                        local color = df.descriptor_color.find(imp.dye_profile.color_index)
+                                                        if color then
+                                                            entry.material_color = {
+                                                                math.floor(color.red * 255),
+                                                                math.floor(color.green * 255),
+                                                                math.floor(color.blue * 255),
+                                                            }
+                                                            found_dye = true
+                                                        end
+                                                    end
+                                                end)
+                                                if found_dye then break end
+                                            end
+                                        end
+                                    end)
+
+                                    -- Fallback to base material color if no dye
+                                    if not found_dye then
+                                        pcall(function()
+                                            local color_id = m.state_color.Solid
+                                            if color_id >= 0 then
+                                                local color = df.descriptor_color.find(color_id)
+                                                if color then
+                                                    entry.material_color = {
+                                                        math.floor(color.red * 255),
+                                                        math.floor(color.green * 255),
+                                                        math.floor(color.blue * 255),
+                                                    }
+                                                end
+                                            end
+                                        end)
+                                    end
+
+                                    -- Artifact check
+                                    pcall(function()
+                                        if item.flags.artifact then
+                                            table.insert(entry.material_flags, 'IS_CRAFTED_ARTIFACT')
+                                        end
+                                    end)
+                                end
+                            end)
+                        end)
+
+                        table.insert(data.equipment, entry)
                     end)
                 end
             end
