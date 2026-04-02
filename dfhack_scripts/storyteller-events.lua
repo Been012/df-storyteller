@@ -1011,6 +1011,12 @@ end
 
 --- Handle building creation events.
 --- Hook: eventful.onBuildingCreated
+--- Only logs notable buildings (workshops, temples, taverns, libraries, etc.)
+--- Skips mundane furniture (chairs, tables, doors, beds, cabinets, etc.)
+local NOTABLE_BUILDING_TYPES = {
+    Workshop = true, Furnace = true, SiegeEngine = true, TradeDepot = true,
+    Bridge = true, Well = true, Trap = true, Civzone = true,
+}
 local function on_building_created(building_id)
     if not event_flags.building_created then return end
 
@@ -1018,8 +1024,13 @@ local function on_building_created(building_id)
     if not building then return end
 
     local ok, data = pcall(function()
+        local btype = df.building_type[building:getType()] or 'unknown'
+
+        -- Skip mundane furniture
+        if not NOTABLE_BUILDING_TYPES[btype] then return nil end
+
         return {
-            building_type = df.building_type[building:getType()] or 'unknown',
+            building_type = btype,
             name = dfhack.buildings.getName(building) or '',
             location = {
                 x = building.centerx,
@@ -1029,7 +1040,7 @@ local function on_building_created(building_id)
         }
     end)
 
-    if ok then
+    if ok and data then
         write_event('building_created', data)
     end
 end
@@ -1391,28 +1402,28 @@ local function poll_changes()
             end
         end)
 
-        -- Detect tantrum/berserk states
+        -- Detect tantrum/berserk states (only fires on state transitions)
         pcall(function()
             if not state.prev_tantrum then state.prev_tantrum = {} end
-            local tantrum_state = nil
+            local tantrum_state = 'none'
             -- Check for berserk (mood == -1 doesn't cover this; use flags)
             if unit.flags3 and unit.flags3.scuttle then
                 tantrum_state = 'berserk'
             elseif unit.mood == 3 then -- macabre/fell can turn violent
                 tantrum_state = 'fell'
             end
-            -- Also check counters for tantrum
-            if not tantrum_state and unit.counters and unit.counters.soldier_mood > 0 then
+            -- Also check counters for martial tantrum
+            if tantrum_state == 'none' and unit.counters and unit.counters.soldier_mood > 0 then
                 tantrum_state = 'martial_tantrum'
             end
-            -- Check stress-related tantrum via very high stress
-            if not tantrum_state then
-                local stress = dfhack.units.getStressCategory(unit)
-                if stress >= 6 and not state.prev_tantrum[uid] then
-                    tantrum_state = 'breakdown'
-                end
-            end
-            if tantrum_state and state.prev_tantrum[uid] ~= tantrum_state then
+            -- Removed: stress_category >= 6 false positive. Category 6 means "on the
+            -- verge of a breakdown", not an actual tantrum. Real tantrums are detected
+            -- via onReport hooks (report types 183=citizen_tantrum, 285=possessed_tantrum)
+            -- and the stress_change event already reports significant mood shifts.
+
+            -- Only emit event on state CHANGE (not every poll while in same state)
+            local prev = state.prev_tantrum[uid] or 'none'
+            if tantrum_state ~= 'none' and tantrum_state ~= prev then
                 write_event('tantrum', {
                     unit = udata,
                     tantrum_type = tantrum_state,
@@ -1422,8 +1433,30 @@ local function poll_changes()
         end)
 
         -- Track known unit IDs (individual migrant_arrived events handled by onUnitNewActive hook)
+        -- For newly seen dwarves, pre-seed their relationship state so existing bonds
+        -- (spouse, children brought with migrants) don't trigger as "new" relationships
         if not state.known_unit_ids[uid] then
             state.known_unit_ids[uid] = true
+            -- Pre-seed existing relationships to avoid false "relationship_formed" events
+            pcall(function()
+                if not state.prev_relationships then state.prev_relationships = {} end
+                if not state.prev_relationships[uid] then state.prev_relationships[uid] = {} end
+                if unit.hist_figure_id and unit.hist_figure_id >= 0 then
+                    local hf = df.historical_figure.find(unit.hist_figure_id)
+                    if hf and hf.histfig_links then
+                        for _, link in ipairs(hf.histfig_links) do
+                            pcall(function()
+                                local target_hf_id = link.target_hf
+                                if not target_hf_id or target_hf_id < 0 then return end
+                                local class_name = tostring(link._type):match('([%w_]+)>') or ''
+                                local rel_type = class_name  -- don't need to resolve, just mark as known
+                                local rel_key = tostring(target_hf_id) .. '_' .. rel_type
+                                state.prev_relationships[uid][rel_key] = true
+                            end)
+                        end
+                    end
+                end
+            end)
         end
 
         ::continue::
