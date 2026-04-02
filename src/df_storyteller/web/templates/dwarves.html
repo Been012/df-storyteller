@@ -15,11 +15,28 @@
 </div>
 
 {% if dwarves %}
-<div class="dwarf-grid">
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;">
+    <input type="text" id="dwarf-search" placeholder="Search by name or profession..."
+           oninput="filterDwarves()"
+           style="flex: 1; min-width: 200px; padding: 0.4rem 0.6rem; font-family: 'Crimson Text', serif; border: 1px solid var(--border); border-radius: 3px; background: var(--parchment-light);">
+    <select id="dwarf-mood-filter" onchange="filterDwarves()" style="padding: 0.4rem; font-family: 'Crimson Text', serif; border: 1px solid var(--border); border-radius: 3px;">
+        <option value="">All Moods</option>
+        <option value="ecstatic">Ecstatic</option>
+        <option value="happy">Happy</option>
+        <option value="content">Content</option>
+        <option value="fine">Fine</option>
+        <option value="stressed">Stressed</option>
+        <option value="very unhappy">Very Unhappy</option>
+        <option value="on the verge">On the Verge</option>
+    </select>
+</div>
+<div class="dwarf-grid" id="dwarf-grid">
     {% for dwarf in dwarves %}
-    <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;">
+    <a href="/dwarves/{{ dwarf.unit_id }}" class="dwarf-card" style="text-decoration: none;"
+       data-name="{{ dwarf.name | lower }}" data-profession="{{ dwarf.profession | lower }}" data-mood="{{ dwarf.happiness_desc | lower }}"
+       data-nobles="{{ (dwarf.noble_positions or []) | join(' ') | lower }}">
         <div style="display: flex; gap: 0.8rem; align-items: flex-start;">
-        <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait-sm" loading="lazy">
+        <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait-sm mood-border-{{ dwarf.happiness_desc | replace(' ', '-') }}" loading="lazy">
         <div style="flex: 1;">
         <div class="dwarf-name">
             {{ dwarf.name }}
@@ -29,7 +46,7 @@
         <div class="dwarf-profession">
             {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
             {% set unique_positions = dwarf.noble_positions | reject('equalto', dwarf.profession) | list %}
-            {{ dwarf.profession }}{% if unique_positions %} &mdash; {{ unique_positions | join(', ') }}{% endif %}
+            {{ dwarf.profession }}{% if unique_positions %} &mdash; <span style="color: var(--gold-dark);">&#9819;</span> {{ unique_positions | join(', ') }}{% endif %}
             &middot; Age {{ dwarf.age | int }}
             <span class="mood-indicator mood-{{ dwarf.happiness_desc }}" title="{{ dwarf.happiness_desc }}">&#9679;</span>
         </div>
@@ -252,6 +269,27 @@
 
 {% block scripts %}
 <script>
+function filterDwarves() {
+    const search = document.getElementById('dwarf-search').value.toLowerCase();
+    const mood = document.getElementById('dwarf-mood-filter').value.toLowerCase();
+    const cards = document.querySelectorAll('#dwarf-grid .dwarf-card');
+    let shown = 0;
+    cards.forEach(card => {
+        const name = card.dataset.name || '';
+        const prof = card.dataset.profession || '';
+        const nobles = card.dataset.nobles || '';
+        const cardMood = card.dataset.mood || '';
+        const matchesSearch = !search || name.includes(search) || prof.includes(search) || nobles.includes(search);
+        const matchesMood = !mood || cardMood === mood;
+        if (matchesSearch && matchesMood) {
+            card.style.display = '';
+            shown++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
 async function showVisitorDetail(hfid, linkEl) {
     const detailEl = document.getElementById('visitor-detail-' + hfid);
     if (!detailEl) return;

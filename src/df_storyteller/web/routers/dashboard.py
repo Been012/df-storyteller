@@ -210,11 +210,23 @@ async def dashboard_page(request: Request):
         desc = re.sub(r"^\[.*?\]\s*", "", _fmt_event(e))
         if "equipped" in desc.lower() or "unequipped" in desc.lower():
             continue
+        # Extract unit_id for portrait thumbnail
+        unit_id = None
+        if hasattr(e, "data"):
+            d = e.data
+            for attr in ("unit", "victim", "attacker"):
+                ref = getattr(d, attr, None) if not isinstance(d, dict) else d.get(attr)
+                if ref:
+                    uid = getattr(ref, "unit_id", None) if not isinstance(ref, dict) else ref.get("unit_id")
+                    if uid:
+                        unit_id = uid
+                        break
         recent_events.append({
             "type": e.event_type.value if hasattr(e.event_type, "value") else str(e.event_type),
             "season": e.season.value.title(),
             "year": e.game_year,
             "description": desc[:150],
+            "unit_id": unit_id,
         })
         if len(recent_events) >= 8:
             break

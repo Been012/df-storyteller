@@ -12,6 +12,9 @@
             <span id="live-status" style="font-size: 0.85rem; color: var(--ink-faded);">Connecting...</span>
         </div>
         <div>
+            <input type="text" id="event-search" placeholder="Search events..."
+                   oninput="filterEvents()"
+                   style="padding: 0.3rem 0.5rem; font-family: 'Crimson Text', serif; border: 1px solid var(--border); border-radius: 3px; width: 160px; margin-right: 0.3rem;">
             <select id="event-filter" onchange="filterEvents()" style="font-family: 'Crimson Text', serif; padding: 0.3rem; border: 1px solid var(--border); border-radius: 3px;">
                 <option value="all">All Events</option>
                 <option value="death">Deaths</option>
@@ -366,13 +369,13 @@ function addEventCard(event) {
 
 function filterEvents() {
     const filter = document.getElementById('event-filter').value;
+    const search = (document.getElementById('event-search').value || '').toLowerCase();
     const cards = document.querySelectorAll('.event-card');
+    // Also show/hide season headers based on visible cards
     cards.forEach(card => {
-        if (filter === 'all' || card.dataset.type === filter) {
-            card.style.display = '';
-        } else {
-            card.style.display = 'none';
-        }
+        const matchesType = filter === 'all' || card.dataset.type === filter;
+        const matchesSearch = !search || (card.textContent || '').toLowerCase().includes(search);
+        card.style.display = (matchesType && matchesSearch) ? '' : 'none';
     });
 }
 

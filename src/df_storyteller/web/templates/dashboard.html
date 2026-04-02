@@ -44,9 +44,16 @@
     <div class="parchment">
         <h3 class="chart-title">Recent Activity</h3>
         {% for evt in dashboard.recent_events %}
-        <div class="event-card {{ evt.type | lower | replace(' ', '_') }}" style="margin-bottom: 0.3rem;">
-            <div class="event-time">{{ evt.season }} Y{{ evt.year }} &middot; {{ evt.type }}</div>
-            <div class="event-text">{{ evt.description }}</div>
+        <div class="event-card {{ evt.type | lower | replace(' ', '_') }}" style="margin-bottom: 0.3rem; display: flex; align-items: flex-start; gap: 0.4rem;">
+            {% if evt.unit_id %}
+            <img src="/api/portraits/{{ evt.unit_id }}" alt=""
+                 style="width: 28px; height: 28px; image-rendering: pixelated; border-radius: 2px; flex-shrink: 0; margin-top: 0.15rem;"
+                 onerror="this.style.display='none'">
+            {% endif %}
+            <div>
+                <div class="event-time">{{ evt.season }} Y{{ evt.year }} &middot; {{ evt.type }}</div>
+                <div class="event-text">{{ evt.description }}</div>
+            </div>
         </div>
         {% endfor %}
         <div style="text-align: right; margin-top: 0.5rem;">

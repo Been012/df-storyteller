@@ -9,13 +9,13 @@
 <div class="parchment" style="padding: 0; overflow: hidden;">
     <div class="char-sheet" style="display: grid !important; grid-template-columns: 1fr 1fr !important;">
         <div class="char-header">
-            <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait" loading="lazy">
+            <img src="/api/portraits/{{ dwarf.unit_id }}" alt="" class="dwarf-portrait mood-border-{{ dwarf.happiness_desc | replace(' ', '-') }}" loading="lazy">
             <div class="char-name">{{ dwarf.name }}</div>
             <div class="char-title">
                 {% if dwarf.sex == 'male' %}<span class="sex-badge male" title="Male">&#9794;</span>{% elif dwarf.sex == 'female' %}<span class="sex-badge female" title="Female">&#9792;</span>{% endif %}
                 {% set unique_positions = dwarf.noble_positions | reject('equalto', dwarf.profession) | list %}
                 {{ dwarf.profession }}
-                {% if unique_positions %} &mdash; {{ unique_positions | join(', ') }}{% endif %}
+                {% if unique_positions %} &mdash; <span title="{{ unique_positions | join(', ') }}" style="color: var(--gold-dark);">&#9819;</span> {{ unique_positions | join(', ') }}{% endif %}
                 {% if dwarf.military_squad %} &mdash; {{ dwarf.military_squad }}{% endif %}
                 &middot; Age {{ dwarf.age | int }}
                 {% if not dwarf.is_alive %}
