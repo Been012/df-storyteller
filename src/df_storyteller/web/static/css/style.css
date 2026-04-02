@@ -366,6 +366,12 @@ a.dwarf-link:hover {
     border-bottom-style: solid;
 }
 
+.wiki-link-unresolved {
+    color: var(--ink-light);
+    border-bottom: 1px dashed var(--border);
+    cursor: help;
+}
+
 a.lore-xref {
     color: var(--ink);
     text-decoration: none;

@@ -743,7 +743,7 @@ async def lore_page(request: Request):
             }
 
     # Apply sensible limits to "other" sections (search reveals all)
-    # Load saved sagas
+    # Load saved sagas with wiki link resolution
     saved_sagas = []
     try:
         fortress_dir = _get_fortress_dir(config, metadata)
@@ -751,6 +751,10 @@ async def lore_page(request: Request):
         if saga_path.exists():
             import json as _json
             saved_sagas = _json.loads(saga_path.read_text(encoding="utf-8", errors="replace"))
+            from df_storyteller.web.helpers import resolve_wiki_links
+            for saga in saved_sagas:
+                if saga.get("text"):
+                    saga["text"] = resolve_wiki_links(saga["text"], world_lore, fortress_dir)
     except (ValueError, OSError):
         pass
 

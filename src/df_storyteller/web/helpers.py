@@ -88,6 +88,109 @@ def linkify_dwarf_names(text: str, dwarf_map: dict[str, int]) -> str:
     return text
 
 
+def resolve_wiki_links(text: str, world_lore=None, fortress_dir=None) -> str:
+    """Convert [[wiki-style links]] to clickable links.
+
+    Tries to match against: lore pins, historical figures, sites,
+    entities, artifacts, wars in the world lore. Falls back to a styled
+    span if no match is found.
+
+    Syntax: [[name]] or [[display text|search term]]
+    """
+    import re as _re
+
+    def _replace_link(m: _re.Match) -> str:
+        content = m.group(1).strip()
+        # Support [[display|search]] syntax
+        if "|" in content:
+            display, search = content.split("|", 1)
+            display = display.strip()
+            search = search.strip()
+        else:
+            display = content
+            search = content
+
+        search_lower = search.lower()
+
+        # Search legends data FIRST (authoritative source for named entities)
+        if world_lore and hasattr(world_lore, "_legends") and world_lore._legends:
+            legends = world_lore._legends
+
+            # Search historical figures (id field: hf_id)
+            if hasattr(legends, "historical_figures"):
+                for hf in legends.historical_figures.values():
+                    hf_name = getattr(hf, "name", "")
+                    if hf_name and search_lower in hf_name.lower():
+                        return f'<a href="/lore/figure/{hf.hf_id}" class="dwarf-link">{display}</a>'
+
+            # Search sites (id field: site_id)
+            if hasattr(legends, "sites"):
+                for site in legends.sites.values():
+                    site_name = getattr(site, "name", "")
+                    if site_name and search_lower in site_name.lower():
+                        return f'<a href="/lore/site/{site.site_id}" class="dwarf-link">{display}</a>'
+
+            # Search entities/civilizations (id field: entity_id)
+            if hasattr(legends, "entities"):
+                for ent in legends.entities.values():
+                    ent_name = getattr(ent, "name", "")
+                    if ent_name and search_lower in ent_name.lower():
+                        return f'<a href="/lore/entity/{ent.entity_id}" class="dwarf-link">{display}</a>'
+
+            # Search artifacts (id field: artifact_id)
+            if hasattr(legends, "artifacts"):
+                for art in legends.artifacts.values():
+                    art_name = getattr(art, "name", "")
+                    if art_name and search_lower in art_name.lower():
+                        return f'<a href="/lore/artifact/{art.artifact_id}" class="dwarf-link">{display}</a>'
+
+            # Search regions
+            if hasattr(legends, "regions"):
+                for region in legends.regions.values():
+                    region_name = getattr(region, "name", "")
+                    if region_name and search_lower in region_name.lower():
+                        region_id = getattr(region, "region_id", getattr(region, "id", 0))
+                        return f'<a href="/lore/region/{region_id}" class="dwarf-link">{display}</a>'
+
+            # Search wars
+            if hasattr(legends, "event_collections"):
+                for ec in legends.event_collections.values():
+                    ec_name = getattr(ec, "name", "")
+                    ec_type = getattr(ec, "ec_type", "")
+                    if ec_name and search_lower in ec_name.lower():
+                        ec_id = getattr(ec, "ec_id", getattr(ec, "id", 0))
+                        if ec_type == "war":
+                            return f'<a href="/lore/war/{ec_id}" class="dwarf-link">{display}</a>'
+                        return f'<a href="/lore/event/{ec_id}" class="dwarf-link">{display}</a>'
+
+        # Fallback: check lore pins (user-labeled references for events, duels, etc.)
+        if fortress_dir:
+            try:
+                from df_storyteller.context.lore_pins import load_pins
+                for pin in load_pins(fortress_dir):
+                    pin_name = pin.get("name", "").lower()
+                    pin_note = pin.get("note", "").lower()
+                    if search_lower in pin_name or search_lower in pin_note:
+                        etype = pin.get("entity_type", "")
+                        eid = pin.get("entity_id", "")
+                        url_map = {
+                            "figure": f"/lore/figure/{eid}",
+                            "site": f"/lore/site/{eid}",
+                            "entity": f"/lore/entity/{eid}",
+                            "artifact": f"/lore/artifact/{eid}",
+                            "war": f"/lore/war/{eid}",
+                        }
+                        url = url_map.get(etype, f"/lore/event/{eid}")
+                        return f'<a href="{url}" class="dwarf-link">{display}</a>'
+            except Exception:
+                pass
+
+        # No match — render as styled text
+        return f'<span class="wiki-link-unresolved" title="Not found in legends">{display}</span>'
+
+    return _re.sub(r"\[\[([^\]]+)\]\]", _replace_link, text)
+
+
 # ---------------------------------------------------------------------------
 # Markdown conversion
 # ---------------------------------------------------------------------------

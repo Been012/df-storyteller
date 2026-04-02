@@ -30,7 +30,7 @@ router = APIRouter()
 @router.get("/", response_class=HTMLResponse)
 async def chronicle_page(request: Request):
     config = _get_config()
-    _, character_tracker, _, metadata = _load_game_state_safe(config)
+    _, character_tracker, world_lore, metadata = _load_game_state_safe(config)
     ctx = _base_context(config, "chronicle", metadata)
     fortress_dir = _get_fortress_dir(config, metadata)
     entries = _parse_journal(config, metadata)
@@ -38,10 +38,12 @@ async def chronicle_page(request: Request):
     # Show newest entries first
     entries.reverse()
 
-    # Hotlink dwarf names in story text
+    # Hotlink dwarf names and [[wiki links]] in story text
+    from df_storyteller.web.helpers import resolve_wiki_links
     name_map = _build_dwarf_name_map(character_tracker)
     for entry in entries:
-        entry["text"] = _linkify_dwarf_names(entry["text"], name_map)
+        text = resolve_wiki_links(entry["text"], world_lore, fortress_dir)
+        entry["text"] = _linkify_dwarf_names(text, name_map)
 
     # Check if current season already has an entry
     from df_storyteller.output.journal import has_entry_for

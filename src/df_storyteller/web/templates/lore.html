@@ -369,7 +369,7 @@
 {% call lore_section("Duels", duels, "duels", total_counts.duels) %}
     {% for duel in duels %}
     <div class="lore-item" style="margin-bottom: 0.4rem;">
-        {{ pin_btn("duel", duel.id, duel.name) }}
+        {{ pin_btn("duel", duel.id, duel.name ~ " — " ~ (duel.atk_name or "?") ~ " vs " ~ (duel.def_name or "?") ~ ((" Y" ~ duel.year) if duel.year else "")) }}
         <strong>{{ lore_link("duel", duel.id, duel.name) | safe }}</strong>
         <span style="color: var(--ink-light); font-size: 0.9rem;">
             {% if duel.year %} — Year {{ duel.year }}{% endif %}

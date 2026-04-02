@@ -554,11 +554,13 @@ async def dwarf_detail_page(request: Request, unit_id: int):
     from df_storyteller.stories.biography import load_biography_history
     bio_history = load_biography_history(config, dwarf.unit_id, fortress_dir)
     name_map = _build_dwarf_name_map(character_tracker)
+    from df_storyteller.web.helpers import resolve_wiki_links
     for entry in bio_history:
         if entry.get("text"):
-            entry["text"] = _linkify_dwarf_names(
-                entry["text"].replace("\n", "<br>"), name_map
-            )
+            text = entry["text"].replace("\n", "<br>")
+            text = resolve_wiki_links(text, world_lore, fortress_dir)
+            text = _linkify_dwarf_names(text, name_map)
+            entry["text"] = text
     dwarf_data["bio_entries"] = [e for e in bio_history if not e.get("is_diary")]
     dwarf_data["diary_entries"] = [e for e in bio_history if e.get("is_diary")]
     dwarf_data["has_eulogy"] = any(e.get("is_eulogy") for e in bio_history)
