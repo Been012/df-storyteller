@@ -146,6 +146,18 @@ async def events_page(request: Request):
             unit = event.data.get("unit", {})
             display_type = "chat"
 
+        # Extract unit_id for portrait thumbnail
+        unit_id = None
+        d = event.data
+        if d:
+            for attr in ("unit", "victim", "attacker"):
+                ref = getattr(d, attr, None) if not isinstance(d, dict) else d.get(attr)
+                if ref:
+                    uid = getattr(ref, "unit_id", None) if not isinstance(ref, dict) else ref.get("unit_id")
+                    if uid:
+                        unit_id = uid
+                        break
+
         events.append({
             "type": display_type,
             "year": event.game_year,
@@ -153,6 +165,7 @@ async def events_page(request: Request):
             "date_label": date_label,
             "_sort": (event.game_year, SEASON_ORDER.get(event.season.value, 0), event.game_tick),
             "description": desc,
+            "unit_id": unit_id,
         })
 
     # Sort by year/season/tick descending (newest first), then remove sort key

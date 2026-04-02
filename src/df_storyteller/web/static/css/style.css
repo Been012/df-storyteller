@@ -562,13 +562,13 @@ a.lore-link:hover {
     flex-shrink: 0;
 }
 
-/* Subtle mood borders on portraits */
-.mood-border-ecstatic { border-color: rgba(180, 160, 60, 0.5); }
-.mood-border-happy { border-color: rgba(160, 150, 80, 0.4); }
-.mood-border-content, .mood-border-fine { border-color: var(--border); }
-.mood-border-stressed { border-color: rgba(180, 120, 60, 0.5); }
-.mood-border-very-unhappy { border-color: rgba(180, 80, 60, 0.5); }
-.mood-border-on-the-verge { border-color: rgba(180, 50, 50, 0.6); }
+/* Mood borders on portraits — noticeable but not garish */
+.mood-border-ecstatic { border: 2px solid rgba(201, 168, 76, 0.8); }
+.mood-border-happy { border: 2px solid rgba(160, 150, 80, 0.6); }
+.mood-border-content, .mood-border-fine { }
+.mood-border-stressed { border: 2px solid rgba(200, 140, 60, 0.7); }
+.mood-border-very-unhappy { border: 2px solid rgba(200, 80, 60, 0.7); }
+.mood-border-on-the-verge { border: 2px solid rgba(200, 50, 50, 0.8); }
 
 /* ========== Character Sheet ========== */
 
