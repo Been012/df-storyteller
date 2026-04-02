@@ -7,11 +7,9 @@
 ---
 --- Usage:
 ---   storyteller-begin          -- Snapshot + start events (recommended)
----   storyteller-begin --yes    -- Same + export legends XML
----   storyteller-begin --no     -- Same, explicitly skip legends
 ---
 --- For world history (legends lore browser), run separately:
----   open-legends               -- Opens legends mode to export XML
+---   open-legends               -- Opens legends viewer, export from there
 ---
 --- Web UI: df-storyteller serve (or python -m df_storyteller serve)
 --- Docs: https://github.com/Been012/df-storyteller
@@ -1119,27 +1117,10 @@ end
 print('')
 
 -- Step 1: Parse args
-local do_legends = false
 local snapshot_only = false
 local args = { ... }
-if args[1] == '--yes' or args[1] == '-y' then
-    do_legends = true
-elseif args[1] == '--no' or args[1] == '-n' then
-    do_legends = false
-elseif args[1] == '--snapshot-only' then
+if args[1] == '--snapshot-only' then
     snapshot_only = true
-    do_legends = false
-else
-    print('Skipping world history export (use --yes to include it).')
-    print('For the full Legends lore browser, run open-legends separately.')
-    print('')
-end
-
-if do_legends then
-    print('[storyteller] Exporting world history...')
-    local ok, err = pcall(function() dfhack.run_command('exportlegends', 'info') end)
-    if ok then print('[storyteller] World history exported.')
-    else print('[storyteller] Legends export failed (may need legends mode). Skipping.') end
 end
 
 -- Step 2: Snapshot units
