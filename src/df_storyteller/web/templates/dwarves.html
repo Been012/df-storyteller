@@ -57,7 +57,13 @@
 
 <div class="dwarf-grid">
     {% for v in visitors %}
-    <div class="dwarf-card" style="opacity: 0.85;">
+    <div class="dwarf-card" style="opacity: 0.85; display: flex; align-items: flex-start; gap: 0.5rem;">
+        {% if v.unit_id %}
+        <img src="/api/portraits/{{ v.unit_id }}"
+             alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0; margin-top: 0.2rem;"
+             onerror="this.style.display='none'">
+        {% endif %}
+        <div>
         <div class="dwarf-name">{{ v.name }}</div>
         <div class="dwarf-profession">
             {{ v.profession }}{% if v.race %} &middot; {{ v.race }}{% endif %}
@@ -70,6 +76,7 @@
         </div>
         <div class="visitor-detail" id="visitor-detail-{{ v.hfid }}" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dotted var(--border); font-size: 0.85rem; color: var(--ink-light);"></div>
         {% endif %}
+        </div>
     </div>
     {% endfor %}
 </div>
@@ -83,7 +90,13 @@
     <div style="padding: 0.4rem 0.8rem 0.8rem;">
         <div class="dwarf-grid">
             {% for t in traders %}
-            <div class="dwarf-card" style="opacity: 0.85;">
+            <div class="dwarf-card" style="opacity: 0.85; display: flex; align-items: flex-start; gap: 0.5rem;">
+                {% if t.unit_id %}
+                <img src="/api/portraits/{{ t.unit_id }}"
+                     alt="" style="width: 48px; height: 48px; image-rendering: pixelated; flex-shrink: 0; margin-top: 0.2rem;"
+                     onerror="this.style.display='none'">
+                {% endif %}
+                <div>
                 <div class="dwarf-name">{{ t.name }} <span class="role-badge" style="font-size: 0.7rem; background: rgba(138, 109, 59, 0.25); color: #c9a84c; border: 1px solid rgba(138, 109, 59, 0.5);">trader</span></div>
                 <div class="dwarf-profession">
                     {{ t.profession }}{% if t.race %} &middot; {{ t.race }}{% endif %}
@@ -97,6 +110,7 @@
                 </div>
                 <div class="visitor-detail" id="visitor-detail-{{ t.hfid }}" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dotted var(--border); font-size: 0.85rem; color: var(--ink-light);"></div>
                 {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>

@@ -107,6 +107,8 @@ async def dwarves_page(request: Request):
             "name": name,
             "profession": prof,
             "race": v.get("race", "").replace("_", " ").title(),
+            "race_raw": v.get("race", "DWARF"),
+            "unit_id": v.get("unit_id"),
             "age": v.get("age", 0),
             "role": v.get("role", "visitor"),
             "hfid": hfid if hfid and hfid > 0 else None,

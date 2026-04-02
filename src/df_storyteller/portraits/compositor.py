@@ -26,16 +26,17 @@ from df_storyteller.portraits.tile_loader import (
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _load_clothes_source_row(df_install: str) -> list[tuple[int, int, int, int]]:
+@lru_cache(maxsize=8)
+def _load_clothes_source_row(df_install: str, race: str = "DWARF") -> list[tuple[int, int, int, int]]:
     """Load the source palette row for clothing tiles.
 
     Clothing tiles are drawn using cols 9-17 of row 0 from the clothes palette.
     This is the neutral gray source that gets recolored to the item's color.
     """
+    race_lower = race.lower()
     palette_path = (
         Path(df_install) / "data/vanilla/vanilla_creatures_graphics/graphics/images"
-        / "dwarf" / "dwarf_clothes_palettes.png"
+        / race_lower / f"{race_lower}_clothes_palettes.png"
     )
     img = Image.open(palette_path).convert("RGB")
     return [(*img.getpixel((x, 0))[:3], 255) for x in range(9, min(18, img.width))]
@@ -65,43 +66,99 @@ def _generate_clothes_target_row(
         result.append((int(r * 255), int(g * 255), int(b * 255), sa))
     return result
 
-# Tile page name → sprite sheet filename
-TILE_PAGE_FILES: dict[str, str] = {
-    "PORTRAIT_DWARF_BODY": "dwarf_portrait_body.png",
-    "PORTRAIT_DWARF_HAIR": "dwarf_portrait_hair.png",
-    "PORTRAIT_DWARF_BABY": "dwarf_portrait_baby.png",
-    "PORTRAIT_DWARF_CHILD_BODY": "dwarf_portrait_child_body.png",
-    "PORTRAIT_DWARF_CHILD_HAIR": "dwarf_portrait_child_hair.png",
-    "PORTRAIT_DWARF_CHILD_CLOTHING": "dwarf_portrait_child_clothing.png",
-    "PORTRAIT_DWARF_CLOTHING_UNDER": "dwarf_portrait_clothing_under.png",
-    "PORTRAIT_DWARF_CLOTHING_SHIRT": "dwarf_portrait_clothing_shirt.png",
-    "PORTRAIT_DWARF_CLOTHING_VEST": "dwarf_portrait_clothing_vest.png",
-    "PORTRAIT_DWARF_CLOTHING_COAT": "dwarf_portrait_clothing_coat.png",
-    "PORTRAIT_DWARF_CLOTHING_TOGA": "dwarf_portrait_clothing_toga.png",
-    "PORTRAIT_DWARF_CLOTHING_MAIL_SHIRT": "dwarf_portrait_clothing_chainmail.png",
-    "PORTRAIT_DWARF_CLOTHING_LEATHER": "dwarf_portrait_clothing_leather.png",
-    "PORTRAIT_DWARF_CLOTHING_BREASTPLATE": "dwarf_portrait_clothing_breastplate.png",
-    "PORTRAIT_DWARF_CLOTHING_CLOAK": "dwarf_portrait_clothing_cloak.png",
-    "PORTRAIT_DWARF_CLOTHING_CAPE": "dwarf_portrait_clothing_cape.png",
-    "PORTRAIT_DWARF_CLOTHING_VEIL_HEAD": "dwarf_portrait_clothing_headveil.png",
-    "PORTRAIT_DWARF_CLOTHING_HOOD": "dwarf_portrait_clothing_hood.png",
-    "PORTRAIT_DWARF_CLOTHING_VEIL_FACE": "dwarf_portrait_clothing_veil.png",
-    "PORTRAIT_DWARF_CLOTHING_HELM": "dwarf_portrait_clothing_helmet.png",
-    "PORTRAIT_DWARF_CLOTHING_TURBAN": "dwarf_portrait_clothing_turban.png",
-    "PORTRAIT_DWARF_CLOTHING_SCARF_HEAD": "dwarf_portrait_clothing_headscarf.png",
-    "PORTRAIT_DWARF_CLOTHING_MASK": "dwarf_portrait_clothing_mask.png",
-    "PORTRAIT_DWARF_CLOTHING_CAP": "dwarf_portrait_clothing_cap.png",
+# Tile page suffix → sprite sheet filename suffix mapping.
+# The tile page names in DF graphics files use "PORTRAIT_{RACE}_{SUFFIX}".
+# We strip the race prefix and map the suffix to a filename pattern.
+_TILE_SUFFIX_TO_FILE: dict[str, str] = {
+    "BODY": "portrait_body.png",
+    "HAIR": "portrait_hair.png",
+    "BABY": "portrait_baby.png",
+    "CHILD_BODY": "portrait_child_body.png",
+    "CHILD_HAIR": "portrait_child_hair.png",
+    "CHILD_CLOTHING": "portrait_child_clothing.png",
+    "CLOTHING_UNDER": "portrait_clothing_under.png",
+    "CLOTHING_SHIRT": "portrait_clothing_shirt.png",
+    "CLOTHING_VEST": "portrait_clothing_vest.png",
+    "CLOTHING_COAT": "portrait_clothing_coat.png",
+    "CLOTHING_TOGA": "portrait_clothing_toga.png",
+    "CLOTHING_MAIL_SHIRT": "portrait_clothing_chainmail.png",
+    "CLOTHING_LEATHER": "portrait_clothing_leather.png",
+    "CLOTHING_BREASTPLATE": "portrait_clothing_breastplate.png",
+    "CLOTHING_CLOAK": "portrait_clothing_cloak.png",
+    "CLOTHING_CAPE": "portrait_clothing_cape.png",
+    "CLOTHING_VEIL_HEAD": "portrait_clothing_headveil.png",
+    "CLOTHING_HOOD": "portrait_clothing_hood.png",
+    "CLOTHING_VEIL_FACE": "portrait_clothing_veil.png",
+    "CLOTHING_HELM": "portrait_clothing_helmet.png",
+    "CLOTHING_TURBAN": "portrait_clothing_turban.png",
+    "CLOTHING_SCARF_HEAD": "portrait_clothing_headscarf.png",
+    "CLOTHING_MASK": "portrait_clothing_mask.png",
+    "CLOTHING_CAP": "portrait_clothing_cap.png",
+    "SKELETON": "portrait_skeleton.png",
+    "CLOTHING_CROWN": "portrait_clothing_crown.png",
 }
+
+# Supported races with portrait graphics
+PORTRAIT_RACES = {"DWARF", "ELF", "HUMAN", "GOBLIN", "KOBOLD"}
 
 # Portrait graphics file relative to DF install
 _GRAPHICS_REL = Path("data/vanilla/vanilla_creatures_graphics/graphics")
-_GRAPHICS_FILE = "graphics_creatures_portrait_dwarf.txt"
 
 
-@lru_cache(maxsize=1)
-def _load_rules(df_install: str) -> list[LayerRule]:
-    """Load and cache parsed portrait layer rules."""
-    path = Path(df_install) / _GRAPHICS_REL / _GRAPHICS_FILE
+def _tile_page_to_filename(tile_page: str, race: str) -> str | None:
+    """Map a tile page name to its sprite sheet filename for a given race.
+
+    E.g. "PORTRAIT_DWARF_BODY" with race "ELF" → "elf_portrait_body.png"
+    """
+    # Strip the "PORTRAIT_{RACE}_" prefix to get the suffix
+    for r in PORTRAIT_RACES:
+        prefix = f"PORTRAIT_{r}_"
+        if tile_page.startswith(prefix):
+            suffix = tile_page[len(prefix):]
+            filename = _TILE_SUFFIX_TO_FILE.get(suffix)
+            if filename:
+                return f"{race.lower()}_{filename}"
+            return None
+    return None
+
+
+def _detect_source_palette_row(
+    df_install: str,
+    race_lower: str,
+    palette: list[list[tuple[int, int, int, int]]],
+) -> list[tuple[int, int, int, int]]:
+    """Detect which palette row a race's hair tiles are drawn with.
+
+    Checks a sample tile's pixels against each palette row and returns
+    the row with the most color matches.
+    """
+    try:
+        sheet = load_sprite_sheet(df_install, f"{race_lower}_portrait_hair.png")
+        tile = crop_tile(sheet, 0, 2)  # Sample: mid-length unstyled hair
+        tile_colors = set()
+        for y in range(tile.height):
+            for x in range(tile.width):
+                px = tile.getpixel((x, y))
+                if px[3] > 0 and px != (19, 18, 18, 255):
+                    tile_colors.add(px)
+
+        best_row_idx = 0
+        best_matches = 0
+        for i, row in enumerate(palette):
+            matches = sum(1 for c in tile_colors if c in row)
+            if matches > best_matches:
+                best_matches = matches
+                best_row_idx = i
+        return palette[best_row_idx]
+    except (FileNotFoundError, IndexError):
+        return palette[0]
+
+
+@lru_cache(maxsize=8)
+def _load_rules(df_install: str, race: str = "DWARF") -> list[LayerRule]:
+    """Load and cache parsed portrait layer rules for a race."""
+    filename = f"graphics_creatures_portrait_{race.lower()}.txt"
+    path = Path(df_install) / _GRAPHICS_REL / filename
     return parse_portrait_graphics(path)
 
 
@@ -109,20 +166,23 @@ def compose_portrait(
     df_install: str,
     appearance: DwarfAppearanceData,
     scale: int = 2,
+    race: str = "DWARF",
 ) -> Image.Image:
-    """Compose a dwarf portrait using the full condition-based evaluator.
+    """Compose a portrait using the full condition-based evaluator.
 
     Args:
         df_install: Path to the DF install directory.
         appearance: Dwarf appearance data for condition matching.
         scale: Upscale factor (1 = 96px, 2 = 192px).
+        race: Creature race (DWARF, ELF, HUMAN, GOBLIN, KOBOLD).
 
     Returns:
         RGBA PIL Image of the composed portrait.
     """
+    race = race.upper()
     canvas = Image.new("RGBA", (TILE_SIZE, TILE_SIZE), (0, 0, 0, 0))
 
-    all_rules = _load_rules(df_install)
+    all_rules = _load_rules(df_install, race)
     if not all_rules:
         return canvas
 
@@ -136,19 +196,29 @@ def compose_portrait(
         target_set = "PORTRAIT"
     rules = [r for r in all_rules if r.layer_set == target_set]
 
+    # Load race-specific palettes
+    race_lower = race.lower()
     try:
-        body_palette = load_palette(df_install, "dwarf_portrait_body_palette.png")
-        hair_palette = load_palette(df_install, "dwarf_portrait_hair_palette.png")
+        body_palette = load_palette(df_install, f"{race_lower}_portrait_body_palette.png")
     except FileNotFoundError as e:
-        logger.warning("Portrait palettes not found: %s", e)
+        logger.warning("Portrait body palette not found for %s: %s", race, e)
         return canvas
 
+    # Some races (goblins, kobolds) don't have hair palettes
+    try:
+        hair_palette = load_palette(df_install, f"{race_lower}_portrait_hair_palette.png")
+    except FileNotFoundError:
+        hair_palette = body_palette  # Fallback to body palette
+
     source_body_row = body_palette[0]
-    source_hair_row = hair_palette[0]
+    # Hair tiles are drawn with a specific palette row that varies per race
+    # (dwarf/elf use row 0, human uses last row). Auto-detect by finding which
+    # palette row's colors appear in a sample hair tile.
+    source_hair_row = _detect_source_palette_row(df_install, race_lower, hair_palette)
 
     # Load clothes source palette for item recoloring
     try:
-        source_clothes_row = _load_clothes_source_row(df_install)
+        source_clothes_row = _load_clothes_source_row(df_install, race)
     except FileNotFoundError:
         source_clothes_row = []
 
@@ -156,7 +226,7 @@ def compose_portrait(
     layers = evaluate_layers(rules, appearance)
 
     for layer in layers:
-        filename = TILE_PAGE_FILES.get(layer.tile_page)
+        filename = _tile_page_to_filename(layer.tile_page, race)
         if not filename:
             continue
 
@@ -243,7 +313,8 @@ def generate_portrait(
             age=appearance.get("age", 0),
         )
 
-        img = compose_portrait(df_install, app_data, scale=2)
+        race = appearance.get("race", "DWARF")
+        img = compose_portrait(df_install, app_data, scale=2, race=race)
         img.save(portrait_path, "PNG")
         hash_path.write_text(appearance_hash)
         return portrait_path

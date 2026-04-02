@@ -40,42 +40,21 @@ def _deterministic_appearance(unit_id: int, sex: str) -> dict:
     }
 
 
-@router.get("/api/portraits/{unit_id}")
-async def api_portrait(unit_id: int):
-    """Generate or serve a cached dwarf portrait."""
-    config = _get_config()
+# Map Lua style names to DF graphics condition shaping names
+# Note: DF tissue enum uses PONY_TAIL but graphics file checks PONY_TAILS
+_STYLE_MAP = {
+    "combed": "NEATLY_COMBED", "braided": "BRAIDED",
+    "double_braids": "DOUBLE_BRAIDS", "pony_tail": "PONY_TAILS",
+    "shaved": "", "thinning": "", "unkempt": "",
+}
 
-    df_install = config.paths.df_install
-    if not df_install:
-        return Response(status_code=404)
 
-    _, character_tracker, _, metadata = _load_game_state_safe(config)
-    fortress_dir = _get_fortress_dir(config, metadata)
-    cache_dir = fortress_dir / "portraits"
-
-    dwarf = character_tracker.get_dwarf(unit_id)
-    if not dwarf:
-        return Response(status_code=404)
-
-    # Check cache first
-    portrait_path = cache_dir / f"portrait_{unit_id}.png"
-    if portrait_path.exists():
-        return FileResponse(portrait_path, media_type="image/png")
-
-    # Build appearance dict — use real data if available, else deterministic fallback
+def _build_appearance_dict(dwarf) -> dict:
+    """Build an appearance dict from a Dwarf model for portrait generation."""
     if dwarf.appearance.skin_color:
-        # Map hair_style names to evaluator shaping names
-        # Map Lua style names to DF graphics condition shaping names
-        # Note: DF tissue enum uses PONY_TAIL but graphics file checks PONY_TAILS
-        _STYLE_MAP = {
-            "combed": "NEATLY_COMBED", "braided": "BRAIDED",
-            "double_braids": "DOUBLE_BRAIDS", "pony_tail": "PONY_TAILS",
-            "shaved": "", "thinning": "", "unkempt": "",
-        }
         hair_shaping = _STYLE_MAP.get(dwarf.appearance.hair_style, "")
         beard_shaping = _STYLE_MAP.get(dwarf.appearance.beard_style, "")
-
-        appearance = {
+        return {
             "sex": dwarf.sex,
             "skin_color": dwarf.appearance.skin_color,
             "hair_color": dwarf.appearance.hair_color or "BROWN",
@@ -99,11 +78,76 @@ async def api_portrait(unit_id: int):
                 item for item in dwarf.equipment
                 if isinstance(item, dict) and item.get("slot")
             ],
+            "race": dwarf.race,
         }
-    else:
-        appearance = _deterministic_appearance(unit_id, dwarf.sex)
+    return _deterministic_appearance(dwarf.unit_id, dwarf.sex)
 
-    from df_storyteller.portraits.compositor import generate_portrait
+
+def _find_visitor(config, unit_id: int):
+    """Find a visitor/trader unit in the latest snapshot data."""
+    import json
+    from pathlib import Path
+    from df_storyteller.context.loader import _load_appearance
+
+    base = Path(config.paths.event_dir) if config.paths.event_dir else None
+    if not base or not base.exists():
+        return None
+
+    # Find the most recent snapshot
+    snapshots = sorted(base.rglob("snapshot_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for snap_path in snapshots[:3]:
+        try:
+            data = json.loads(snap_path.read_text(encoding="utf-8", errors="replace"))
+            for visitor in data.get("data", {}).get("visitors", []):
+                if visitor.get("unit_id") == unit_id:
+                    from df_storyteller.schema.entities import Dwarf
+                    appearance = _load_appearance(visitor)
+                    return Dwarf(
+                        unit_id=unit_id,
+                        name=visitor.get("name", ""),
+                        race=visitor.get("race", "DWARF"),
+                        sex=visitor.get("sex", "unknown"),
+                        age=visitor.get("age", 0),
+                        appearance=appearance,
+                        equipment=visitor.get("equipment", []),
+                        is_vampire=visitor.get("is_vampire", False),
+                    )
+        except (json.JSONDecodeError, OSError):
+            continue
+    return None
+
+
+@router.get("/api/portraits/{unit_id}")
+async def api_portrait(unit_id: int):
+    """Generate or serve a cached portrait for any unit (citizen, visitor, trader)."""
+    config = _get_config()
+
+    df_install = config.paths.df_install
+    if not df_install:
+        return Response(status_code=404)
+
+    _, character_tracker, _, metadata = _load_game_state_safe(config)
+    fortress_dir = _get_fortress_dir(config, metadata)
+    cache_dir = fortress_dir / "portraits"
+
+    # Try fortress citizens first, then visitors/traders
+    dwarf = character_tracker.get_dwarf(unit_id)
+    if not dwarf:
+        dwarf = _find_visitor(config, unit_id)
+    if not dwarf:
+        return Response(status_code=404)
+
+    # Check cache first
+    portrait_path = cache_dir / f"portrait_{unit_id}.png"
+    if portrait_path.exists():
+        return FileResponse(portrait_path, media_type="image/png")
+
+    appearance = _build_appearance_dict(dwarf)
+
+    from df_storyteller.portraits.compositor import generate_portrait, PORTRAIT_RACES
+    # Only generate condition-based portraits for supported races
+    if appearance.get("race", "DWARF").upper() not in PORTRAIT_RACES:
+        return Response(status_code=404)
     result = generate_portrait(df_install, unit_id, appearance, cache_dir)
 
     if result and result.exists():
