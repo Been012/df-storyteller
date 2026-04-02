@@ -19,8 +19,23 @@ fetch('/api/lore/pins')
         document.getElementById('pin-count').textContent = pins.length;
         panel.style.display = '';
 
-        const TYPE_URLS = { figure: '/lore/figure/', civilization: '/lore/civ/', site: '/lore/site/', artifact: '/lore/artifact/', war: '/lore/war/' };
-        const TYPE_ICONS = { figure: '\u2694', civilization: '\u2655', site: '\u2302', artifact: '\u2736', war: '\u2620' };
+        const TYPE_URLS = {
+            figure: '/lore/figure/', civilization: '/lore/civ/', entity: '/lore/civ/',
+            site: '/lore/site/', artifact: '/lore/artifact/', war: '/lore/war/',
+            region: '/lore/region/', written_work: '/lore/work/',
+            landmass: '/lore/landmass/', peak: '/lore/peak/',
+            construction: '/lore/construction/',
+            duel: '/lore/event/', battle: '/lore/event/',
+            beast_attack: '/lore/event/', site_conquest: '/lore/event/',
+            persecution: '/lore/event/', abduction: '/lore/event/',
+            theft: '/lore/event/', insurrection: '/lore/event/',
+        };
+        const TYPE_ICONS = {
+            figure: '\u2694', civilization: '\u2655', entity: '\u2655',
+            site: '\u2302', artifact: '\u2736', war: '\u2620',
+            region: '\u2637', written_work: '\u270D', duel: '\u2694',
+            battle: '\u2620', beast_attack: '\uD83D\uDC32',
+        };
 
         for (const pin of pins) {
             const div = document.createElement('div');
