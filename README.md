@@ -102,9 +102,11 @@ A dwarven newspaper with five sections. Newspaper-style two-column layout with p
 **Install and run:**
 ```bash
 pip install df-storyteller
-python -m df_storyteller init
-python -m df_storyteller serve
+df-storyteller init
+df-storyteller serve
 ```
+
+> **Note:** If `df-storyteller` isn't recognized as a command, use `python -m df_storyteller` instead (underscores, not dashes). This happens on some Windows installs where Python scripts aren't on the PATH.
 
 **In DFHack console (first time per fortress):**
 ```
