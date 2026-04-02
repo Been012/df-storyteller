@@ -97,24 +97,28 @@ async def events_page(request: Request):
     from df_storyteller.context.context_builder import _format_event
     SEASON_ORDER = {"spring": 0, "summer": 1, "autumn": 2, "winter": 3}
     events = []
-    for event in event_store.recent_events(200):
+    # Use all events (sorted chronologically) instead of recent_events(200)
+    # which can miss important events buried under chat/building noise
+    SKIP_TYPES = {
+        "announcement",     # Duplicated by DFHack events
+        "combat",           # Shown in dedicated Combat Log section
+        "chat",             # Shown in dedicated Chat Log section
+        "equipment_change", # Too noisy, data on military dashboard
+        "building",         # Too noisy (furniture), notable ones captured via reports
+        "migrant_arrived",  # Individual per-dwarf; migration_wave is the summary
+    }
+    for event in event_store.all_events():
+        if event.event_type.value in SKIP_TYPES:
+            continue
         desc = _format_event(event)
         # Strip the [Season Year] prefix and type label — the UI shows those separately
         desc = re.sub(r"^\[.*?\]\s*", "", desc)
         desc = re.sub(r"^[A-Za-z_ ]+:\s", "", desc)
-        # Skip empty, session markers, and gamelog announcements (duplicated by DFHack events)
+        # Skip empty and session markers
         if not desc.strip():
             continue
         if "Loading Fortress" in desc or "Starting New Outpost" in desc or "STARTING NEW GAME" in desc:
             continue
-        if event.event_type.value == "announcement":
-            continue
-        if event.event_type.value == "combat":
-            continue
-        if event.event_type.value == "chat":
-            continue  # Shown in dedicated Chat Log section
-        if event.event_type.value == "equipment_change":
-            continue  # Too noisy, data available on military dashboard
         # Build date label: "12 Granite" or fall back to season
         date_label = event.season.value.title()
         if event.month_name and event.day:
@@ -196,7 +200,7 @@ async def events_page(request: Request):
 
     # Collect all combat events in chronological order
     all_combat = []
-    for event in event_store.recent_events(200):
+    for event in event_store.all_events():
         if event.event_type == ET.COMBAT:
             all_combat.append(event)
 

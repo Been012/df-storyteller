@@ -39,6 +39,18 @@ class EventStore:
             return self._events[idx]
         return None
 
+    def sort_chronologically(self) -> None:
+        """Sort events by game year and tick, then rebuild indexes."""
+        with self._lock:
+            self._events.sort(key=lambda e: (e.game_year, e.game_tick))
+            # Rebuild indexes after sort
+            self._by_type.clear()
+            self._by_unit.clear()
+            for idx, event in enumerate(self._events):
+                self._by_type[event.event_type].append(idx)
+                for unit_id in self._extract_unit_ids(event):
+                    self._by_unit[unit_id].append(idx)
+
     def all_events(self) -> list[GameEvent]:
         return list(self._events)
 

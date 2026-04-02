@@ -291,10 +291,12 @@ class CrimeEvent(GameEvent):
 
 
 class CaravanData(BaseModel):
-    caravan_type: str = ""  # merchant, diplomat
+    caravan_type: str = ""  # merchant, diplomat (legacy single-unit events)
     civilization: str = ""
     civ_id: int = -1
     visitor: UnitRef | None = None
+    merchant_count: int = 0  # grouped: how many merchants arrived
+    diplomat_count: int = 0  # grouped: how many diplomats arrived
 
 
 class CaravanEvent(GameEvent):

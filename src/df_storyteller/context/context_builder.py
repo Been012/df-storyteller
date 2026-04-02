@@ -153,6 +153,13 @@ def _format_event(event: GameEvent) -> str:
         return f"{prefix} CRIME: {data.crime_type.replace('_', ' ')} — victim: {victim}, suspect: {suspect}"
     if isinstance(data, CaravanData):
         civ = data.civilization or "an unknown civilization"
+        if data.merchant_count or data.diplomat_count:
+            parts = []
+            if data.merchant_count:
+                parts.append(f"{data.merchant_count} merchant{'s' if data.merchant_count != 1 else ''}")
+            if data.diplomat_count:
+                parts.append(f"{data.diplomat_count} diplomat{'s' if data.diplomat_count != 1 else ''}")
+            return f"{prefix} CARAVAN: A trade caravan from {civ} has arrived ({', '.join(parts)})"
         return f"{prefix} CARAVAN: A {data.caravan_type} from {civ} has arrived"
     if isinstance(data, SiegeData):
         if data.status == "ended":

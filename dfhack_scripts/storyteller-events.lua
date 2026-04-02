@@ -195,29 +195,11 @@ if not dfhack.storyteller_state then
 end
 local state = dfhack.storyteller_state
 
--- Detect map change: if the output directory changed (different world/save slot),
--- force a stop so start() will re-initialize with the correct output_dir.
--- Without this, the old tick callback keeps writing to the previous folder.
-if state.enabled and state.output_dir and state.output_dir ~= output_dir then
-    print('[storyteller] Map changed (' .. state.output_dir .. ' -> ' .. output_dir .. '), restarting...')
-    eventful.onUnitDeath.storyteller = nil
-    eventful.onBuildingCreatedDestroyed.storyteller = nil
-    eventful.onJobCompleted.storyteller = nil
-    state.enabled = false
-    state.known_unit_ids = {}
-    state.prev_professions = {}
-    state.prev_nobles = {}
-    state.prev_squads = {}
-    state.prev_stress = {}
-    state.prev_population = 0
-    state.prev_mandates = {}
-    state.prev_crimes = {}
-    state.peak_population = 0
-    state.death_count = 0
-    state.known_caravans = {}
-    state.siege_active = false
-    state.sequence = 0
-    state.poll_count = 0
+-- Handle map/save folder changes (autosave renames waa → autosave 1 → autosave 2...).
+-- Instead of stopping the monitor, just update the output path and keep running.
+-- All functions read from state.output_dir so the redirect is immediate.
+if state.output_dir and state.output_dir ~= output_dir then
+    print('[storyteller] Output folder changed: ' .. state.output_dir .. ' -> ' .. output_dir)
 end
 state.output_dir = output_dir
 
@@ -257,10 +239,10 @@ end
 --- Uses dfhack.filesystem since os.execute is not available in DFHack's sandbox.
 --- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
 local function ensure_output_dir()
-    if not dfhack.filesystem.isdir(output_dir) then
-        dfhack.filesystem.mkdir_recursive(output_dir)
+    if not dfhack.filesystem.isdir(state.output_dir) then
+        dfhack.filesystem.mkdir_recursive(state.output_dir)
     end
-    local processed = output_dir .. 'processed/'
+    local processed = state.output_dir .. 'processed/'
     if not dfhack.filesystem.isdir(processed) then
         dfhack.filesystem.mkdir_recursive(processed)
     end
@@ -288,8 +270,8 @@ local function write_event(event_type, data)
     }
 
     local filename = string.format('%d_%s_%06d', year, event_type, state.sequence)
-    local tmp_path = output_dir .. filename .. '.tmp'
-    local json_path = output_dir .. filename .. '.json'
+    local tmp_path = state.output_dir .. filename .. '.tmp'
+    local json_path = state.output_dir .. filename .. '.json'
 
     local ok, err = pcall(function()
         local f = io.open(tmp_path, 'w')
@@ -1230,6 +1212,17 @@ end
 --- Poll for changes in dwarf state (positions, professions, squads, stress, migrants).
 --- Compares current state to previous snapshot and emits events for differences.
 local function poll_changes()
+    -- Auto-update output folder on autosave (waa → autosave 1 → autosave 2...)
+    pcall(function()
+        local current_folder = dfhack.world.ReadWorldFolder()
+        local current_dir = dfhack.getDFPath() .. '/storyteller_events/' .. current_folder .. '/'
+        if current_dir ~= state.output_dir then
+            print('[storyteller] Autosave folder change: ' .. state.output_dir .. ' -> ' .. current_dir)
+            state.output_dir = current_dir
+            ensure_output_dir()
+        end
+    end)
+
     local player_race = df.global.plotinfo.race_id
     local current_pop = 0
 
@@ -1586,9 +1579,12 @@ local function poll_crimes()
 end
 
 --- Poll for caravan/diplomat arrivals.
+--- Groups all new arrivals from the same civ into a single event per poll cycle.
 local function poll_caravans()
     if not event_flags.caravan then return end
     pcall(function()
+        -- Collect new arrivals grouped by civ
+        local arrivals = {}  -- civ_id -> {civ_name, merchants=N, diplomats=N}
         for _, unit in ipairs(df.global.world.units.active) do
             pcall(function()
                 if not dfhack.units.isAlive(unit) then return end
@@ -1605,22 +1601,35 @@ local function poll_caravans()
                 if not caravan_type then return end
 
                 state.known_caravans[uid] = true
-                local civ_name = ''
-                pcall(function()
-                    if unit.civ_id >= 0 then
-                        local entity = df.historical_entity.find(unit.civ_id)
-                        if entity and entity.name then
-                            civ_name = dfhack.df2utf(dfhack.translation.translateName(entity.name, true))
+                local civ_id = unit.civ_id or -1
+                if not arrivals[civ_id] then
+                    local civ_name = ''
+                    pcall(function()
+                        if civ_id >= 0 then
+                            local entity = df.historical_entity.find(civ_id)
+                            if entity and entity.name then
+                                civ_name = dfhack.df2utf(dfhack.translation.translateName(entity.name, true))
+                            end
                         end
-                    end
-                end)
-                write_event('caravan', {
-                    caravan_type = caravan_type,
-                    civilization = civ_name,
-                    civ_id = unit.civ_id,
-                    visitor = serialize_unit(unit),
-                })
+                    end)
+                    arrivals[civ_id] = { civ_name = civ_name, merchants = 0, diplomats = 0 }
+                end
+                if caravan_type == 'diplomat' then
+                    arrivals[civ_id].diplomats = arrivals[civ_id].diplomats + 1
+                else
+                    arrivals[civ_id].merchants = arrivals[civ_id].merchants + 1
+                end
             end)
+        end
+
+        -- Emit one event per civ
+        for civ_id, info in pairs(arrivals) do
+            write_event('caravan', {
+                civilization = info.civ_name,
+                civ_id = civ_id,
+                merchant_count = info.merchants,
+                diplomat_count = info.diplomats,
+            })
         end
     end)
 end
@@ -1726,8 +1735,8 @@ local function write_delta_snapshot()
         }
 
         local filename = string.format('delta_%d_%06d_%d', year, tick, os.time())
-        local tmp_path = output_dir .. filename .. '.tmp'
-        local json_path = output_dir .. filename .. '.json'
+        local tmp_path = state.output_dir .. filename .. '.tmp'
+        local json_path = state.output_dir .. filename .. '.json'
         local f = io.open(tmp_path, 'w')
         if f then
             f:write(json.encode(delta))
@@ -1769,7 +1778,7 @@ end
 --- Save baseline state to disk for persistence across DF restarts.
 local function save_baselines()
     pcall(function()
-        local path = output_dir .. '.baselines.json'
+        local path = state.output_dir .. '.baselines.json'
         local data = {
             prev_professions = state.prev_professions or {},
             prev_nobles = state.prev_nobles or {},
@@ -1958,7 +1967,7 @@ local function start()
     dfhack.timeout(poll_interval_ticks, 'ticks', poll_loop)
 
     state.enabled = true
-    print('[storyteller] Event monitoring started. Output: ' .. output_dir)
+    print('[storyteller] Event monitoring started. Output: ' .. state.output_dir)
 end
 
 local function stop()
@@ -1991,7 +2000,7 @@ local function status()
     if state.enabled then
         print('[storyteller] Running. Events written: ' .. state.sequence)
         print('[storyteller] Poll ticks: ' .. tostring(state.poll_count or 0))
-        print('[storyteller] Output directory: ' .. output_dir)
+        print('[storyteller] Output directory: ' .. state.output_dir)
         print('[storyteller] Tracking ' .. tostring(state.prev_population) .. ' dwarves')
         print('[storyteller] Last season: ' .. tostring(state.last_season))
         print('[storyteller] Current season: ' .. get_season(df.global.cur_year_tick))
@@ -2003,7 +2012,7 @@ end
 --- Manually run one poll cycle and report what happened (for debugging).
 local function debug_poll()
     print('[storyteller] === Debug Poll ===')
-    print('[storyteller] Output dir: ' .. output_dir)
+    print('[storyteller] Output dir: ' .. state.output_dir)
     print('[storyteller] Enabled: ' .. tostring(state.enabled))
     print('[storyteller] Sequence (events written): ' .. tostring(state.sequence))
     print('[storyteller] Poll count (ticks fired): ' .. tostring(state.poll_count or 0))

@@ -137,12 +137,37 @@ def safe_watch_dir(config: AppConfig, world: str) -> Path | None:
 
 
 def get_active_world(config: AppConfig) -> str:
-    """Get the active world folder name."""
+    """Get the active world folder name.
+
+    Auto-updates when a newer folder with the same fortress identity appears
+    (e.g. after DF autosave renames 'waa' to 'autosave 1').
+    """
     global _active_world
-    if _active_world:
-        return _active_world
     worlds = get_worlds(config)
-    return worlds[0]["folder"] if worlds else ""
+    if not worlds:
+        return _active_world or ""
+    # get_worlds returns folders sorted by most recent first, grouped by identity.
+    # The first entry is always the most recently active folder for that fortress.
+    newest = worlds[0]["folder"]
+    if _active_world:
+        # Check if our cached world is still the most recent for its fortress.
+        # If a newer folder appeared (autosave), auto-switch to it.
+        if _active_world == newest:
+            return _active_world
+        # Check if the newest folder is for the same fortress
+        from df_storyteller.context.loader import _get_folder_identity
+        base = Path(config.paths.event_dir) if config.paths.event_dir else None
+        if base and base.exists():
+            old_path = base / _active_world
+            new_path = base / newest
+            old_id = _get_folder_identity(old_path) if old_path.exists() else None
+            new_id = _get_folder_identity(new_path) if new_path.exists() else None
+            if old_id and new_id and old_id == new_id:
+                _active_world = newest
+                return _active_world
+        # Different fortress or can't determine — keep current selection
+        return _active_world
+    return newest
 
 
 def set_active_world(world: str) -> None:

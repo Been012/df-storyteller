@@ -561,6 +561,7 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
     # 4. Load legends if available (skip if told to — expensive for large files)
     if skip_legends:
         logger.info("Skipping legends loading (skip_legends=True)")
+        event_store.sort_chronologically()
         return event_store, character_tracker, world_lore, metadata
 
     legends_path = None
@@ -757,6 +758,7 @@ def load_game_state(config: AppConfig, skip_legends: bool = False, active_world:
         if legends:
             world_lore.load(legends)
 
+    event_store.sort_chronologically()
     logger.info(
         "Game state loaded: %d events, %d characters tracked",
         event_store.count,
