@@ -562,13 +562,17 @@ a.lore-link:hover {
     flex-shrink: 0;
 }
 
-/* Mood borders on portraits — noticeable but not garish */
+/* Mood borders on portraits — matches _STRESS_DESCS mapping */
+/* 6=ecstatic, 5=very happy, 4=pleased → positive */
 .mood-border-ecstatic { border: 2px solid rgba(201, 168, 76, 0.8); }
-.mood-border-happy { border: 2px solid rgba(160, 150, 80, 0.6); }
-.mood-border-content, .mood-border-fine { }
+.mood-border-very-happy { border: 2px solid rgba(160, 150, 80, 0.6); }
+.mood-border-pleased { border: 2px solid rgba(140, 140, 80, 0.4); }
+/* 3=content → neutral (no extra border) */
+.mood-border-content { }
+/* 2=stressed, 1=very stressed, 0=haggard → negative */
 .mood-border-stressed { border: 2px solid rgba(200, 140, 60, 0.7); }
-.mood-border-very-unhappy { border: 2px solid rgba(200, 80, 60, 0.7); }
-.mood-border-on-the-verge { border: 2px solid rgba(200, 50, 50, 0.8); }
+.mood-border-very-stressed { border: 2px solid rgba(200, 80, 60, 0.7); }
+.mood-border-haggard { border: 2px solid rgba(200, 50, 50, 0.8); }
 
 /* ========== Character Sheet ========== */
 
