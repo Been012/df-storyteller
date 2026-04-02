@@ -31,7 +31,7 @@ _URL_MAP = {
     "abduction": "event", "theft": "event", "persecution": "event",
     "site_conquest": "event", "overthrow": "event", "insurrection": "event",
     "written_work": "work", "festival": "festival",
-    "form_poetic": "form/poetic", "form_musical": "form/musical", "form_dance": "form/dance",
+    "form_poetic": "form", "form_musical": "form", "form_dance": "form",
     "cultural_form": "form/poetic",
     "region": "region", "geography": "region",
     "landmass": "landmass", "peak": "peak", "construction": "construction",
