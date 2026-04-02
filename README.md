@@ -5,7 +5,7 @@ A companion journal and legends browser for [Dwarf Fortress](https://store.steam
 ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **[Full Documentation on the Wiki](https://github.com/Been012/df-storyteller/wiki)**
+> **[New? Start here — Getting Started Guide](https://github.com/Been012/df-storyteller/wiki/Getting-Started)** | [Full Wiki](https://github.com/Been012/df-storyteller/wiki)
 
 ## Features
 
