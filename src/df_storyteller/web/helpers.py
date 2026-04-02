@@ -146,25 +146,25 @@ def resolve_wiki_links(text: str, world_lore=None, fortress_dir=None) -> str:
                     if art_name and search_lower in art_name.lower():
                         return f'<a href="/lore/artifact/{art.artifact_id}" class="dwarf-link">{display}</a>'
 
-            # Search regions (may be list or dict)
+            # Search regions (list of dicts or Pydantic models)
             if hasattr(legends, "regions"):
                 regions = legends.regions
                 region_iter = regions.values() if isinstance(regions, dict) else regions
                 for region in region_iter:
-                    region_name = getattr(region, "name", "")
+                    region_name = region.get("name", "") if isinstance(region, dict) else getattr(region, "name", "")
                     if region_name and search_lower in region_name.lower():
-                        region_id = getattr(region, "region_id", getattr(region, "id", 0))
+                        region_id = region.get("id", 0) if isinstance(region, dict) else getattr(region, "region_id", getattr(region, "id", 0))
                         return f'<a href="/lore/region/{region_id}" class="dwarf-link">{display}</a>'
 
-            # Search wars/event collections (may be list or dict)
+            # Search wars/event collections (list of dicts or Pydantic models)
             if hasattr(legends, "event_collections"):
                 ecs = legends.event_collections
                 ec_iter = ecs.values() if isinstance(ecs, dict) else ecs
                 for ec in ec_iter:
-                    ec_name = getattr(ec, "name", "")
-                    ec_type = getattr(ec, "ec_type", "")
+                    ec_name = ec.get("name", "") if isinstance(ec, dict) else getattr(ec, "name", "")
+                    ec_type = ec.get("type", "") if isinstance(ec, dict) else getattr(ec, "ec_type", "")
                     if ec_name and search_lower in ec_name.lower():
-                        ec_id = getattr(ec, "ec_id", getattr(ec, "id", 0))
+                        ec_id = ec.get("id", 0) if isinstance(ec, dict) else getattr(ec, "ec_id", getattr(ec, "id", 0))
                         if ec_type == "war":
                             return f'<a href="/lore/war/{ec_id}" class="dwarf-link">{display}</a>'
                         return f'<a href="/lore/event/{ec_id}" class="dwarf-link">{display}</a>'
