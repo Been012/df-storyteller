@@ -20,6 +20,14 @@ end
 local eventful = require('plugins.eventful')
 local json = require('json')
 
+local function encode_json_locale_safe(data)
+    local encoded = json.encode(data)
+    -- DFHack's JSON encoder uses tostring() for numbers, which can emit
+    -- locale decimal commas on Windows. JSON requires "." for decimals.
+    local normalized = encoded:gsub('(%d),(%d)', '%1.%2')
+    return normalized
+end
+
 -- ======================= Config =======================
 -- Per-world subfolder so multiple worlds don't mix data.
 -- Ref: https://docs.dfhack.org/en/stable/docs/dev/Lua%20API.html
@@ -138,7 +146,7 @@ pcall(function()
         }
         local wf = io.open(output_dir .. '.session_info', 'w')
         if wf then
-            wf:write(json.encode(info))
+            wf:write(encode_json_locale_safe(info))
             wf:close()
         end
     end)
@@ -296,7 +304,7 @@ local function write_event(event_type, data)
         if not f then
             error('Cannot open file: ' .. tmp_path)
         end
-        f:write(json.encode(event))
+        f:write(encode_json_locale_safe(event))
         f:close()
         os.rename(tmp_path, json_path)
     end)
@@ -1697,7 +1705,7 @@ local function write_delta_snapshot()
         local json_path = output_dir .. filename .. '.json'
         local f = io.open(tmp_path, 'w')
         if f then
-            f:write(json.encode(delta))
+            f:write(encode_json_locale_safe(delta))
             f:close()
             os.rename(tmp_path, json_path)
         end
@@ -1760,7 +1768,7 @@ local function save_baselines()
         local tmp = path .. '.tmp'
         local f = io.open(tmp, 'w')
         if f then
-            f:write(json.encode(data))
+            f:write(encode_json_locale_safe(data))
             f:close()
             os.rename(tmp, path)
         end

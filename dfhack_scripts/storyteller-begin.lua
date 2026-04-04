@@ -24,6 +24,14 @@ end
 
 local json = require('json')
 
+local function encode_json_locale_safe(data)
+    local encoded = json.encode(data)
+    -- DFHack's JSON encoder uses tostring() for numbers, which can emit
+    -- locale decimal commas on Windows. JSON requires "." for decimals.
+    local normalized = encoded:gsub('(%d),(%d)', '%1.%2')
+    return normalized
+end
+
 -- ======================= Config =======================
 local world_folder = dfhack.world.ReadWorldFolder()
 if world_folder == '' then
@@ -1489,7 +1497,7 @@ local json_path = output_dir .. filename .. '.json'
 
 local write_ok, write_err = pcall(function()
     local f = io.open(tmp_path, 'w')
-    f:write(json.encode(snapshot))
+    f:write(encode_json_locale_safe(snapshot))
     f:close()
 end)
 
