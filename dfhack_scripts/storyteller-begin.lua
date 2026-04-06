@@ -23,14 +23,9 @@ if df.global.gamemode ~= 0 then
 end
 
 local json = require('json')
-
-local function encode_json_locale_safe(data)
-    local encoded = json.encode(data)
-    -- DFHack's JSON encoder uses tostring() for numbers, which can emit
-    -- locale decimal commas on Windows. JSON requires "." for decimals.
-    local normalized = encoded:gsub('(%d),(%d)', '%1.%2')
-    return normalized
-end
+-- Force "." as decimal separator regardless of system locale.
+-- DFHack's json.encode uses tostring(number), which honors LC_NUMERIC.
+pcall(os.setlocale, 'C', 'numeric')
 
 -- ======================= Config =======================
 local world_folder = dfhack.world.ReadWorldFolder()
@@ -1497,7 +1492,7 @@ local json_path = output_dir .. filename .. '.json'
 
 local write_ok, write_err = pcall(function()
     local f = io.open(tmp_path, 'w')
-    f:write(encode_json_locale_safe(snapshot))
+    f:write(json.encode(snapshot))
     f:close()
 end)
 
