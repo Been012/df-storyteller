@@ -19,6 +19,9 @@ end
 
 local eventful = require('plugins.eventful')
 local json = require('json')
+-- Force "." as decimal separator regardless of system locale.
+-- DFHack's json.encode uses tostring(number), which honors LC_NUMERIC.
+pcall(os.setlocale, 'C', 'numeric')
 
 -- ======================= Config =======================
 -- Per-world subfolder so multiple worlds don't mix data.

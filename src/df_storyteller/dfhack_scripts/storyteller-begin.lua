@@ -17,6 +17,9 @@ if df.global.gamemode ~= 0 then
 end
 
 local json = require('json')
+-- Force "." as decimal separator regardless of system locale.
+-- DFHack's json.encode uses tostring(number), which honors LC_NUMERIC.
+pcall(os.setlocale, 'C', 'numeric')
 
 -- ======================= Config =======================
 local world_folder = dfhack.world.ReadWorldFolder()
