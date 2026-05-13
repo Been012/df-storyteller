@@ -89,7 +89,19 @@ _SKILL_ID_NAMES: dict[str, str] = {
     "116": "Building Design", "117": "Food Preparation",
     "118": "Logistics", "119": "Critical Thinking", "120": "Melee Combat",
 }
-
+def _format_item_list(items: list[object]) -> str:
+    formatted = []
+    for item in items:
+        if isinstance(item, dict):
+            formatted.append(
+                item.get("name")
+                or item.get("description")
+                or item.get("label")
+                or str(item)
+            )
+        else:
+            formatted.append(str(item))
+    return ", ".join(formatted)
 
 def _resolve_skill_name(name: str) -> str:
     """Convert a skill name or numeric ID to a readable name."""
@@ -204,11 +216,11 @@ def format_dwarf_narrative(dwarf: Dwarf) -> str:
 
     # Equipment
     if dwarf.equipment:
-        lines.append(f"  Equipment: {', '.join(dwarf.equipment[:5])}")
+        lines.append(f"  Equipment: {_format_item_list(dwarf.equipment[:5])}")
 
     # Wounds
     if dwarf.wounds:
-        lines.append(f"  Wounds: injured {', '.join(dwarf.wounds)}")
+        lines.append(f"  Wounds: injured {_format_item_list(dwarf.wounds)}")
 
     # Current activity
     if dwarf.current_job:
